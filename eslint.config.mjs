@@ -1,0 +1,50 @@
+/**
+ * ESLint flat config — Next.js 15 + dbAdmin 防護
+ * dbAdmin 只允許 (admin)/** / lib/tenant/resolver.ts / lib/db/admin-only/** 使用
+ */
+import { FlatCompat } from '@eslint/eslintrc';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const compat = new FlatCompat({ baseDirectory: __dirname });
+
+const dbAdminRule = {
+  rules: {
+    'no-restricted-imports': [
+      'error',
+      {
+        paths: [
+          {
+            name: '@/db',
+            importNames: ['dbAdmin'],
+            message:
+              'dbAdmin 會繞過 RLS。請改 import dbUser，或將檔案移至 (admin)/ 或 lib/db/admin-only/',
+          },
+          {
+            name: '@/db/admin-only',
+            message:
+              'admin-only 模組僅允許 (admin)/** / lib/tenant/resolver.ts 使用',
+          },
+        ],
+      },
+    ],
+  },
+};
+
+export default [
+  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  dbAdminRule,
+  // 例外：以下路徑允許 import dbAdmin
+  {
+    files: [
+      'src/app/(admin)/**',
+      'src/lib/tenant/resolver.ts',
+      'src/db/admin-only/**',
+      'src/db/index.ts',
+      'src/inngest/**',         // background job 走 dbAdmin (worker context，非 user-facing)
+      'src/lib/storage/**',     // R2 / 系統內部，非 RLS 範圍
+    ],
+    rules: { 'no-restricted-imports': 'off' },
+  },
+];

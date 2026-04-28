@@ -1,0 +1,11 @@
+[
+  {
+    "_comment_zh": "Hackathon R2 bucket CORS 設定。08:40 setup 時請把這份 JSON (去掉 _comment_*) 貼到 Cloudflare R2 dashboard。路徑: dash.cloudflare.com → R2 → Buckets → demo-sass-2-photos → Settings → CORS Policy → 點 Edit CORS Policy → 貼上 → Save。沒設好瀏覽器 PUT 會被擋成 CORS error，前端會看到 Network error。",
+    "_comment_origins_zh": "AllowedOrigins: localhost 給本機開發、*.vercel.app 給 preview/prod；正式網域記得自己加。",
+    "AllowedOrigins": ["http://localhost:3000", "https://*.vercel.app"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
