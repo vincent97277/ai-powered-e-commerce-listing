@@ -1,38 +1,25 @@
 'use client';
 
 /**
- * useFileUpload — 把整個直傳流程包成一個 hook
+ * useFileUpload — local-first 版本
  *
  * Flow:
- *   idle → signing  → uploading (有 progress) → processing → done
- *                                                          ↘ error
+ *   idle → uploading (有 progress) → processing → done
+ *                                              ↘ error
  *
- * 為何用 XMLHttpRequest 而非 fetch:
- *   fetch 在瀏覽器目前還沒有原生 upload progress event (ReadableStream
- *   的 progress polyfill 太脆弱)，XHR 的 upload.onprogress 是最穩的選擇。
+ * 改造重點: 不走 presigned URL，直接 POST FormData 到 /api/uploads
+ * (server 寫到 public/uploads/，回傳 storage key)
  */
 
 import { useCallback, useRef, useState } from 'react';
-import {
-  signUploadUrl,
-  triggerIngest,
-} from '@/app/(merchant)/merchant/products/new/actions';
+import { triggerIngest } from '@/app/(merchant)/merchant/products/new/actions';
 
-export type UploadState =
-  | 'idle'
-  | 'signing'
-  | 'uploading'
-  | 'processing'
-  | 'done'
-  | 'error';
+export type UploadState = 'idle' | 'uploading' | 'processing' | 'done' | 'error';
 
 export interface UseFileUploadReturn {
   state: UploadState;
-  /** 0-100，只在 uploading 階段有意義 */
   progress: number;
-  /** 失敗時的錯誤訊息，給 UI 顯示用 */
   error: string | null;
-  /** 上傳成功會回 { key }，失敗回 null (UI 從 error state 拿訊息) */
   upload: (file: File) => Promise<{ key: string } | null>;
   reset: () => void;
 }
@@ -42,7 +29,6 @@ export function useFileUpload(): UseFileUploadReturn {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // 用 ref 追進行中 XHR，方便之後做 cancel (hackathon 沒接 UI，但留鉤子)
   const xhrRef = useRef<XMLHttpRequest | null>(null);
 
   const reset = useCallback(() => {
@@ -59,30 +45,23 @@ export function useFileUpload(): UseFileUploadReturn {
         setError(null);
         setProgress(0);
 
-        // ---------- step 1: 跟 server 拿 presigned URL ----------
-        setState('signing');
-        const signed = await signUploadUrl({
-          contentType: file.type,
-          fileSize: file.size,
-        });
-        if (!signed.success) {
-          setError(signed.error);
-          setState('error');
-          return null;
-        }
-
-        // ---------- step 2: PUT 直傳 R2 (帶 progress) ----------
+        // step 1: POST 到 /api/uploads (local fs write)
         setState('uploading');
-        await putWithProgress({
-          url: signed.uploadUrl,
+        const result = await postWithProgress({
           file,
           onProgress: (pct) => setProgress(pct),
           xhrRef,
         });
 
-        // ---------- step 3: 通知 Inngest 開始處理 ----------
+        if (!result.success) {
+          setError(result.error ?? '上傳失敗');
+          setState('error');
+          return null;
+        }
+
+        // step 2: 通知 Inngest 開始處理
         setState('processing');
-        const ingest = await triggerIngest({ r2Key: signed.key });
+        const ingest = await triggerIngest({ r2Key: result.key });
         if (!ingest.ingested) {
           setError('觸發背景處理失敗，請重試');
           setState('error');
@@ -90,9 +69,8 @@ export function useFileUpload(): UseFileUploadReturn {
         }
 
         setState('done');
-        return { key: signed.key };
+        return { key: result.key };
       } catch (err) {
-        // XHR abort / network error / timeout 全部走這裡
         const msg = err instanceof Error ? err.message : '上傳失敗';
         setError(msg);
         setState('error');
@@ -105,23 +83,25 @@ export function useFileUpload(): UseFileUploadReturn {
   return { state, progress, error, upload, reset };
 }
 
-// ---------- 內部 helper: XHR PUT with progress ----------
+// ---------- 內部 helper: XHR POST with progress ----------
 
-function putWithProgress(opts: {
-  url: string;
+type UploadResponse =
+  | { success: true; key: string; publicUrl: string; size: number }
+  | { success: false; error: string };
+
+function postWithProgress(opts: {
   file: File;
   onProgress: (pct: number) => void;
   xhrRef: React.MutableRefObject<XMLHttpRequest | null>;
-}): Promise<void> {
+}): Promise<UploadResponse> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     opts.xhrRef.current = xhr;
 
-    xhr.open('PUT', opts.url, true);
-    // 重要: Content-Type 必須跟 presign 時的 contentType 一致，
-    // 否則 R2 會回 SignatureDoesNotMatch。瀏覽器會用 file.type，
-    // 而我們 sign 時也用 file.type，理論上一致。
-    xhr.setRequestHeader('Content-Type', opts.file.type);
+    const formData = new FormData();
+    formData.append('file', opts.file);
+
+    xhr.open('POST', '/api/uploads', true);
 
     xhr.upload.onprogress = (e) => {
       if (!e.lengthComputable) return;
@@ -130,26 +110,23 @@ function putWithProgress(opts: {
     };
 
     xhr.onload = () => {
-      // R2 PUT 成功是 200 (有時 204)，其他都當失敗
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-      } else {
-        reject(
-          new Error(
-            `R2 上傳失敗 (HTTP ${xhr.status}): ${xhr.responseText?.slice(0, 200) ?? ''}`,
-          ),
-        );
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+          resolve(data);
+        } else {
+          resolve({ success: false, error: data.error ?? `HTTP ${xhr.status}` });
+        }
+      } catch {
+        reject(new Error(`Invalid response: ${xhr.responseText?.slice(0, 100)}`));
       }
     };
 
-    xhr.onerror = () =>
-      reject(new Error('網路錯誤 (CORS 沒設好? R2 endpoint 不對?)'));
+    xhr.onerror = () => reject(new Error('網路錯誤'));
     xhr.onabort = () => reject(new Error('上傳已取消'));
     xhr.ontimeout = () => reject(new Error('上傳逾時'));
 
-    // 60 秒 timeout (10MB on 4G 大概 20-30 秒，留 buffer)
     xhr.timeout = 60_000;
-
-    xhr.send(opts.file);
+    xhr.send(formData);
   });
 }

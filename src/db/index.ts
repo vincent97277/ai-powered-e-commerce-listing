@@ -1,22 +1,17 @@
 /**
- * 雙 connection pool — Neon serverless WebSocket driver
+ * 雙 connection pool — node-postgres (pg) driver, local-first
  * dbUser  → web_anon role，RLS 強制生效 (預設用這個)
  * dbAdmin → web_admin role，BYPASSRLS (僅限 admin-only/ 目錄)
  *
- * Hackathon 注意事項：
- * 1. Neon pgbouncer transaction mode 下 prepared statement 必須 disable
- * 2. Hackathon connection 不要開太大，max=5 已足夠 demo 流量
- * 3. Lazy init — build time 沒 .env 不會炸，只在 runtime 第一次 query 才抛錯
+ * v2 升級到 Neon: 換成 drizzle-orm/neon-serverless + WebSocket driver
+ *
+ * Lazy init — build time 沒 .env 不會炸，runtime 第一次 query 才 throw
  */
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from 'ws';
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from './schema';
 
-neonConfig.webSocketConstructor = ws;
-
 function makeDb(envKey: 'DATABASE_URL_USER' | 'DATABASE_URL_ADMIN', max: number) {
-  // 用 Proxy lazy init，build time 不會 throw
   let pool: Pool | null = null;
   let drz: ReturnType<typeof drizzle<typeof schema>> | null = null;
 

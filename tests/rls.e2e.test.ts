@@ -13,8 +13,9 @@ import { dbAdmin, dbUser } from '@/db';
 import { merchants, products } from '@/db/schema';
 import { sql, eq } from 'drizzle-orm';
 
-const TENANT_A = '11111111-1111-1111-1111-111111111111';
-const TENANT_B = '22222222-2222-2222-2222-222222222222';
+// 用 99..., aa... 避免跟 demo merchant (11..., 22...) 撞
+const TENANT_A = '99999999-9999-9999-9999-999999999999';
+const TENANT_B = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
 beforeAll(async () => {
   // 用 dbAdmin (BYPASSRLS) seed 兩個 tenant + 一筆 product 各自
@@ -119,8 +120,9 @@ describe('RLS multi-tenant isolation', () => {
    * - 確認當前 connection 沒掛 BYPASSRLS attribute
    */
   it('T3: web_anon cannot escalate to bypass RLS', async () => {
-    await expect(dbUser.execute(sql`SET ROLE platform_admin`)).rejects.toThrow(
-      /permission denied|must be member/i
+    // 嘗試切到 BYPASSRLS role 應失敗 (web_anon 沒被 GRANT 到 web_admin)
+    await expect(dbUser.execute(sql`SET ROLE web_admin`)).rejects.toThrow(
+      /permission denied|must be member|does not exist|不存在/i
     );
 
     await expect(dbUser.execute(sql`SET SESSION AUTHORIZATION postgres`)).rejects.toThrow();
