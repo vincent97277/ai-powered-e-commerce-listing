@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Geist, Noto_Serif_TC, Noto_Sans_TC } from 'next/font/google';
 import { cn } from '@/lib/utils';
+import { Toaster } from 'sonner';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -33,7 +34,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="zh-Hant"
       className={cn('font-sans', geist.variable, notoSerif.variable, notoSans.variable)}
     >
-      <body>{children}</body>
+      <body>
+        {children}
+        <Toaster
+          position="top-right"
+          richColors
+          closeButton
+          toastOptions={{
+            style: {
+              fontFamily: 'var(--brand-font-heading), system-ui, sans-serif',
+              borderRadius: 'var(--brand-radius)',
+            },
+          }}
+        />
+      </body>
     </html>
   );
 }

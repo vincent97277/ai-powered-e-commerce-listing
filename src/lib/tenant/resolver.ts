@@ -32,6 +32,22 @@ export const resolveTenantBySlug = (slug: string) =>
     { tags: [tagFor(slug)], revalidate: 300 } // 5 分鐘 fallback，但 tag 失效優先
   )();
 
+/** 同時拿 tenant_id + 公開資料 (商家名)，給 storefront 用 */
+export const resolveStorefrontMeta = (slug: string) =>
+  unstable_cache(
+    async (): Promise<{ tenantId: string; name: string } | null> => {
+      const rows = await dbAdmin
+        .select({ id: merchants.id, name: merchants.name })
+        .from(merchants)
+        .where(eq(merchants.slug, slug))
+        .limit(1);
+      if (!rows[0]) return null;
+      return { tenantId: rows[0].id, name: rows[0].name };
+    },
+    [`storefront-meta-${slug}`],
+    { tags: [tagFor(slug)], revalidate: 300 }
+  )();
+
 /**
  * 商家在 settings 改 slug 時呼叫，cache 立即失效
  */

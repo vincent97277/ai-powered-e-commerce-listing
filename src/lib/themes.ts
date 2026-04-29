@@ -30,6 +30,6 @@ export const THEMES: Record<MerchantId, BrandTheme> = {
 };
 
 export const MERCHANT_META: Record<MerchantId, { name: string; emoji: string; tagline: string }> = {
-  akami: { name: '阿明選物', emoji: '🍵', tagline: '日式侘寂・職人選物' },
-  afen: { name: '阿芬鹹酥雞', emoji: '🍗', tagline: '夜市熱賣・脆皮現炸' },
+  akami: { name: '阿明選物', emoji: '🍵', tagline: '永康街選物店 · 質感日系 · 老闆有強迫症' },
+  afen: { name: '阿芬鹹酥雞', emoji: '🍗', tagline: '夜市第三攤 · 限時搶購 · 老闆很吵' },
 };

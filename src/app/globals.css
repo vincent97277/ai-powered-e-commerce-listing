@@ -26,8 +26,46 @@
   --info:    #3B82F6;
 
   --streaming-cursor: var(--brand-primary);
-  --skeleton-base: var(--neutral-200);
-  --skeleton-shine: var(--neutral-100);
+  --skeleton-base: color-mix(in srgb, var(--brand-primary) 8%, transparent);
+  --skeleton-shine: color-mix(in srgb, var(--brand-primary) 22%, transparent);
+
+  /* ----- Type scale (modular, ratio 1.25) ----- */
+  --fs-display: clamp(3.5rem, 7vw + 1rem, 6rem);   /* 56px → 96px */
+  --fs-h1:      clamp(2.25rem, 3vw + 1rem, 3.5rem);/* 36px → 56px */
+  --fs-h2:      clamp(1.5rem, 1.5vw + 1rem, 2rem); /* 24px → 32px */
+  --fs-h3:      1.25rem;                            /* 20px */
+  --fs-body:    1rem;                               /* 16px */
+  --fs-small:   0.875rem;                           /* 14px */
+  --fs-caption: 0.75rem;                            /* 12px */
+
+  --lh-tight:   1.05;
+  --lh-snug:    1.25;
+  --lh-normal:  1.5;
+  --lh-loose:   1.7;
+
+  --tracking-tight: -0.03em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.08em;
+
+  /* ----- Spacing rhythm ----- */
+  --space-section-y: clamp(3rem, 6vw, 6rem);       /* 縱向 section padding */
+  --space-section-x: clamp(1.5rem, 4vw, 4rem);     /* 橫向 page padding */
+  --space-card-pad:  1.5rem;
+  --space-stack-sm:  0.75rem;
+  --space-stack-md:  1.25rem;
+  --space-stack-lg:  2rem;
+  --space-stack-xl:  3rem;
+
+  /* ----- Elevation system (3 層 + glass) ----- */
+  --elev-1: 0 1px 2px 0 rgb(0 0 0 / 0.04),
+            0 1px 3px 0 rgb(0 0 0 / 0.06);
+  --elev-2: 0 4px 6px -2px rgb(0 0 0 / 0.05),
+            0 10px 20px -8px rgb(0 0 0 / 0.10);
+  --elev-3: 0 12px 24px -8px rgb(0 0 0 / 0.12),
+            0 24px 48px -16px rgb(0 0 0 / 0.18);
+  --elev-glow: 0 0 0 1px color-mix(in srgb, var(--brand-primary) 18%, transparent),
+               0 8px 32px -8px color-mix(in srgb, var(--brand-primary) 24%, transparent);
+  --elev-inset: inset 0 1px 0 0 rgb(255 255 255 / 0.6);
 
   /* 預設 brand vars (避免初始化閃白) — 阿明選物 */
   --brand-primary: #8B7355;
@@ -35,6 +73,8 @@
   --brand-text: #2C2416;
   --brand-radius: 2px;
   --brand-font-heading: 'Noto Serif TC', serif;
+
+  /* shadcn fallback tokens (保留) */
   --background:  oklch(1 0 0);
   --foreground:  oklch(0.145 0 0);
   --card:  oklch(1 0 0);
@@ -69,10 +109,18 @@
   --sidebar-ring:  oklch(0.708 0 0);
 }
 
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
 body {
   font-family: var(--brand-font-heading), system-ui, sans-serif;
   background-color: var(--brand-bg);
   color: var(--brand-text);
+  font-feature-settings: "kern", "liga", "calt";
 }
 
 /* ======================================
@@ -85,6 +133,30 @@ body {
     color 600ms cubic-bezier(0.4, 0, 0.2, 1),
     border-color 600ms cubic-bezier(0.4, 0, 0.2, 1),
     border-radius 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 不要 transition 任何 transform / shadow / opacity (避免互動延遲) */
+button, a, input, textarea, select, [role="button"] {
+  transition:
+    background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ======================================
+   Focus rings — brand 色而非預設藍
+   ====================================== */
+:where(button, a, [role="button"], input, textarea, select):focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 3px;
+  border-radius: calc(var(--brand-radius) + 2px);
+}
+
+::selection {
+  background-color: color-mix(in srgb, var(--brand-primary) 30%, transparent);
+  color: var(--brand-text);
 }
 
 /* ======================================
@@ -108,6 +180,20 @@ body {
   );
   background-size: 200% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: var(--brand-radius);
+}
+
+/* Brand-aware skeleton (覆蓋 shadcn 預設) */
+[data-slot="skeleton"] {
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-base) 0%,
+    var(--skeleton-shine) 50%,
+    var(--skeleton-base) 100%
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: shimmer 1.6s ease-in-out infinite !important;
+  border-radius: var(--brand-radius) !important;
 }
 
 @keyframes hint-pulse {
@@ -115,6 +201,312 @@ body {
   50%      { transform: translateY(-3px); }
 }
 .tab-hint { animation: hint-pulse 0.6s ease-in-out 2; }
+
+@keyframes cursor-glow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px 0 var(--brand-primary); }
+  50%      { opacity: 0.3; box-shadow: 0 0 2px 0 var(--brand-primary); }
+}
+
+@keyframes float-subtle {
+  0%, 100% { transform: translateY(0px); }
+  50%      { transform: translateY(-4px); }
+}
+
+/* ======================================
+   Whimsy layer — micro-celebrations
+   ====================================== */
+
+/* 欄位完成時 sparkle (用 ::after 觸發，避免多 DOM) */
+@keyframes whimsy-sparkle {
+  0%   { opacity: 0; transform: scale(0.4) rotate(0deg); }
+  40%  { opacity: 1; transform: scale(1.4) rotate(20deg); }
+  70%  { opacity: 1; transform: scale(1.1) rotate(-10deg); }
+  100% { opacity: 0; transform: scale(0.9) rotate(0deg); }
+}
+.whimsy-sparkle::after {
+  content: '✦';
+  position: absolute;
+  right: -14px;
+  top: -10px;
+  font-size: 14px;
+  color: var(--brand-primary);
+  animation: whimsy-sparkle 720ms cubic-bezier(0.34, 1.56, 0.64, 1) 1;
+  pointer-events: none;
+}
+
+/* 欄位剛 settled 時整段 highlight 一閃 */
+@keyframes whimsy-flash {
+  0%   { background-color: transparent; }
+  30%  { background-color: color-mix(in srgb, var(--brand-primary) 14%, transparent); }
+  100% { background-color: transparent; }
+}
+.whimsy-flash {
+  animation: whimsy-flash 600ms ease-out 1;
+  border-radius: var(--brand-radius);
+}
+
+/* Cursor pulsing glow — 比舊的 cursor-glow 更有「正在思考」的感覺 */
+@keyframes whimsy-cursor-pulse {
+  0%, 100% {
+    opacity: 0.95;
+    box-shadow: 0 0 8px 1px color-mix(in srgb, var(--brand-primary) 60%, transparent),
+                0 0 2px 0 var(--brand-primary);
+  }
+  50% {
+    opacity: 0.4;
+    box-shadow: 0 0 14px 2px color-mix(in srgb, var(--brand-primary) 80%, transparent),
+                0 0 4px 0 var(--brand-primary);
+  }
+}
+.whimsy-cursor {
+  animation: whimsy-cursor-pulse 900ms ease-in-out infinite;
+}
+
+/* 18s 結束 bloom — 整個 stream 區塊外圍呼吸一次 */
+@keyframes whimsy-bloom {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-primary) 40%, transparent); }
+  60%  { box-shadow: 0 0 32px 6px color-mix(in srgb, var(--brand-primary) 24%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-primary) 0%, transparent); }
+}
+.whimsy-bloom { animation: whimsy-bloom 1400ms ease-out 1; border-radius: var(--brand-radius); }
+
+/* Brand voice 切換 — 從上方刷下來的 sweep */
+@keyframes whimsy-sweep {
+  0%   { transform: translateY(-100%); opacity: 0.85; }
+  60%  { opacity: 0.55; }
+  100% { transform: translateY(110%); opacity: 0; }
+}
+.whimsy-sweep-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--brand-primary) 35%, transparent) 45%,
+    color-mix(in srgb, var(--brand-primary) 55%, transparent) 50%,
+    color-mix(in srgb, var(--brand-primary) 35%, transparent) 55%,
+    transparent 100%);
+  animation: whimsy-sweep 720ms cubic-bezier(0.65, 0, 0.35, 1) 1 forwards;
+}
+
+/* Dropzone 呼吸 (拖入時) */
+@keyframes whimsy-breathe {
+  0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-primary) 25%, transparent); }
+  50%      { transform: scale(1.015); box-shadow: 0 0 0 8px color-mix(in srgb, var(--brand-primary) 12%, transparent); }
+}
+.whimsy-breathe { animation: whimsy-breathe 1200ms ease-in-out infinite; }
+
+/* Dropzone wobble (取消) */
+@keyframes whimsy-wobble {
+  0%   { transform: translateX(0); }
+  25%  { transform: translateX(-3px) rotate(-0.5deg); }
+  50%  { transform: translateX(3px) rotate(0.5deg); }
+  75%  { transform: translateX(-2px); }
+  100% { transform: translateX(0); }
+}
+.whimsy-wobble { animation: whimsy-wobble 320ms ease-in-out 1; }
+
+/* Confidence breathing — 4 段節奏 */
+@keyframes whimsy-confident-breath { /* 高 confidence: 慢穩 */
+  0%, 100% { opacity: 0.92; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.02); }
+}
+@keyframes whimsy-anxious-breath { /* 低 confidence: 快不安 */
+  0%, 100% { opacity: 0.65; transform: scale(0.98); }
+  35%      { opacity: 1;    transform: scale(1.04); }
+  70%      { opacity: 0.7;  transform: scale(0.99); }
+}
+.whimsy-conf-high   { animation: whimsy-confident-breath 2400ms ease-in-out infinite; }
+.whimsy-conf-mid    { animation: whimsy-confident-breath 1700ms ease-in-out infinite; }
+.whimsy-conf-low    { animation: whimsy-anxious-breath 1100ms ease-in-out infinite; }
+.whimsy-conf-fail   { animation: whimsy-anxious-breath  650ms ease-in-out infinite; }
+
+/* Rainbow Easter egg 彩蛋 C */
+@keyframes whimsy-rainbow {
+  0%   { filter: hue-rotate(0deg)   saturate(1.2); }
+  100% { filter: hue-rotate(360deg) saturate(1.2); }
+}
+.whimsy-rainbow-mode { animation: whimsy-rainbow 2.4s linear infinite; }
+
+/* Float emoji (Demo Mode toggle 時的小 emoji) */
+@keyframes whimsy-emoji-float {
+  0%   { opacity: 0; transform: translate(-50%, 0) scale(0.6); }
+  20%  { opacity: 1; transform: translate(-50%, -22px) scale(1.1); }
+  100% { opacity: 0; transform: translate(-50%, -64px) scale(0.9); }
+}
+.whimsy-emoji-float {
+  position: absolute;
+  left: 50%;
+  top: -8px;
+  pointer-events: none;
+  animation: whimsy-emoji-float 900ms cubic-bezier(0.22, 1, 0.36, 1) 1 forwards;
+  font-size: 22px;
+}
+
+/* Regenerate 完成時的 ripple */
+@keyframes whimsy-ripple {
+  0%   { transform: scale(0.6); opacity: 0.6; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.whimsy-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid var(--success);
+  pointer-events: none;
+  animation: whimsy-ripple 700ms ease-out 1 forwards;
+}
+
+/* Empty state 箭頭 dance */
+@keyframes whimsy-arrow-dance {
+  0%, 100% { transform: translateY(0)   rotate(0deg); }
+  50%      { transform: translateY(-6px) rotate(-4deg); }
+}
+.whimsy-arrow-dance { animation: whimsy-arrow-dance 1.4s ease-in-out infinite; }
+
+/* 404 float */
+@keyframes whimsy-404-float {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50%      { transform: translateY(-10px) rotate(2deg); }
+}
+.whimsy-404-float { animation: whimsy-404-float 3.2s ease-in-out infinite; }
+
+/* ======================================
+   Brand-aware utilities
+   ====================================== */
+.text-brand           { color: var(--brand-primary); }
+.text-brand-ink       { color: var(--brand-text); }
+.bg-brand             { background-color: var(--brand-primary); }
+.bg-brand-soft        { background-color: color-mix(in srgb, var(--brand-primary) 8%, var(--brand-bg)); }
+.bg-brand-tint        { background-color: color-mix(in srgb, var(--brand-primary) 14%, transparent); }
+.border-brand         { border-color: var(--brand-primary); }
+.border-brand-subtle  { border-color: color-mix(in srgb, var(--brand-primary) 22%, transparent); }
+.border-brand-faint   { border-color: color-mix(in srgb, var(--brand-primary) 10%, transparent); }
+.ring-brand           { box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-primary) 30%, transparent); }
+.rounded-brand        { border-radius: var(--brand-radius); }
+.rounded-brand-lg     { border-radius: calc(var(--brand-radius) * 3); }
+.font-brand           { font-family: var(--brand-font-heading), system-ui, sans-serif; }
+
+/* Type scale utilities */
+.t-display {
+  font-size: var(--fs-display);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  font-weight: 700;
+  font-family: var(--brand-font-heading), system-ui, sans-serif;
+}
+.t-h1 {
+  font-size: var(--fs-h1);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  font-weight: 600;
+  font-family: var(--brand-font-heading), system-ui, sans-serif;
+}
+.t-h2 {
+  font-size: var(--fs-h2);
+  line-height: var(--lh-snug);
+  font-weight: 600;
+  font-family: var(--brand-font-heading), system-ui, sans-serif;
+}
+.t-h3 {
+  font-size: var(--fs-h3);
+  line-height: var(--lh-snug);
+  font-weight: 600;
+}
+.t-body {
+  font-size: var(--fs-body);
+  line-height: var(--lh-loose);
+}
+.t-small {
+  font-size: var(--fs-small);
+  line-height: var(--lh-normal);
+}
+.t-caption {
+  font-size: var(--fs-caption);
+  line-height: var(--lh-normal);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.t-tabular { font-variant-numeric: tabular-nums; }
+
+/* Elevation utilities */
+.elev-1 { box-shadow: var(--elev-1); }
+.elev-2 { box-shadow: var(--elev-2); }
+.elev-3 { box-shadow: var(--elev-3); }
+.elev-glow { box-shadow: var(--elev-glow); }
+
+/* Glass card — frosted background */
+.glass-card {
+  background: color-mix(in srgb, var(--brand-bg) 70%, transparent);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 14%, transparent);
+  box-shadow: var(--elev-2), var(--elev-inset);
+}
+
+/* Subtle texture noise (純 CSS, 無外部資源) */
+.noise-bg {
+  position: relative;
+}
+.noise-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' /%3E%3C/svg%3E");
+}
+
+/* Brand gradient backgrounds */
+.bg-brand-gradient {
+  background:
+    radial-gradient(ellipse at top left, color-mix(in srgb, var(--brand-primary) 14%, transparent) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom right, color-mix(in srgb, var(--brand-primary) 10%, transparent) 0%, transparent 50%),
+    var(--brand-bg);
+}
+
+.bg-brand-vignette {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in srgb, var(--brand-primary) 16%, transparent) 0%, transparent 60%),
+    var(--brand-bg);
+}
+
+/* Lift hover (用於 card / chip) */
+.hover-lift {
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--elev-2);
+}
+
+/* Streaming cursor 強化版 */
+.streaming-cursor {
+  display: inline-block;
+  width: 3px;
+  height: 1.1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: linear-gradient(180deg,
+    var(--brand-primary) 0%,
+    color-mix(in srgb, var(--brand-primary) 60%, transparent) 100%);
+  border-radius: 1px;
+  animation: cursor-glow 1s ease-in-out infinite;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 150ms !important;
+  }
+  html { scroll-behavior: auto; }
+}
 
 @theme inline {
   --font-heading:  var(--font-sans);

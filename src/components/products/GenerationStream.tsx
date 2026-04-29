@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import { StreamingField } from './StreamingField';
 import { useStreamingPipeline } from '@/hooks/useStreamingPipeline';
 import { useDemoMode } from '@/components/demo/DemoModeToggle';
-import { useImperativeHandle, forwardRef } from 'react';
+import { useImperativeHandle, forwardRef, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import type { ProductOutput } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -15,6 +16,8 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
   function GenerationStream({ previewUrl }, ref) {
     const { state, start } = useStreamingPipeline();
     const { mode } = useDemoMode();
+    const wrapRef = useRef<HTMLDivElement>(null);
+    const celebrated = useRef(false);
 
     useImperativeHandle(ref, () => ({
       async kickoff() {
@@ -26,7 +29,6 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           start(data);
           return;
         }
-        // OFF: 真打 Inngest API；落空仍 fallback fixture
         const res = await fetch('/api/products/generate', { method: 'POST' }).catch(() => null);
         const data: ProductOutput = res
           ? await res.json()
@@ -35,8 +37,23 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
       },
     }));
 
+    // 18s done — bloom + AI 完成 toast (一次性)
+    useEffect(() => {
+      if (state.done && !celebrated.current) {
+        celebrated.current = true;
+        wrapRef.current?.classList.add('whimsy-bloom');
+        setTimeout(() => wrapRef.current?.classList.remove('whimsy-bloom'), 1500);
+        toast.success('AI 上架就緒', {
+          description: '7 個欄位填好了。標題、描述、SEO、變體、定價、蝦皮規格、去背圖。',
+          icon: '✨',
+          duration: 4000,
+        });
+      }
+      if (!state.done) celebrated.current = false;
+    }, [state.done]);
+
     return (
-      <div className="grid grid-cols-2 gap-8">
+      <div ref={wrapRef} className="grid grid-cols-2 gap-8 p-2">
         <Card className="aspect-square overflow-hidden" style={{ borderRadius: 'var(--brand-radius)' }}>
           {previewUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -53,7 +70,8 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           <StreamingField label="商品變體" mode="variants" value={state.variants} visibleCount={state.variantsVisible} loading={state.variants === null} />
 
           {state.price && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+            <motion.div initial={{ opacity: 0, y: 12, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 22 }}>
               <Card className="p-4" style={{ borderRadius: 'var(--brand-radius)', borderColor: 'var(--brand-primary)' }}>
                 <p className="text-xs uppercase opacity-60">建議定價</p>
                 <p className="text-3xl font-semibold" style={{ color: 'var(--brand-primary)', fontFamily: 'var(--brand-font-heading)' }}>
@@ -64,7 +82,7 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           )}
 
           {state.shopeeReady && (
-            <motion.div animate={{ scale: [1, 1.03, 1] }} transition={{ duration: 1.2, repeat: 3 }}>
+            <motion.div animate={{ scale: [1, 1.04, 1] }} transition={{ duration: 1.0, repeat: 2 }}>
               <Tabs defaultValue="shopee">
                 <TabsList style={{ borderRadius: 'var(--brand-radius)' }}>
                   <TabsTrigger value="shopee">蝦皮規格已就緒 →</TabsTrigger>
