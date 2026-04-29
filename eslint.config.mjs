@@ -45,6 +45,9 @@ export default [
       'src/inngest/**',         // background job 走 dbAdmin (worker context，非 user-facing)
       'src/lib/storage/**',     // R2 / 系統內部，非 RLS 範圍
       'src/app/api/products/generate/**',  // sync vision endpoint 需查 brand_voice (system query)
+      'src/app/onboarding/**',             // signup 需建 merchant (寫入 BYPASSRLS)
+      'src/app/(merchant)/**',             // 商家後台需 BYPASSRLS 解析 cookie 對應的 merchant
+      'src/app/(storefront)/**',           // storefront 需 BYPASSRLS 拿商家 theme/name
     ],
     rules: { 'no-restricted-imports': 'off' },
   },

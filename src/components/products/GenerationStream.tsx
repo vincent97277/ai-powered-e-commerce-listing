@@ -21,8 +21,12 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
 
     useImperativeHandle(ref, () => ({
       async kickoff(file: File | null) {
+        // 立刻給用戶一個訊號 — kickoff 真的有被呼叫
+        console.log('[GenerationStream] kickoff', { mode, hasFile: !!file });
+
         // Demo Mode ON: 走 fixture (省 OpenAI 額度 + 速度穩定)
         if (mode === 'on') {
+          toast.info('預覽模式 — 用範例資料展示流程', { duration: 2000 });
           await new Promise((r) => setTimeout(r, 500));
           const res = await fetch('/fixtures/products/teacup.json');
           const data: ProductOutput = await res.json();
@@ -33,41 +37,51 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
         // Demo Mode OFF: 真實 GPT-4o 流程
         if (!file) {
           toast.error('找不到上傳檔案，請重新拖曳照片');
+          // Fallback to fixture so 畫面不卡死
+          const fb = await fetch('/fixtures/products/teacup.json');
+          start(await fb.json());
           return;
         }
 
         try {
           // Step 1: 上傳檔案到 /api/uploads (寫入 public/uploads/)
-          toast.loading('上傳中...', { id: 'upload' });
+          console.log('[GenerationStream] uploading file', file.name, file.size);
+          toast.loading('上傳照片中...', { id: 'upload' });
           const formData = new FormData();
           formData.append('file', file);
           const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData });
           const uploadJson = await uploadRes.json();
+          console.log('[GenerationStream] upload result', uploadRes.status, uploadJson);
           if (!uploadRes.ok || !uploadJson.success) {
-            throw new Error(uploadJson.error ?? '上傳失敗');
+            throw new Error(uploadJson.error ?? `上傳失敗 (HTTP ${uploadRes.status})`);
           }
           toast.dismiss('upload');
+          toast.success('照片上傳完成', { duration: 1500 });
 
-          // Step 2: 同步呼叫 GPT-4o vision (繞過 Inngest 簡化 hackathon)
-          toast.loading('GPT-4o 正在看照片...', { id: 'vision' });
+          // Step 2: 同步呼叫 GPT-4o vision
+          console.log('[GenerationStream] calling GPT-4o vision');
+          toast.loading('GPT-4o 正在看照片...這通常 3-8 秒', { id: 'vision' });
           const aiRes = await fetch('/api/products/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ storageKey: uploadJson.key }),
           });
           const aiJson = await aiRes.json();
+          console.log('[GenerationStream] AI result', aiRes.status, aiJson);
           toast.dismiss('vision');
 
           if (!aiRes.ok || !aiJson.success) {
-            throw new Error(aiJson.error ?? 'AI 生成失敗');
+            throw new Error(aiJson.error ?? `AI 生成失敗 (HTTP ${aiRes.status})`);
           }
 
           // Step 3: 拿到 ProductOutput → 進 streaming 動畫
+          toast.success('AI 完成，開始顯示結果', { duration: 1500 });
           start(aiJson.data as ProductOutput);
         } catch (err) {
           toast.dismiss('upload');
           toast.dismiss('vision');
           const msg = err instanceof Error ? err.message : '未知錯誤';
+          console.error('[GenerationStream] error', err);
           toast.error('AI 生成失敗', {
             description: `${msg}。改用 fixture demo 繼續。`,
             duration: 6000,

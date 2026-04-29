@@ -62,7 +62,7 @@ export function DemoModeToggle() {
       const k = 'whimsy-demo-hint';
       if (!localStorage.getItem(k)) {
         localStorage.setItem(k, '1');
-        toast('Demo Mode 是 hackathon 的安全網。喔你發現了。', {
+        toast('預覽模式 — 用範例資料展示流程, 不消耗 AI 額度', {
           icon: '🎭',
           duration: 3500,
         });
@@ -134,13 +134,13 @@ export function DemoModeToggle() {
               }}
             >
               <p className="text-xs uppercase tracking-widest opacity-60">
-                You found a secret
+                Unit economics
               </p>
               <h3
                 className="text-2xl"
                 style={{ fontFamily: 'var(--brand-font-heading)' }}
               >
-                跑一張商品的真實成本
+                每張商品的 AI 成本
               </h3>
               <p
                 className="text-5xl font-bold"

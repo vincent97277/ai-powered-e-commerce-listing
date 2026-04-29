@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { UploadDropzone } from '@/components/products/UploadDropzone';
 import { BrandVoiceSelect } from '@/components/products/BrandVoiceSelect';
@@ -15,10 +15,20 @@ export default function NewProductPage() {
   const [voice, setVoice] = useState<BrandVoice>('minimal');
   const [started, setStarted] = useState(false);
   const streamRef = useRef<GenerationStreamHandle>(null);
+  const kickedOff = useRef(false);
 
-  const handleGenerate = async () => {
+  // 修 race condition: setStarted 跟 ref attach 不在同一 tick
+  // 用 useEffect 等 GenerationStream mount 完成 (ref 可用) 後再呼叫 kickoff
+  useEffect(() => {
+    if (started && !kickedOff.current && streamRef.current) {
+      kickedOff.current = true;
+      streamRef.current.kickoff(file);
+    }
+  }, [started, file]);
+
+  const handleGenerate = () => {
+    kickedOff.current = false;
     setStarted(true);
-    await streamRef.current?.kickoff(file);
   };
 
   return (
@@ -74,7 +84,7 @@ export default function NewProductPage() {
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" strokeWidth={2.4} />
             </Button>
             <p className="t-caption" style={{ color: 'color-mix(in srgb, var(--brand-text) 50%, transparent)' }}>
-              · 不會真的扣 OpenAI 額度（Demo Mode 開啟時走 fixture）
+              · 預覽模式啟用時, 走範例資料不消耗 AI 額度 (右下角切換)
             </p>
           </div>
         </motion.div>
