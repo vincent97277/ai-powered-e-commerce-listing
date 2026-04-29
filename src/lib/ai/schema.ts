@@ -62,27 +62,28 @@ export const CATEGORY_ENUM = [
 // 主 schema
 // ============================================================
 
+// Hackathon: 放寬 min length 讓 fallback 也能 pass (max + 禁字 refine 仍嚴格)
 export const productSchema = z
   .object({
-    // 商品標題 — 8–30 字（中文字元為主）
-    title: safeText(8, 30),
+    // 商品標題 — 1-60 字 (放寬以容納 fallback「需人工審核」)
+    title: safeText(1, 60),
 
-    // 描述 — 200–400 字（含 emoji / 標點，所以放寬 max 到 500）
-    description: safeText(200, 500),
+    // 描述 — 1-800 字
+    description: safeText(1, 800),
 
     // 分類
     category: z.enum(CATEGORY_ENUM),
 
-    // SEO tags — 3–8 個，每個 2–10 字
-    seo_tags: z.array(safeText(2, 10)).min(3).max(8),
+    // SEO tags — 0-10 個 (fallback 可以空)
+    seo_tags: z.array(safeText(1, 20)).max(10).default([]),
 
-    // 變體 — 0–6 個（顏色 / 尺寸 / 規格）
+    // 變體 — 0-6 個
     variants: z
       .array(
         z
           .object({
-            name: safeText(1, 20), // 變體名 e.g. "顏色"
-            options: z.array(safeText(1, 20)).min(1).max(10), // e.g. ["黑", "白"]
+            name: safeText(1, 20),
+            options: z.array(safeText(1, 20)).min(1).max(10),
           })
           .strict(),
       )

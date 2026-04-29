@@ -20,8 +20,8 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
     const celebrated = useRef(false);
 
     useImperativeHandle(ref, () => ({
-      async kickoff() {
-        // Hackathon: demo mode 一律 fallback fixture (500ms 假延遲)
+      async kickoff(file: File | null) {
+        // Demo Mode ON: 走 fixture (省 OpenAI 額度 + 速度穩定)
         if (mode === 'on') {
           await new Promise((r) => setTimeout(r, 500));
           const res = await fetch('/fixtures/products/teacup.json');
@@ -29,11 +29,53 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           start(data);
           return;
         }
-        const res = await fetch('/api/products/generate', { method: 'POST' }).catch(() => null);
-        const data: ProductOutput = res
-          ? await res.json()
-          : await (await fetch('/fixtures/products/teacup.json')).json();
-        start(data);
+
+        // Demo Mode OFF: 真實 GPT-4o 流程
+        if (!file) {
+          toast.error('找不到上傳檔案，請重新拖曳照片');
+          return;
+        }
+
+        try {
+          // Step 1: 上傳檔案到 /api/uploads (寫入 public/uploads/)
+          toast.loading('上傳中...', { id: 'upload' });
+          const formData = new FormData();
+          formData.append('file', file);
+          const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData });
+          const uploadJson = await uploadRes.json();
+          if (!uploadRes.ok || !uploadJson.success) {
+            throw new Error(uploadJson.error ?? '上傳失敗');
+          }
+          toast.dismiss('upload');
+
+          // Step 2: 同步呼叫 GPT-4o vision (繞過 Inngest 簡化 hackathon)
+          toast.loading('GPT-4o 正在看照片...', { id: 'vision' });
+          const aiRes = await fetch('/api/products/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storageKey: uploadJson.key }),
+          });
+          const aiJson = await aiRes.json();
+          toast.dismiss('vision');
+
+          if (!aiRes.ok || !aiJson.success) {
+            throw new Error(aiJson.error ?? 'AI 生成失敗');
+          }
+
+          // Step 3: 拿到 ProductOutput → 進 streaming 動畫
+          start(aiJson.data as ProductOutput);
+        } catch (err) {
+          toast.dismiss('upload');
+          toast.dismiss('vision');
+          const msg = err instanceof Error ? err.message : '未知錯誤';
+          toast.error('AI 生成失敗', {
+            description: `${msg}。改用 fixture demo 繼續。`,
+            duration: 6000,
+          });
+          // Fallback: 萬一 AI 掛了，仍跑 fixture demo 不讓畫面卡死
+          const fb = await fetch('/fixtures/products/teacup.json');
+          start(await fb.json());
+        }
       },
     }));
 

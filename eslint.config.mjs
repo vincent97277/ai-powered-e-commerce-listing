@@ -44,6 +44,7 @@ export default [
       'src/db/index.ts',
       'src/inngest/**',         // background job 走 dbAdmin (worker context，非 user-facing)
       'src/lib/storage/**',     // R2 / 系統內部，非 RLS 範圍
+      'src/app/api/products/generate/**',  // sync vision endpoint 需查 brand_voice (system query)
     ],
     rules: { 'no-restricted-imports': 'off' },
   },
