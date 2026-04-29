@@ -20,7 +20,7 @@ import { generateObject } from 'ai';
 import { buildSystemPrompt } from './prompt';
 import { productSchema, type ProductOutput } from './schema';
 
-// 用 2024-11-20 版本（vision 品質和 latency 平衡點，hackathon 夠用）
+// 用 2024-11-20 版本（vision 品質和 latency 平衡點，V1 夠用）
 const MODEL_ID = 'gpt-4o-2024-11-20';
 
 // 哪些錯誤值得重試
@@ -57,10 +57,12 @@ export type VisionResult =
 export async function callVisionWithRetry(opts: {
   imageUrl: string;
   brandVoice: string;
+  /** V1 #67 (RA12): IG/蝦皮 import 來源文案, 餵 GPT-4o 重寫成 brand voice 風格 */
+  sourceCaption?: string;
   maxRetries?: number;
 }): Promise<VisionResult> {
-  const { imageUrl, brandVoice, maxRetries = 2 } = opts;
-  const system = buildSystemPrompt(brandVoice);
+  const { imageUrl, brandVoice, sourceCaption, maxRetries = 2 } = opts;
+  const system = buildSystemPrompt(brandVoice, sourceCaption);
 
   let lastErr: unknown;
   const totalAttempts = maxRetries + 1;

@@ -35,8 +35,8 @@ export const productIngestFn = inngest.createFunction(
   },
   { event: 'product.ingest' },
   async ({ event, step, logger }) => {
-    const { tenantId, r2Key, merchantId } = event.data;
-    logger.info('product.ingest 開始', { tenantId, r2Key, merchantId });
+    const { tenantId, r2Key, merchantId, sourceText, importSessionId, itemIndex } = event.data;
+    logger.info('product.ingest 開始', { tenantId, r2Key, merchantId, hasSourceText: !!sourceText });
 
     // Step 1: 從本地讀原始照片
     const originalBuffer = await step.run('read-from-fs', async () => {
@@ -73,16 +73,18 @@ export const productIngestFn = inngest.createFunction(
     });
 
     // Step 5: GPT-4o vision (要絕對 URL — 用 NEXT_PUBLIC_APP_URL + /uploads/...)
+    //         V1 #67 (RA12): sourceText 從 IG/蝦皮 import 帶進來, 餵 GPT-4o 重寫成 brand voice
     const visionResult = await step.run('call-vision', async () => {
       const imageUrl = getPublicUrl(processedKey);
       return await callVisionWithRetry({
         imageUrl,
         brandVoice,
+        sourceCaption: sourceText,
         maxRetries: 2,
       });
     });
 
-    // Step 6a: 失敗分支
+    // Step 6a: 失敗分支 (RA20: 寫 needs_review status, 不 throw 讓 parent retry)
     if (!visionResult.success) {
       logger.error('vision 失敗', { error: visionResult.error });
 
@@ -96,6 +98,7 @@ export const productIngestFn = inngest.createFunction(
               description: `AI 解析失敗：${visionResult.error}`,
               r2Key: processedKey,
               priceCents: 0,
+              productStatus: 'needs_review', // RA20
               aiMetadata: {
                 title: '上架失敗',
                 description: '需手動補資料',
@@ -114,13 +117,38 @@ export const productIngestFn = inngest.createFunction(
 
       await step.sendEvent('emit-failed', {
         name: 'product.ingest.failed',
-        data: { tenantId, r2Key, error: visionResult.error },
+        data: { tenantId, r2Key, error: visionResult.error, importSessionId, itemIndex },
       });
 
+      // RA20: 不 throw — parent worker 已 dispatch, 不該因為 child AI 失敗 retry parent
       return { ok: false, productId: failedProductId, error: visionResult.error };
     }
 
-    // Step 6b: 成功分支
+    // Step 6b: 成功分支 — 額外 Zod-light 驗證 (RA10): title/desc 不可含 URL
+    const aiData = visionResult.data;
+    const URL_RE = /https?:\/\/|www\./i;
+    if (URL_RE.test(aiData.title) || URL_RE.test(aiData.description)) {
+      logger.warn('AI output 含 URL, 標 needs_review', { title: aiData.title });
+      const flaggedProductId = await step.run('write-flagged', async () => {
+        return await withTenantTx(tenantId, async (tx) => {
+          const inserted = await tx
+            .insert(products)
+            .values({
+              tenantId,
+              title: aiData.title,
+              description: aiData.description,
+              r2Key: processedKey,
+              priceCents: aiData.price_twd.min * 100,
+              productStatus: 'needs_review',
+              aiMetadata: { ...aiData, status: 'success' } satisfies ProductAiMetadata,
+            })
+            .returning({ id: products.id });
+          return inserted[0].id;
+        });
+      });
+      return { ok: true, productId: flaggedProductId, flagged: true };
+    }
+
     const productId = await step.run('write-product', async () => {
       return await withTenantTx(tenantId, async (tx) => {
         const ai = visionResult.data;
@@ -144,7 +172,7 @@ export const productIngestFn = inngest.createFunction(
 
     await step.sendEvent('emit-ingested', {
       name: 'product.ingested',
-      data: { productId, tenantId },
+      data: { productId, tenantId, importSessionId, itemIndex },
     });
 
     logger.info('product.ingest 完成', { productId, confidence: visionResult.data.confidence });

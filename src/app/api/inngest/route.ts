@@ -9,11 +9,12 @@
 import { serve } from 'inngest/next';
 import { inngest } from '@/inngest/client';
 import { productIngestFn } from '@/inngest/functions/product-ingest';
+import { productImportBatchFn } from '@/inngest/functions/product-import-batch';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [productIngestFn],
+  functions: [productIngestFn, productImportBatchFn],
 });
