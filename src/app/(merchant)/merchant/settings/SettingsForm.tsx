@@ -1,0 +1,327 @@
+'use client';
+
+import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { Save, Eye } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { updateMerchantAction } from './actions';
+
+const FONT_OPTIONS = [
+  { value: "'Noto Serif TC', serif", label: '思源宋體 (質感日系)' },
+  { value: "'Noto Sans TC', sans-serif", label: '思源黑體 (現代簡潔)' },
+];
+
+const RADIUS_OPTIONS = [
+  { value: '2px', label: '銳利 (2px)' },
+  { value: '6px', label: '微圓 (6px)' },
+  { value: '12px', label: '圓潤 (12px)' },
+  { value: '20px', label: '柔和 (20px)' },
+];
+
+export function SettingsForm({
+  name: initialName,
+  slug: initialSlug,
+  brandVoice: initialBrandVoice,
+  themeVars: initialThemeVars,
+}: {
+  name: string;
+  slug: string;
+  brandVoice: string;
+  themeVars: Record<string, string>;
+}) {
+  const router = useRouter();
+  const [name, setName] = useState(initialName);
+  const [slug, setSlug] = useState(initialSlug);
+  const [brandVoice, setBrandVoice] = useState(initialBrandVoice);
+  const [primary, setPrimary] = useState(initialThemeVars['--brand-primary'] ?? '#8B7355');
+  const [bg, setBg] = useState(initialThemeVars['--brand-bg'] ?? '#FAF8F5');
+  const [text, setText] = useState(initialThemeVars['--brand-text'] ?? '#2C2416');
+  const [radius, setRadius] = useState(initialThemeVars['--brand-radius'] ?? '6px');
+  const [font, setFont] = useState(
+    initialThemeVars['--brand-font-heading'] ?? "'Noto Sans TC', sans-serif",
+  );
+  const [pending, start] = useTransition();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    start(async () => {
+      const themeVars = {
+        '--brand-primary': primary,
+        '--brand-bg': bg,
+        '--brand-text': text,
+        '--brand-radius': radius,
+        '--brand-font-heading': font,
+      };
+
+      const result = await updateMerchantAction({
+        name,
+        slug: slug !== initialSlug ? slug : undefined,
+        brandVoice,
+        themeVars,
+      });
+
+      if (!result.success) {
+        toast.error(result.error ?? '儲存失敗');
+        return;
+      }
+      toast.success('已儲存設定', {
+        description:
+          result.newSlug && result.newSlug !== initialSlug
+            ? `店面網址改成 /store/${result.newSlug} 了`
+            : '改變立刻套用到 storefront 跟 AI 文案生成',
+        duration: 4000,
+      });
+      router.refresh();
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-8">
+      {/* 基本資訊 */}
+      <Section title="基本資訊">
+        <div className="space-y-2">
+          <Label className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+            店名
+          </Label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={60}
+            required
+            style={{
+              borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+              borderRadius: 'var(--brand-radius)',
+            }}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+            店面網址 (slug)
+          </Label>
+          <div
+            className="flex items-stretch overflow-hidden border"
+            style={{
+              borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+              borderRadius: 'var(--brand-radius)',
+            }}
+          >
+            <span
+              className="t-small flex items-center px-3 font-mono"
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--brand-primary) 8%, transparent)',
+                color: 'color-mix(in srgb, var(--brand-text) 60%, transparent)',
+              }}
+            >
+              /store/
+            </span>
+            <Input
+              value={slug}
+              onChange={(e) => setSlug(e.target.value.toLowerCase())}
+              pattern="[a-z0-9][a-z0-9-]{1,30}[a-z0-9]"
+              minLength={3}
+              maxLength={32}
+              required
+              className="flex-1 border-0 font-mono"
+              style={{ borderRadius: 0 }}
+            />
+          </div>
+          {slug !== initialSlug && (
+            <p className="t-caption" style={{ color: 'var(--warning)' }}>
+              ⚠ 改 slug 後舊網址 /store/{initialSlug} 會 404, 通知過顧客的請小心
+            </p>
+          )}
+        </div>
+      </Section>
+
+      {/* 品牌語氣 */}
+      <Section title="品牌語氣 (給 AI 文案用)">
+        <div className="space-y-2">
+          <Textarea
+            value={brandVoice}
+            onChange={(e) => setBrandVoice(e.target.value)}
+            maxLength={200}
+            rows={4}
+            placeholder="例: 永康街選物店, 質感日系, 文字偏內斂, 不堆形容詞"
+            style={{
+              borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+              borderRadius: 'var(--brand-radius)',
+            }}
+          />
+          <p className="t-caption tabular-nums opacity-50">
+            {brandVoice.length} / 200 · 改了之後下次 AI 生成商品文案會用這段語氣
+          </p>
+        </div>
+      </Section>
+
+      {/* 視覺主題 */}
+      <Section title="視覺主題">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <ColorField label="主色 (primary)" value={primary} onChange={setPrimary} />
+          <ColorField label="底色 (bg)" value={bg} onChange={setBg} />
+          <ColorField label="文字色" value={text} onChange={setText} />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+              圓角風格
+            </Label>
+            <select
+              value={radius}
+              onChange={(e) => setRadius(e.target.value)}
+              className="w-full border bg-transparent px-3 py-2 text-sm"
+              style={{
+                borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+                borderRadius: 'var(--brand-radius)',
+                color: 'var(--brand-text)',
+              }}
+            >
+              {RADIUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+              標題字型
+            </Label>
+            <select
+              value={font}
+              onChange={(e) => setFont(e.target.value)}
+              className="w-full border bg-transparent px-3 py-2 text-sm"
+              style={{
+                borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+                borderRadius: 'var(--brand-radius)',
+                color: 'var(--brand-text)',
+              }}
+            >
+              {FONT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Live preview */}
+        <motion.div
+          layout
+          className="mt-4 p-6"
+          style={{
+            backgroundColor: bg,
+            color: text,
+            borderRadius: radius,
+            border: `1px solid ${primary}33`,
+            transition: 'all 600ms ease',
+          }}
+        >
+          <p
+            className="text-2xl font-bold"
+            style={{ color: primary, fontFamily: font }}
+          >
+            {name || '你的店名'}
+          </p>
+          <p className="mt-2 text-sm opacity-70">
+            這是 storefront 預覽 — 顧客打開 /store/{slug || initialSlug} 會看到的色調
+          </p>
+        </motion.div>
+      </Section>
+
+      <div className="flex items-center justify-between pt-4">
+        <a
+          href={`/store/${initialSlug}`}
+          target="_blank"
+          rel="noreferrer"
+          className="t-small inline-flex items-center gap-1 underline"
+          style={{ color: 'var(--brand-primary)' }}
+        >
+          <Eye className="h-3.5 w-3.5" strokeWidth={2.4} />
+          查看 storefront
+        </a>
+        <Button
+          type="submit"
+          disabled={pending}
+          className="hover-lift inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold elev-2"
+          style={{
+            backgroundColor: 'var(--brand-primary)',
+            color: 'var(--brand-bg)',
+            borderRadius: 'var(--brand-radius)',
+            fontFamily: 'var(--brand-font-heading)',
+          }}
+        >
+          <Save className="h-4 w-4" strokeWidth={2.4} />
+          {pending ? '儲存中...' : '儲存設定'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section
+      className="space-y-4 border p-6"
+      style={{
+        borderColor: 'color-mix(in srgb, var(--brand-primary) 16%, transparent)',
+        borderRadius: 'var(--brand-radius)',
+        backgroundColor: 'color-mix(in srgb, var(--brand-primary) 2%, var(--brand-bg))',
+      }}
+    >
+      <h2
+        className="t-h3"
+        style={{ fontFamily: 'var(--brand-font-heading)', color: 'var(--brand-text)' }}
+      >
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+        {label}
+      </Label>
+      <div
+        className="flex items-stretch overflow-hidden border"
+        style={{
+          borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+          borderRadius: 'var(--brand-radius)',
+        }}
+      >
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-10 w-12 cursor-pointer border-0 bg-transparent"
+          style={{ padding: 0 }}
+        />
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          maxLength={9}
+          pattern="^#[0-9a-fA-F]{6,8}$"
+          className="flex-1 border-0 bg-transparent px-2 font-mono text-sm outline-none"
+          style={{ color: 'var(--brand-text)' }}
+        />
+      </div>
+    </div>
+  );
+}
