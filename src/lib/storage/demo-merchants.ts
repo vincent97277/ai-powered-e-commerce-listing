@@ -1,5 +1,5 @@
 /**
- * Demo Merchants — Hackathon 用的 hardcode tenant mapping。
+ * Demo Merchants — V1 用的 hardcode tenant mapping。
  *
  * 為什麼: Auth.js 在 1-day build 完整接會吃太多時間，
  * 我們改用 cookie `demo-merchant-id` 直接帶 slug，server 端 map 回 tenant uuid。
@@ -16,7 +16,7 @@ export interface DemoMerchant {
   tenantId: string;
   slug: DemoMerchantSlug;
   name: string;
-  /** 同個 tenant 下的 merchant id (Drizzle merchants.id)，hackathon 一對一 */
+  /** 同個 tenant 下的 merchant id (Drizzle merchants.id)，V1 一對一 */
   merchantId: string;
 }
 
@@ -37,7 +37,7 @@ export const DEMO_MERCHANTS: Record<DemoMerchantSlug, DemoMerchant> = {
 
 /**
  * 從 cookie value 取出 merchant，認不出來就 fallback 到 akami。
- * 不丟錯，因為 hackathon demo 流暢度比 strict 重要。
+ * 不丟錯，因為 V1 demo 流暢度比 strict 重要。
  */
 export function getMerchantFromCookie(
   cookieValue: string | undefined,

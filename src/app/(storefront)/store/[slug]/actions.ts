@@ -1,7 +1,7 @@
 'use server';
 
 /**
- * Storefront 顧客結帳 — Hackathon mock 版
+ * Storefront 顧客結帳 — V1 假金流版
  * 顧客送出表單 → 寫 orders + order_items → 回傳 order id 給 client redirect
  *
  * 顧客身分: email 字串 (不 auth)

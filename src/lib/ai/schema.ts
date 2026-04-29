@@ -44,7 +44,7 @@ const safeText = (min: number, max: number) =>
     .refine((s) => !URL_OR_CONTACT.test(s), { message: '含外連 / 聯絡方式' });
 
 // ============================================================
-// 商品分類 enum — hackathon scope 先定 8 類，之後再擴
+// 商品分類 enum — V1 scope 先定 8 類，之後再擴
 // ============================================================
 
 export const CATEGORY_ENUM = [
@@ -62,7 +62,7 @@ export const CATEGORY_ENUM = [
 // 主 schema
 // ============================================================
 
-// Hackathon: 放寬 min length 讓 fallback 也能 pass (max + 禁字 refine 仍嚴格)
+// V1: 放寬 min length 讓 fallback 也能 pass (max + 禁字 refine 仍嚴格)
 export const productSchema = z
   .object({
     // 商品標題 — 1-60 字 (放寬以容納 fallback「需人工審核」)

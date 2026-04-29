@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 
 /**
  * 彩蛋 C: 連點 logo 3 次 (1.2s window) → 整頁 hue-rotate 5 秒
- * 副效果：所有 brand color 跟著旋轉，hackathon 慶祝感
+ * 副效果：所有 brand color 跟著旋轉，玩心慶祝感
  */
 export function RainbowLogo({ children }: { children: React.ReactNode }) {
   const tapCount = useRef(0);
@@ -21,7 +21,7 @@ export function RainbowLogo({ children }: { children: React.ReactNode }) {
     if (tapCount.current >= 3) {
       tapCount.current = 0;
       setActive(true);
-      toast('🌈 hackathon mode unlocked', {
+      toast('🌈 設計師模式 unlocked', {
         description: '連點 logo 3 次。你發現了。5 秒後恢復。',
         duration: 4000,
       });

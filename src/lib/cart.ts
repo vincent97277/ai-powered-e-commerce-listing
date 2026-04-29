@@ -2,7 +2,7 @@
 
 /**
  * 購物車 hook — localStorage per merchant slug
- * Hackathon: 不接 server，純 client 狀態
+ * V1: 不接 server，純 client 狀態
  */
 import { useEffect, useState, useCallback } from 'react';
 

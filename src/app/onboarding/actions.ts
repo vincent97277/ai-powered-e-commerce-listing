@@ -1,7 +1,7 @@
 'use server';
 
 /**
- * 商家自助註冊 — Hackathon 簡化:
+ * 商家自助註冊 — V1 簡化:
  * - 不做 email 驗證
  * - 不做 captcha
  * - 不做唯一性檢查 (slug UNIQUE constraint 會擋)

@@ -1,12 +1,12 @@
 /**
- * 本地檔案儲存 — 取代 R2 (hackathon local-first)
+ * 本地檔案儲存 — 取代 R2 (V1 local-first)
  *
  * 上傳路徑: ./public/uploads/{tenant_id}/{uuid}.{ext}
  * 公開 URL: /uploads/{tenant_id}/{uuid}.{ext} (Next.js 自動 serve public/)
  *
  * 為什麼不用 server signed URL？
  * - 本地不需要 — 前端直接 PUT 到 /api/uploads (server action 寫檔)
- * - 簡化 hackathon flow
+ * - 簡化 V1 flow
  *
  * v2 升級到 R2 時，這個檔換掉就好，介面相同
  */

@@ -24,7 +24,7 @@ export function useDemoMode() {
 // 估算「真實成本」(GPT-4o vision + text generation)
 // vision: ~1100 input tokens (image), text out: ~600 tokens
 // 4o input $2.5/M, output $10/M → 2.5 * 1100 / 1e6 + 10 * 600 / 1e6 ≈ $0.00875
-// 用台幣 32 匯率 ≈ NT$ 0.28，hackathon 可以說「跑一張 < NT$ 0.3」
+// 用台幣 32 匯率 ≈ NT$ 0.28，demo 可以說「跑一張 < NT$ 0.3」
 const REAL_COST_USD = 0.00275 + 0.006; // = 0.00875
 const REAL_COST_TWD = (REAL_COST_USD * 32).toFixed(2);
 
