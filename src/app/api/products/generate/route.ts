@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFileLocal } from '@/lib/storage/local-fs';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
+import { assertNotSuspended, MerchantSuspendedError } from '@/lib/merchant/suspend-guard';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { products, type ProductAiMetadata } from '@/db/schema';
 import { callVisionWithRetry } from '@/lib/ai/vision';
@@ -23,6 +24,16 @@ export async function POST(req: NextRequest) {
   try {
     const cookieValue = req.cookies.get('demo-merchant-id')?.value;
     const merchant = await resolveMerchantFromCookie(cookieValue);
+
+    // V1 #53: 停權商家不可上架
+    try {
+      await assertNotSuspended(merchant.tenantId);
+    } catch (err) {
+      if (err instanceof MerchantSuspendedError) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 403 });
+      }
+      throw err;
+    }
 
     const body = await req.json().catch(() => null);
     const storageKey = body?.storageKey as string | undefined;

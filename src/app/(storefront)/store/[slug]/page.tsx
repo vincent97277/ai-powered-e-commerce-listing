@@ -2,19 +2,54 @@
  * Storefront 首頁 — 列出 published 商品
  */
 import Link from 'next/link';
-import { resolveStorefrontMeta } from '@/lib/tenant/resolver';
+import { resolveSlugRedirect, resolveStorefrontMeta } from '@/lib/tenant/resolver';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { products } from '@/db/schema';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { eq, desc } from 'drizzle-orm';
-import { ShoppingBag } from 'lucide-react';
+import { Pause, ShoppingBag } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 export default async function StorefrontPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const meta = await resolveStorefrontMeta(slug);
-  if (!meta) notFound();
+
+  // 若 slug 不存在 — 看是否 match previousSlug, 是的話 301 redirect 到新 slug
+  if (!meta) {
+    const newSlug = await resolveSlugRedirect(slug);
+    if (newSlug) redirect(`/store/${newSlug}`);
+    notFound();
+  }
+
+  // 商家被平台停權 — 顯示「暫停營業中」(200 OK 不是 503, SEO 不爆)
+  if (meta.suspendedAt) {
+    return (
+      <main
+        className="flex min-h-screen items-center justify-center px-6"
+        style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}
+      >
+        <div className="max-w-md text-center">
+          <Pause
+            className="mx-auto mb-4 h-12 w-12 opacity-40"
+            strokeWidth={1.4}
+            style={{ color: 'var(--brand-primary)' }}
+          />
+          <h1
+            className="t-h2"
+            style={{ fontFamily: 'var(--brand-font-heading)' }}
+          >
+            {meta.name} 暫停營業中
+          </h1>
+          {meta.suspendedReason ? (
+            <p className="t-small mt-3 opacity-70">{meta.suspendedReason}</p>
+          ) : (
+            <p className="t-small mt-3 opacity-60">店家暫時無法接受訂單, 請稍後再來</p>
+          )}
+        </div>
+      </main>
+    );
+  }
 
   const items = await withTenantTx(meta.tenantId, async (tx) => {
     return await tx

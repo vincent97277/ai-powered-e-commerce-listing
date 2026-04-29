@@ -32,19 +32,52 @@ export const resolveTenantBySlug = (slug: string) =>
     { tags: [tagFor(slug)], revalidate: 300 } // 5 分鐘 fallback，但 tag 失效優先
   )();
 
-/** 同時拿 tenant_id + 公開資料 (商家名)，給 storefront 用 */
+/** 同時拿 tenant_id + 公開資料 (商家名 + 停權狀態), 給 storefront 用 */
 export const resolveStorefrontMeta = (slug: string) =>
   unstable_cache(
-    async (): Promise<{ tenantId: string; name: string } | null> => {
+    async (): Promise<{
+      tenantId: string;
+      name: string;
+      suspendedAt: Date | null;
+      suspendedReason: string | null;
+    } | null> => {
       const rows = await dbAdmin
-        .select({ id: merchants.id, name: merchants.name })
+        .select({
+          id: merchants.id,
+          name: merchants.name,
+          suspendedAt: merchants.suspendedAt,
+          suspendedReason: merchants.suspendedReason,
+        })
         .from(merchants)
         .where(eq(merchants.slug, slug))
         .limit(1);
       if (!rows[0]) return null;
-      return { tenantId: rows[0].id, name: rows[0].name };
+      return {
+        tenantId: rows[0].id,
+        name: rows[0].name,
+        suspendedAt: rows[0].suspendedAt,
+        suspendedReason: rows[0].suspendedReason,
+      };
     },
     [`storefront-meta-${slug}`],
+    { tags: [tagFor(slug)], revalidate: 300 }
+  )();
+
+/**
+ * 若輸入 slug 不是當前 active slug, 但 match 某商家的 previousSlug → 回新 slug
+ * 給 storefront 做 301 redirect 用 (V1 #52)
+ */
+export const resolveSlugRedirect = (slug: string) =>
+  unstable_cache(
+    async (): Promise<string | null> => {
+      const rows = await dbAdmin
+        .select({ slug: merchants.slug })
+        .from(merchants)
+        .where(eq(merchants.previousSlug, slug))
+        .limit(1);
+      return rows[0]?.slug ?? null;
+    },
+    [`slug-redirect-${slug}`],
     { tags: [tagFor(slug)], revalidate: 300 }
   )();
 

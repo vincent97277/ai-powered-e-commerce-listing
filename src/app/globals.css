@@ -116,6 +116,50 @@ html {
   text-rendering: optimizeLegibility;
 }
 
+/* ======================================
+   Platform palette (V1 #48, RA16)
+   套在 admin / 平台首頁 / about / privacy / terms wrapper
+   .platform 內: brand vars 切 Linear-tone, shadcn vars 也跟著切
+   merchant storefront / merchant 後台 不加 .platform → 繼續用商家 brand
+   ====================================== */
+.platform {
+  /* Linear-tone palette (zinc-based, 高對比, 4px sharp radius) */
+  --brand-primary: #18181B;        /* zinc-900, primary CTA / link */
+  --brand-bg: #FAFAFA;             /* zinc-50, 接近白但有暖調 */
+  --brand-text: #18181B;           /* zinc-900, 高對比 body */
+  --brand-radius: 4px;             /* sharp Linear-style */
+  --brand-font-heading: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
+
+  /* shadcn primitives 別名 — Button / Dialog / Input 跟著切 */
+  --primary: oklch(0.205 0 0);          /* zinc-900 oklch */
+  --primary-foreground: oklch(0.985 0 0);
+  --background: oklch(0.985 0 0);       /* zinc-50 */
+  --foreground: oklch(0.205 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.205 0 0);
+  --border: oklch(0.922 0 0);           /* zinc-200 */
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.439 0 0); /* zinc-600 */
+  --radius: 0.25rem;                    /* 4px aligned with --brand-radius */
+
+  background-color: var(--brand-bg);
+  color: var(--brand-text);
+}
+
+/* platform 區塊用 Inter, 不繼承 body 的 Noto Serif */
+.platform,
+.platform * {
+  font-family: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
+}
+
+/* tabular-nums 用 monospace */
+.platform .font-mono,
+.platform .t-tabular {
+  font-family: 'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
+}
+
 body {
   font-family: var(--brand-font-heading), system-ui, sans-serif;
   background-color: var(--brand-bg);

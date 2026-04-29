@@ -10,6 +10,7 @@ import { withTenantTx } from '@/lib/db/with-tenant';
 import { products, type ProductAiMetadata } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
+import { assertNotSuspended } from '@/lib/merchant/suspend-guard';
 
 async function resolveTenantIdFromCookie(): Promise<string> {
   const c = await cookies();
@@ -17,10 +18,17 @@ async function resolveTenantIdFromCookie(): Promise<string> {
   return m.tenantId;
 }
 
+/** V1 #53: 商家被平台停權時所有 write 拒絕 (但容許 togglePublish 為 false 也擋住, 不能下架後再上架) */
+async function resolveTenantAndCheckSuspend(): Promise<string> {
+  const tenantId = await resolveTenantIdFromCookie();
+  await assertNotSuspended(tenantId);
+  return tenantId;
+}
+
 /** 上架 / 下架 */
 export async function togglePublishAction(productId: string, publish: boolean): Promise<{ success: boolean; error?: string }> {
   try {
-    const tenantId = await resolveTenantIdFromCookie();
+    const tenantId = await resolveTenantAndCheckSuspend();
     await withTenantTx(tenantId, async (tx) => {
       await tx.update(products).set({ isPublished: publish }).where(eq(products.id, productId));
     });
@@ -49,7 +57,7 @@ export async function updateProductAction(
       return { success: false, error: '價格必須 0-100,000 元之間' };
     }
 
-    const tenantId = await resolveTenantIdFromCookie();
+    const tenantId = await resolveTenantAndCheckSuspend();
     await withTenantTx(tenantId, async (tx) => {
       const update: Record<string, unknown> = { updatedAt: new Date() };
       if (patch.title !== undefined) update.title = patch.title;
@@ -69,7 +77,7 @@ export async function updateProductAction(
 /** 刪除商品 */
 export async function deleteProductAction(productId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const tenantId = await resolveTenantIdFromCookie();
+    const tenantId = await resolveTenantAndCheckSuspend();
     await withTenantTx(tenantId, async (tx) => {
       await tx.delete(products).where(eq(products.id, productId));
     });
@@ -84,7 +92,7 @@ export async function deleteProductAction(productId: string): Promise<{ success:
 /** Seed 假資料供新商家快速體驗 */
 export async function seedDemoProductAction(opts: { fixtureSlug: 'teacup' | 'phonecase' | 'sauce' }): Promise<{ success: boolean; productId?: string; error?: string }> {
   try {
-    const tenantId = await resolveTenantIdFromCookie();
+    const tenantId = await resolveTenantAndCheckSuspend();
     const fixtureRes = await fetch(
       `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/fixtures/products/${opts.fixtureSlug}.json`,
     );

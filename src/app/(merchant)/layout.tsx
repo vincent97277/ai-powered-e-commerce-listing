@@ -27,13 +27,15 @@ export default async function MerchantLayout({ children }: { children: React.Rea
   const c = await cookies();
   const cookieValue = c.get(DEMO_MERCHANT_COOKIE)?.value;
 
-  // 撈所有 merchants 從 DB
+  // 撈所有 merchants 從 DB (含 suspendedAt 給 banner 用)
   const rows = await dbAdmin
     .select({
       id: merchantsTable.id,
       slug: merchantsTable.slug,
       name: merchantsTable.name,
       themeVars: merchantsTable.themeVars,
+      suspendedAt: merchantsTable.suspendedAt,
+      suspendedReason: merchantsTable.suspendedReason,
     })
     .from(merchantsTable)
     .orderBy(desc(merchantsTable.createdAt));
@@ -58,8 +60,22 @@ export default async function MerchantLayout({ children }: { children: React.Rea
     }
   }
 
+  // 當前商家是否被平台停權?
+  const currentRow = rows.find((r) => r.id === currentId);
+  const isSuspended = currentRow?.suspendedAt != null;
+  const suspendedReason = currentRow?.suspendedReason ?? null;
+
   return (
     <ThemeProvider merchants={merchants} initialMerchantId={currentId}>
+      {isSuspended && (
+        <div className="border-b border-red-200 bg-red-50 px-12 py-3 text-sm text-red-800">
+          <strong>你的商家已被平台暫停營業</strong>
+          {suspendedReason && <span> — {suspendedReason}</span>}
+          <span className="ml-2 text-xs text-red-600">
+            (in-flight 訂單仍可處理, 但無法上架商品 / 改設定)
+          </span>
+        </div>
+      )}
       <header
         className="flex items-center justify-between border-b px-12 py-4"
         style={{
