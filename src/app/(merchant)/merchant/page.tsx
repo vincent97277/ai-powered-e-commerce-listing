@@ -6,9 +6,12 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { withTenantTx } from '@/lib/db/with-tenant';
-import { products, orders, orderItems } from '@/db/schema';
-import { count, eq, sum, sql, desc, gte } from 'drizzle-orm';
+import { products, orders, orderItems, merchants } from '@/db/schema';
+import { count, eq, sum, sql, desc, gte, lte } from 'drizzle-orm';
 import { Plus, Package, ShoppingCart, ExternalLink, TrendingUp, Settings } from 'lucide-react';
+import { KpiCard } from '@/components/dashboard/KpiCard';
+import { PendingCallout } from '@/components/merchant/PendingCallout';
+import { dbAdmin } from '@/db/admin-only';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,6 +101,36 @@ export default async function MerchantDashboard() {
       .limit(5);
   });
 
+  // V1 #72: 待處理 callout query (Promise.all 平行 → 同 withTenantTx)
+  const [merchantRow] = await dbAdmin
+    .select({ lowStockThreshold: merchants.lowStockThreshold })
+    .from(merchants)
+    .where(eq(merchants.id, merchant.tenantId))
+    .limit(1);
+  const lowStockThreshold = merchantRow?.lowStockThreshold ?? 5;
+
+  const [callout] = await withTenantTx(merchant.tenantId, async (tx) => {
+    const [orderCounts, lowStock] = await Promise.all([
+      tx
+        .select({
+          pending: sql<number>`count(*) filter (where ${orders.status} = 'pending')::int`.mapWith(Number),
+          paid: sql<number>`count(*) filter (where ${orders.status} = 'paid')::int`.mapWith(Number),
+        })
+        .from(orders),
+      tx
+        .select({ n: count(products.id) })
+        .from(products)
+        .where(lte(products.stockQuantity, lowStockThreshold)),
+    ]);
+    return [
+      {
+        pending: orderCounts[0]?.pending ?? 0,
+        paid: orderCounts[0]?.paid ?? 0,
+        lowStock: lowStock[0]?.n ?? 0,
+      },
+    ];
+  });
+
   // 上架轉換率
   const publishRate = productStats.total > 0
     ? Math.round((productStats.published / productStats.total) * 100)
@@ -163,6 +196,14 @@ export default async function MerchantDashboard() {
             </Link>
           </div>
         </header>
+
+        {/* V1 #72 PendingCallout (全 0 不顯示) */}
+        <PendingCallout
+          pendingOrders={callout.pending}
+          paidOrders={callout.paid}
+          lowStockCount={callout.lowStock}
+          lowStockThreshold={lowStockThreshold}
+        />
 
         {/* KPI cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -345,52 +386,6 @@ export default async function MerchantDashboard() {
         </div>
       </div>
     </main>
-  );
-}
-
-function KpiCard({
-  href,
-  icon: Icon,
-  label,
-  value,
-  sub,
-}: {
-  href: string;
-  icon: React.ElementType;
-  label: string;
-  value: string | number;
-  sub: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="hover-lift block border p-5"
-      style={{
-        borderColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
-        borderRadius: 'var(--brand-radius)',
-        backgroundColor: 'color-mix(in srgb, var(--brand-primary) 3%, var(--brand-bg))',
-        boxShadow: 'var(--elev-1)',
-      }}
-    >
-      <div className="mb-3 flex items-center gap-2">
-        <Icon className="h-4 w-4" strokeWidth={2.2} style={{ color: 'var(--brand-primary)' }} />
-        <span className="t-caption" style={{ color: 'var(--brand-primary)' }}>
-          {label}
-        </span>
-      </div>
-      <p
-        className="t-tabular text-3xl font-semibold leading-none"
-        style={{ color: 'var(--brand-text)', fontFamily: 'var(--brand-font-heading)' }}
-      >
-        {value}
-      </p>
-      <p
-        className="t-small mt-2"
-        style={{ color: 'color-mix(in srgb, var(--brand-text) 55%, transparent)' }}
-      >
-        {sub}
-      </p>
-    </Link>
   );
 }
 

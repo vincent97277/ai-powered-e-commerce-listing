@@ -5,23 +5,81 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { withTenantTx } from '@/lib/db/with-tenant';
-import { products } from '@/db/schema';
-import { desc } from 'drizzle-orm';
-import { Plus, Package, ImageIcon } from 'lucide-react';
+import { products, orderItems, merchants } from '@/db/schema';
+import { asc, desc, eq, lte, sql } from 'drizzle-orm';
+import { Plus, Package, ImageIcon, AlertTriangle } from 'lucide-react';
 import { ProductRowActions } from './ProductRowActions';
+import { dbAdmin } from '@/db/admin-only';
 
 export const dynamic = 'force-dynamic';
 
-export default async function MerchantProductsList() {
+const SORT_OPTIONS = {
+  sales: '銷量 (高 → 低)',
+  createdAt: '建立時間 (新 → 舊)',
+  stock: '庫存 (少 → 多)',
+  title: '標題 (A → Z)',
+} as const;
+type SortKey = keyof typeof SORT_OPTIONS;
+
+function isSortKey(s: unknown): s is SortKey {
+  return typeof s === 'string' && s in SORT_OPTIONS;
+}
+
+export default async function MerchantProductsList({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string; filter?: string }>;
+}) {
+  const params = await searchParams;
+  const sortKey: SortKey = isSortKey(params.sort) ? params.sort : 'sales';
+  const lowStockOnly = params.filter === 'low-stock';
+
   const c = await cookies();
   const merchant = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
 
+  // 取 lowStockThreshold from merchants (RLS 過, 但商家自己看自己沒問題)
+  const [merchantRow] = await dbAdmin
+    .select({ lowStockThreshold: merchants.lowStockThreshold })
+    .from(merchants)
+    .where(eq(merchants.id, merchant.tenantId))
+    .limit(1);
+  const threshold = merchantRow?.lowStockThreshold ?? 5;
+
   const items = await withTenantTx(merchant.tenantId, async (tx) => {
-    return await tx
-      .select()
-      .from(products)
-      .orderBy(desc(products.createdAt))
-      .limit(100);
+    const base = tx
+      .select({
+        id: products.id,
+        title: products.title,
+        description: products.description,
+        priceCents: products.priceCents,
+        stockQuantity: products.stockQuantity,
+        isPublished: products.isPublished,
+        productStatus: products.productStatus,
+        r2Key: products.r2Key,
+        createdAt: products.createdAt,
+        soldCount: sql<number>`COALESCE((SELECT SUM(${orderItems.quantity})::int FROM ${orderItems} WHERE ${orderItems.productId} = ${products.id}), 0)::int`.mapWith(
+          Number,
+        ),
+      })
+      .from(products);
+
+    const filtered = lowStockOnly
+      ? base.where(lte(products.stockQuantity, threshold))
+      : base;
+
+    const sorted =
+      sortKey === 'sales'
+        ? filtered.orderBy(
+            desc(sql`COALESCE((SELECT SUM(${orderItems.quantity}) FROM ${orderItems} WHERE ${orderItems.productId} = ${products.id}), 0)`),
+            desc(products.createdAt),
+          )
+        : sortKey === 'stock'
+          ? filtered.orderBy(asc(products.stockQuantity))
+          : sortKey === 'title'
+            ? filtered.orderBy(asc(products.title))
+            : filtered.orderBy(desc(products.createdAt));
+
+    return await sorted.limit(100);
   });
 
   return (
@@ -29,7 +87,7 @@ export default async function MerchantProductsList() {
       className="min-h-screen px-12 py-10"
       style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}
     >
-      <div className="mx-auto max-w-6xl space-y-8">
+      <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex items-end justify-between gap-6">
           <div>
             <p className="t-caption" style={{ color: 'var(--brand-primary)' }}>
@@ -39,7 +97,12 @@ export default async function MerchantProductsList() {
               你的所有商品
             </h1>
             <p className="t-small mt-1 opacity-60">
-              共 {items.length} 件 · {items.filter((p) => p.isPublished).length} 件已上架
+              {lowStockOnly ? `低庫存 (≤${threshold}) ` : ''}
+              {items.length} 件 · {items.filter((p) => p.isPublished).length} 件已上架
+              {!lowStockOnly && (() => {
+                const lowCount = items.filter((p) => p.stockQuantity <= threshold).length;
+                return lowCount > 0 ? ` · ${lowCount} 件低庫存` : '';
+              })()}
             </p>
           </div>
           <Link
@@ -56,6 +119,58 @@ export default async function MerchantProductsList() {
             上架新商品
           </Link>
         </header>
+
+        {/* Sort + filter toolbar */}
+        <nav className="flex flex-wrap items-center gap-3">
+          <form className="flex items-center gap-2">
+            <label htmlFor="sort" className="t-caption opacity-60">排序</label>
+            <select
+              id="sort"
+              name="sort"
+              defaultValue={sortKey}
+              className="border bg-transparent px-3 py-1.5 text-sm"
+              style={{
+                borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+                borderRadius: 'var(--brand-radius)',
+                color: 'var(--brand-text)',
+              }}
+            >
+              {Object.entries(SORT_OPTIONS).map(([k, label]) => (
+                <option key={k} value={k}>{label}</option>
+              ))}
+            </select>
+            {lowStockOnly && <input type="hidden" name="filter" value="low-stock" />}
+            <button
+              type="submit"
+              className="text-xs opacity-60 underline hover:opacity-100"
+              style={{ color: 'var(--brand-primary)' }}
+            >
+              套用
+            </button>
+          </form>
+          <div className="ml-auto flex items-center gap-2">
+            <Link
+              href={lowStockOnly ? `/merchant/products?sort=${sortKey}` : `/merchant/products?sort=${sortKey}&filter=low-stock`}
+              className="inline-flex items-center gap-1 rounded px-3 py-1.5 text-xs font-medium"
+              style={
+                lowStockOnly
+                  ? {
+                      backgroundColor: 'var(--error)',
+                      color: 'var(--brand-bg)',
+                      borderRadius: 'var(--brand-radius)',
+                    }
+                  : {
+                      border: '1px solid color-mix(in srgb, var(--error) 30%, transparent)',
+                      color: 'var(--error)',
+                      borderRadius: 'var(--brand-radius)',
+                    }
+              }
+            >
+              <AlertTriangle className="h-3 w-3" strokeWidth={2.4} />
+              {lowStockOnly ? '顯示全部' : `只看低庫存 (≤${threshold})`}
+            </Link>
+          </div>
+        </nav>
 
         {items.length === 0 ? (
           <div
@@ -102,9 +217,10 @@ export default async function MerchantProductsList() {
               >
                 <tr className="text-left">
                   <th className="t-caption px-4 py-3 font-medium" style={{ color: 'var(--brand-primary)' }}>商品</th>
-                  <th className="t-caption px-4 py-3 font-medium" style={{ color: 'var(--brand-primary)' }}>定價</th>
+                  <th className="t-caption px-4 py-3 font-medium tabular-nums" style={{ color: 'var(--brand-primary)' }}>定價</th>
+                  <th className="t-caption px-4 py-3 font-medium tabular-nums" style={{ color: 'var(--brand-primary)' }}>庫存</th>
+                  <th className="t-caption px-4 py-3 font-medium tabular-nums" style={{ color: 'var(--brand-primary)' }}>銷量</th>
                   <th className="t-caption px-4 py-3 font-medium" style={{ color: 'var(--brand-primary)' }}>狀態</th>
-                  <th className="t-caption px-4 py-3 font-medium" style={{ color: 'var(--brand-primary)' }}>建立</th>
                   <th className="t-caption px-4 py-3 font-medium text-right" style={{ color: 'var(--brand-primary)' }}>操作</th>
                 </tr>
               </thead>
@@ -161,26 +277,65 @@ export default async function MerchantProductsList() {
                       <td className="t-tabular px-4 py-3 text-sm font-semibold" style={{ color: 'var(--brand-primary)' }}>
                         NT$ {(p.priceCents / 100).toLocaleString()}
                       </td>
+                      <td className="t-tabular px-4 py-3 text-sm">
+                        {p.stockQuantity === 0 ? (
+                          <span
+                            className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold"
+                            style={{
+                              backgroundColor: 'color-mix(in srgb, var(--brand-text) 90%, transparent)',
+                              color: 'var(--brand-bg)',
+                              borderRadius: 'var(--brand-radius)',
+                            }}
+                          >
+                            無貨
+                          </span>
+                        ) : p.stockQuantity <= threshold ? (
+                          <span
+                            className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold tabular-nums"
+                            style={{
+                              backgroundColor: 'color-mix(in srgb, var(--error) 14%, transparent)',
+                              color: 'var(--error)',
+                              borderRadius: 'var(--brand-radius)',
+                            }}
+                          >
+                            ⚠ {p.stockQuantity}
+                          </span>
+                        ) : (
+                          <span className="tabular-nums opacity-70">{p.stockQuantity}</span>
+                        )}
+                      </td>
+                      <td className="t-tabular px-4 py-3 text-sm opacity-70">
+                        {p.soldCount > 0 ? `${p.soldCount} 件` : '—'}
+                      </td>
                       <td className="px-4 py-3">
                         <span
                           className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs"
                           style={{
-                            backgroundColor: p.isPublished
-                              ? 'color-mix(in srgb, var(--success) 12%, transparent)'
-                              : 'color-mix(in srgb, var(--brand-primary) 8%, transparent)',
-                            color: p.isPublished ? 'var(--success)' : 'color-mix(in srgb, var(--brand-text) 60%, transparent)',
+                            backgroundColor: p.productStatus === 'needs_review'
+                              ? 'color-mix(in srgb, var(--warning) 14%, transparent)'
+                              : p.isPublished
+                                ? 'color-mix(in srgb, var(--success) 12%, transparent)'
+                                : 'color-mix(in srgb, var(--brand-primary) 8%, transparent)',
+                            color: p.productStatus === 'needs_review'
+                              ? 'var(--warning)'
+                              : p.isPublished
+                                ? 'var(--success)'
+                                : 'color-mix(in srgb, var(--brand-text) 60%, transparent)',
                             borderRadius: 'var(--brand-radius)',
                           }}
                         >
                           <span
                             className="inline-block h-1.5 w-1.5 rounded-full"
-                            style={{ backgroundColor: p.isPublished ? 'var(--success)' : 'var(--brand-primary)' }}
+                            style={{
+                              backgroundColor: p.productStatus === 'needs_review'
+                                ? 'var(--warning)'
+                                : p.isPublished
+                                  ? 'var(--success)'
+                                  : 'var(--brand-primary)',
+                            }}
                           />
-                          {p.isPublished ? '已上架' : '草稿'}
+                          {p.productStatus === 'needs_review' ? '需審查' : p.isPublished ? '已上架' : '草稿'}
                         </span>
-                      </td>
-                      <td className="t-small px-4 py-3 opacity-50">
-                        {new Date(p.createdAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <ProductRowActions

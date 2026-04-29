@@ -28,11 +28,15 @@ export function SettingsForm({
   slug: initialSlug,
   brandVoice: initialBrandVoice,
   themeVars: initialThemeVars,
+  lowStockThreshold: initialThreshold,
+  dailyAiCostCentsCap: initialCostCap,
 }: {
   name: string;
   slug: string;
   brandVoice: string;
   themeVars: Record<string, string>;
+  lowStockThreshold: number;
+  dailyAiCostCentsCap: number;
 }) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
@@ -45,6 +49,8 @@ export function SettingsForm({
   const [font, setFont] = useState(
     initialThemeVars['--brand-font-heading'] ?? "'Noto Sans TC', sans-serif",
   );
+  const [lowStockThreshold, setLowStockThreshold] = useState<number>(initialThreshold);
+  const [dailyAiCostCentsCap, setDailyAiCostCentsCap] = useState<number>(initialCostCap);
   const [pending, start] = useTransition();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -63,6 +69,8 @@ export function SettingsForm({
         slug: slug !== initialSlug ? slug : undefined,
         brandVoice,
         themeVars,
+        lowStockThreshold,
+        dailyAiCostCentsCap,
       });
 
       if (!result.success) {
@@ -231,6 +239,57 @@ export function SettingsForm({
             這是 storefront 預覽 — 顧客打開 /store/{slug || initialSlug} 會看到的色調
           </p>
         </motion.div>
+      </Section>
+
+      {/* 營運設定 */}
+      <Section title="營運設定">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+              低庫存警示閾值
+            </Label>
+            <Input
+              type="number"
+              min={0}
+              max={10000}
+              value={lowStockThreshold}
+              onChange={(e) => setLowStockThreshold(Math.max(0, Math.min(10000, Number(e.target.value) || 0)))}
+              required
+              style={{
+                borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+                borderRadius: 'var(--brand-radius)',
+              }}
+            />
+            <p className="t-caption opacity-50">
+              庫存 ≤ 此值會在商品列表顯示紅徽章警示 (預設 5)
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+              每日 AI 成本上限 (NT$)
+            </Label>
+            <Input
+              type="number"
+              min={100}
+              max={100000}
+              value={Math.floor(dailyAiCostCentsCap / 100)}
+              onChange={(e) =>
+                setDailyAiCostCentsCap(
+                  Math.max(100, Math.min(100000, Number(e.target.value) || 0)) * 100,
+                )
+              }
+              required
+              style={{
+                borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+                borderRadius: 'var(--brand-radius)',
+              }}
+            />
+            <p className="t-caption opacity-50">
+              每天 IG/蝦皮 import + 上架 GPT-4o token 累計超過 → 暫停 (預設 NT$ 50)
+            </p>
+          </div>
+        </div>
       </Section>
 
       <div className="flex items-center justify-between pt-4">

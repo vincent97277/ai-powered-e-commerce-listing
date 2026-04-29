@@ -10,7 +10,13 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { dbAdmin, dbUser } from '@/db';
-import { merchants, products } from '@/db/schema';
+import {
+  merchants,
+  products,
+  orders,
+  orderStatusHistory,
+  importSessions,
+} from '@/db/schema';
 import { sql, eq } from 'drizzle-orm';
 
 // 用 99..., aa... 避免跟 demo merchant (11..., 22...) 撞
@@ -65,9 +71,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Cleanup
+  // Cleanup (cascade 帶走 orders / order_status_history / import_sessions)
   await dbAdmin.delete(products).where(eq(products.tenantId, TENANT_A));
   await dbAdmin.delete(products).where(eq(products.tenantId, TENANT_B));
+  await dbAdmin.delete(orders).where(eq(orders.tenantId, TENANT_A));
+  await dbAdmin.delete(orders).where(eq(orders.tenantId, TENANT_B));
+  await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_A));
+  await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_B));
   await dbAdmin.delete(merchants).where(eq(merchants.id, TENANT_A));
   await dbAdmin.delete(merchants).where(eq(merchants.id, TENANT_B));
 });
@@ -131,5 +141,124 @@ describe('RLS multi-tenant isolation', () => {
       SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user
     `);
     expect((r.rows[0] as { rolbypassrls?: boolean }).rolbypassrls).toBe(false);
+  });
+
+  /**
+   * V1 #73 / RA7: order_status_history RLS via JOIN
+   * 商家 A 寫一筆 history → 商家 B 看不到
+   */
+  it('T4: order_status_history isolation via JOIN orders', async () => {
+    // 用 dbAdmin seed 一個 A 的 order + history row
+    const orderA = '11111111-2222-3333-4444-555555555555';
+    await dbAdmin.delete(orders).where(eq(orders.id, orderA));
+    await dbAdmin.insert(orders).values({
+      id: orderA,
+      tenantId: TENANT_A,
+      customerEmail: 'a@test',
+      totalCents: 100,
+      status: 'paid',
+    });
+    await dbAdmin.insert(orderStatusHistory).values({
+      orderId: orderA,
+      fromStatus: 'pending',
+      toStatus: 'paid',
+      changedBy: 'merchant',
+    });
+
+    // 商家 A 看得到
+    const seenByA = await dbUser.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
+      return await tx.execute(sql`SELECT count(*)::int AS n FROM order_status_history`);
+    });
+    expect(Number((seenByA.rows[0] as { n: number }).n)).toBeGreaterThanOrEqual(1);
+
+    // 商家 B 看不到
+    const seenByB = await dbUser.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_B}, true)`);
+      return await tx.execute(sql`SELECT count(*)::int AS n FROM order_status_history`);
+    });
+    expect(Number((seenByB.rows[0] as { n: number }).n)).toBe(0);
+  });
+
+  /**
+   * V1 #73 / RA7: order_status_history WITH CHECK 拒跨 tenant insert
+   * 商家 A 試 insert history 指向 B 的 order → 拒
+   */
+  it('T5: order_status_history WITH CHECK blocks cross-tenant insert', async () => {
+    // 先建一個 B 的 order
+    const orderB = 'bbbbbbbb-1111-2222-3333-444444444444';
+    await dbAdmin.delete(orders).where(eq(orders.id, orderB));
+    await dbAdmin.insert(orders).values({
+      id: orderB,
+      tenantId: TENANT_B,
+      customerEmail: 'b@test',
+      totalCents: 100,
+      status: 'paid',
+    });
+
+    await expect(
+      dbUser.transaction(async (tx) => {
+        await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
+        // 商家 A 試圖寫一筆 history 指向 B 的 order
+        await tx.execute(sql`
+          INSERT INTO order_status_history (order_id, from_status, to_status, changed_by)
+          VALUES (${orderB}::uuid, 'pending', 'paid', 'merchant')
+        `);
+      }),
+    ).rejects.toThrow(/row-level security/i);
+  });
+
+  /**
+   * V1 #73 / RA18: import_sessions isolation (RLS via merchant_id 直接比對)
+   */
+  it('T6: import_sessions isolation', async () => {
+    // 商家 A 建 session
+    await dbAdmin
+      .insert(importSessions)
+      .values({
+        merchantId: TENANT_A,
+        sourceUrl: 'https://www.instagram.com/test_a',
+        sourceType: 'ig',
+      });
+
+    const seenByA = await dbUser.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
+      return await tx.execute(sql`SELECT count(*)::int AS n FROM import_sessions`);
+    });
+    expect(Number((seenByA.rows[0] as { n: number }).n)).toBeGreaterThanOrEqual(1);
+
+    const seenByB = await dbUser.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_B}, true)`);
+      return await tx.execute(sql`SELECT count(*)::int AS n FROM import_sessions`);
+    });
+    expect(Number((seenByB.rows[0] as { n: number }).n)).toBe(0);
+  });
+
+  /**
+   * V1 #73: import_sessions WITH CHECK 拒商家 A 寫 B 的 session
+   */
+  it('T7: import_sessions WITH CHECK blocks cross-tenant insert', async () => {
+    await expect(
+      dbUser.transaction(async (tx) => {
+        await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
+        await tx.execute(sql`
+          INSERT INTO import_sessions (merchant_id, source_url, source_type)
+          VALUES (${TENANT_B}::uuid, 'https://shopee.tw/x', 'shopee')
+        `);
+      }),
+    ).rejects.toThrow(/row-level security/i);
+  });
+
+  /**
+   * V1 #73: admin_action_history 對 web_anon 全 deny (defense-in-depth)
+   * 即使 set tenant context 也讀不到 (RA2 enforcement)
+   */
+  it('T8: admin_action_history deny-all to web_anon', async () => {
+    await expect(
+      dbUser.transaction(async (tx) => {
+        await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
+        await tx.execute(sql`SELECT * FROM admin_action_history`);
+      }),
+    ).rejects.toThrow(/permission denied|insufficient/i);
   });
 });

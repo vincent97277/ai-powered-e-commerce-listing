@@ -44,6 +44,8 @@ export default async function SettingsPage() {
           slug={m.slug}
           brandVoice={m.brandVoice ?? ''}
           themeVars={(m.themeVars ?? {}) as Record<string, string>}
+          lowStockThreshold={m.lowStockThreshold}
+          dailyAiCostCentsCap={m.dailyAiCostCentsCap}
         />
       </div>
     </main>
