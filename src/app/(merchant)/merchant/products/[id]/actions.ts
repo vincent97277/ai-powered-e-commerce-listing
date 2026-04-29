@@ -1,51 +1,31 @@
 'use server';
 
 /**
- * 商家上架/下架 server action
+ * 商家商品 CRUD server actions
  */
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { withTenantTx } from '@/lib/db/with-tenant';
-import { products } from '@/db/schema';
+import { products, type ProductAiMetadata } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { DEMO_MERCHANT_COOKIE, getMerchantFromCookie } from '@/lib/storage/demo-merchants';
-import { dbAdmin } from '@/db/admin-only';
-import { merchants } from '@/db/schema';
+import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 
 async function resolveTenantIdFromCookie(): Promise<string> {
   const c = await cookies();
-  const cookieValue = c.get(DEMO_MERCHANT_COOKIE)?.value;
-
-  // 若 cookie 是 hardcode demo merchant slug (akami / afen)，走 demo-merchants map
-  if (cookieValue === 'akami' || cookieValue === 'afen') {
-    return getMerchantFromCookie(cookieValue).tenantId;
-  }
-
-  // 否則 cookie 直接是 tenant uuid (來自 onboarding)
-  if (cookieValue && /^[0-9a-f-]{36}$/i.test(cookieValue)) {
-    // verify exists
-    const [m] = await dbAdmin
-      .select({ id: merchants.id })
-      .from(merchants)
-      .where(eq(merchants.id, cookieValue))
-      .limit(1);
-    if (m) return m.id;
-  }
-
-  // fallback to akami
-  return getMerchantFromCookie('akami').tenantId;
+  const m = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
+  return m.tenantId;
 }
 
+/** 上架 / 下架 */
 export async function togglePublishAction(productId: string, publish: boolean): Promise<{ success: boolean; error?: string }> {
   try {
     const tenantId = await resolveTenantIdFromCookie();
     await withTenantTx(tenantId, async (tx) => {
-      await tx
-        .update(products)
-        .set({ isPublished: publish })
-        .where(eq(products.id, productId));
+      await tx.update(products).set({ isPublished: publish }).where(eq(products.id, productId));
     });
     revalidatePath(`/merchant/products/${productId}`);
+    revalidatePath('/merchant/products');
     revalidatePath('/merchant');
     return { success: true };
   } catch (err) {
@@ -53,7 +33,55 @@ export async function togglePublishAction(productId: string, publish: boolean): 
   }
 }
 
-/** 給 demo seed 用 — 拿 demo product 假資料寫進去，這樣商家剛 onboarding 也有東西可以 publish */
+/** 編輯商品 (商家手動微調 AI 結果) */
+export async function updateProductAction(
+  productId: string,
+  patch: { title?: string; description?: string; priceCents?: number },
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (patch.title !== undefined && (patch.title.length < 1 || patch.title.length > 60)) {
+      return { success: false, error: '標題長度必須 1-60 字' };
+    }
+    if (patch.description !== undefined && patch.description.length > 800) {
+      return { success: false, error: '描述最多 800 字' };
+    }
+    if (patch.priceCents !== undefined && (patch.priceCents < 0 || patch.priceCents > 100_000_00)) {
+      return { success: false, error: '價格必須 0-100,000 元之間' };
+    }
+
+    const tenantId = await resolveTenantIdFromCookie();
+    await withTenantTx(tenantId, async (tx) => {
+      const update: Record<string, unknown> = { updatedAt: new Date() };
+      if (patch.title !== undefined) update.title = patch.title;
+      if (patch.description !== undefined) update.description = patch.description;
+      if (patch.priceCents !== undefined) update.priceCents = patch.priceCents;
+      await tx.update(products).set(update).where(eq(products.id, productId));
+    });
+
+    revalidatePath(`/merchant/products/${productId}`);
+    revalidatePath('/merchant/products');
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : '更新失敗' };
+  }
+}
+
+/** 刪除商品 */
+export async function deleteProductAction(productId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const tenantId = await resolveTenantIdFromCookie();
+    await withTenantTx(tenantId, async (tx) => {
+      await tx.delete(products).where(eq(products.id, productId));
+    });
+    revalidatePath('/merchant/products');
+    revalidatePath('/merchant');
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : '刪除失敗' };
+  }
+  redirect('/merchant/products');
+}
+
+/** Seed 假資料供新商家快速體驗 */
 export async function seedDemoProductAction(opts: { fixtureSlug: 'teacup' | 'phonecase' | 'sauce' }): Promise<{ success: boolean; productId?: string; error?: string }> {
   try {
     const tenantId = await resolveTenantIdFromCookie();
@@ -72,12 +100,13 @@ export async function seedDemoProductAction(opts: { fixtureSlug: 'teacup' | 'pho
           r2Key: `${tenantId}/fixtures/${opts.fixtureSlug}.png`,
           priceCents: fixture.price_twd.min * 100,
           isPublished: false,
-          aiMetadata: { ...fixture, status: 'success' },
+          aiMetadata: { ...fixture, status: 'success' } satisfies ProductAiMetadata,
         })
         .returning({ id: products.id });
       return inserted.id;
     });
 
+    revalidatePath('/merchant/products');
     revalidatePath('/merchant');
     return { success: true, productId };
   } catch (err) {

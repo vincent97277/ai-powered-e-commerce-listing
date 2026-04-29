@@ -3,54 +3,60 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTheme } from './ThemeProvider';
-import { MERCHANT_META, type MerchantId } from '@/lib/themes';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ChevronsUpDown, Loader2 } from 'lucide-react';
+import { ChevronsUpDown, Loader2, Plus } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
+import Link from 'next/link';
+
+/**
+ * 從 merchant name 派一個固定 emoji (避免每次 render 隨機)
+ */
+function emojiFor(name: string): string {
+  const pool = ['🍵', '🍗', '🛒', '🌿', '🎁', '🍰', '🧵', '🌸', '🍱', '🪴'];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return pool[Math.abs(hash) % pool.length];
+}
 
 export function MerchantSwitcher() {
-  const { merchantId, setMerchantId } = useTheme();
+  const { current, merchants, setCurrentId } = useTheme();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [sweep, setSweep] = useState(false);
-  const meta = MERCHANT_META[merchantId];
 
-  const handleChange = (id: MerchantId) => {
-    if (id === merchantId) return;
-    const nextMeta = MERCHANT_META[id];
-    // 1) sweep overlay (~720ms)
+  const handleChange = (id: string) => {
+    if (id === current.id) return;
+    const next = merchants.find((m) => m.id === id);
+    if (!next) return;
     setSweep(true);
     setTimeout(() => setSweep(false), 760);
-    // 2) update theme + refresh
-    setMerchantId(id);
+    setCurrentId(id);
     startTransition(() => router.refresh());
-    // 3) brand-color toast (theme 已切，toast 內 var 自動著色)
-    toast(`換上${nextMeta.name}的口氣`, {
-      icon: nextMeta.emoji,
-      description: nextMeta.tagline,
+    toast(`切換到「${next.name}」`, {
+      icon: next.emoji ?? emojiFor(next.name),
+      description: next.tagline,
       duration: 3000,
       style: { borderLeft: '3px solid var(--brand-primary)' },
     });
   };
 
+  const currentEmoji = current.emoji ?? emojiFor(current.name);
+
   return (
     <div
       className="relative inline-flex items-center gap-2.5 rounded-md border p-1 pr-2"
       style={{
-        backgroundColor:
-          'color-mix(in srgb, var(--brand-primary) 4%, var(--brand-bg))',
-        borderColor:
-          'color-mix(in srgb, var(--brand-primary) 16%, transparent)',
+        backgroundColor: 'color-mix(in srgb, var(--brand-primary) 4%, var(--brand-bg))',
+        borderColor: 'color-mix(in srgb, var(--brand-primary) 16%, transparent)',
         borderRadius: 'calc(var(--brand-radius) + 4px)',
         boxShadow: 'var(--elev-1)',
       }}
     >
-      {/* Avatar with brand glow ring + flip transition */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={merchantId}
+          key={current.id}
           initial={{ rotateY: 90, scale: 0.7, opacity: 0 }}
           animate={{ rotateY: 0, scale: 1, opacity: 1 }}
           exit={{ rotateY: -90, scale: 0.7, opacity: 0 }}
@@ -74,18 +80,15 @@ export function MerchantSwitcher() {
                 borderRadius: 'var(--brand-radius)',
               }}
             >
-              {meta.emoji}
+              {currentEmoji}
             </AvatarFallback>
           </Avatar>
         </motion.div>
       </AnimatePresence>
 
-      <Select
-        value={merchantId}
-        onValueChange={(v) => handleChange(v as MerchantId)}
-      >
+      <Select value={current.id} onValueChange={(v) => v && handleChange(v)}>
         <SelectTrigger
-          className="h-auto w-[180px] gap-2 border-0 bg-transparent px-1 py-0.5 shadow-none focus:ring-0 focus-visible:ring-0"
+          className="h-auto w-[200px] gap-2 border-0 bg-transparent px-1 py-0.5 shadow-none focus:ring-0 focus-visible:ring-0"
           style={{ outline: 'none' }}
         >
           <SelectValue>
@@ -93,21 +96,20 @@ export function MerchantSwitcher() {
               <span
                 className="t-caption"
                 style={{
-                  color:
-                    'color-mix(in srgb, var(--brand-text) 50%, transparent)',
+                  color: 'color-mix(in srgb, var(--brand-text) 50%, transparent)',
                   fontSize: '10px',
                 }}
               >
                 當前商家
               </span>
               <span
-                className="text-sm font-semibold"
+                className="text-sm font-semibold truncate max-w-[160px]"
                 style={{
                   fontFamily: 'var(--brand-font-heading)',
                   color: 'var(--brand-text)',
                 }}
               >
-                {meta.name}
+                {current.name}
               </span>
             </div>
           </SelectValue>
@@ -120,20 +122,19 @@ export function MerchantSwitcher() {
 
         <SelectContent
           style={{
-            borderColor:
-              'color-mix(in srgb, var(--brand-primary) 22%, transparent)',
+            borderColor: 'color-mix(in srgb, var(--brand-primary) 22%, transparent)',
             backgroundColor: 'var(--brand-bg)',
             borderRadius: 'calc(var(--brand-radius) + 4px)',
             boxShadow: 'var(--elev-3)',
           }}
         >
-          {(Object.keys(MERCHANT_META) as MerchantId[]).map((id) => {
-            const m = MERCHANT_META[id];
-            const selected = id === merchantId;
+          {merchants.map((m) => {
+            const e = m.emoji ?? emojiFor(m.name);
+            const selected = m.id === current.id;
             return (
               <SelectItem
-                key={id}
-                value={id}
+                key={m.id}
+                value={m.id}
                 className="gap-2.5 py-2 pr-8"
                 style={{
                   backgroundColor: selected
@@ -142,7 +143,7 @@ export function MerchantSwitcher() {
                   borderRadius: 'var(--brand-radius)',
                 }}
               >
-                <span className="mr-1 text-lg">{m.emoji}</span>
+                <span className="mr-1 text-lg">{e}</span>
                 <div className="flex flex-col">
                   <span
                     className="text-sm font-medium"
@@ -150,19 +151,32 @@ export function MerchantSwitcher() {
                   >
                     {m.name}
                   </span>
-                  <span
-                    className="text-xs"
-                    style={{
-                      color:
-                        'color-mix(in srgb, var(--brand-text) 55%, transparent)',
-                    }}
-                  >
-                    {m.tagline}
-                  </span>
+                  {m.tagline && (
+                    <span
+                      className="text-xs truncate max-w-[200px]"
+                      style={{
+                        color: 'color-mix(in srgb, var(--brand-text) 55%, transparent)',
+                      }}
+                    >
+                      {m.tagline}
+                    </span>
+                  )}
                 </div>
               </SelectItem>
             );
           })}
+          {/* 開新店面入口 */}
+          <Link
+            href="/onboarding"
+            className="flex items-center gap-2 px-2 py-2 text-sm hover:bg-brand-soft border-t mt-1"
+            style={{
+              borderColor: 'color-mix(in srgb, var(--brand-primary) 16%, transparent)',
+              color: 'var(--brand-primary)',
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" strokeWidth={2.4} />
+            開新店面
+          </Link>
         </SelectContent>
       </Select>
 
@@ -172,7 +186,6 @@ export function MerchantSwitcher() {
         </span>
       )}
 
-      {/* Brand color sweep overlay (儀式感) */}
       {sweep && <div className="whimsy-sweep-overlay" aria-hidden />}
     </div>
   );

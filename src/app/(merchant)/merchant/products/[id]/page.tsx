@@ -5,10 +5,11 @@
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { withTenantTx } from '@/lib/db/with-tenant';
-import { dbAdmin } from '@/db/admin-only';
-import { merchants, products } from '@/db/schema';
+import { products } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { DEMO_MERCHANT_COOKIE, getMerchantFromCookie } from '@/lib/storage/demo-merchants';
+import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { ProductHeader } from '@/components/products/ProductHeader';
 import { ProductDescription } from '@/components/products/ProductDescription';
 import { TagsChips } from '@/components/products/TagsChips';
@@ -16,34 +17,20 @@ import { VariantsTable } from '@/components/products/VariantsTable';
 import { PriceCard } from '@/components/products/PriceCard';
 import { ShopeeExportTab } from '@/components/products/ShopeeExportTab';
 import { PublishToggle } from '@/components/products/PublishToggle';
+import { EditableProductFields } from '@/components/products/EditableProductFields';
+import { DeleteProductButton } from '@/components/products/DeleteProductButton';
 import { aiOutputToUi } from '@/lib/ai/flatten';
 import type { ProductOutput as UiProductOutput } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-async function resolveTenant(): Promise<{ tenantId: string; slug: string } | null> {
-  const c = await cookies();
-  const cv = c.get(DEMO_MERCHANT_COOKIE)?.value;
-
-  if (cv === 'akami' || cv === 'afen') {
-    const m = getMerchantFromCookie(cv);
-    return { tenantId: m.tenantId, slug: m.slug };
-  }
-  if (cv && /^[0-9a-f-]{36}$/i.test(cv)) {
-    const [m] = await dbAdmin
-      .select({ id: merchants.id, slug: merchants.slug })
-      .from(merchants)
-      .where(eq(merchants.id, cv))
-      .limit(1);
-    if (m) return { tenantId: m.id, slug: m.slug };
-  }
-  return null;
-}
-
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const tenant = await resolveTenant();
-  if (!tenant) notFound();
+  const c = await cookies();
+  const tenant = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
+
+  // 不是 UUID 直接 404
+  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
 
   const [row] = await withTenantTx(tenant.tenantId, async (tx) => {
     return await tx.select().from(products).where(eq(products.id, id)).limit(1);
@@ -68,11 +55,19 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   }
 
   const uiProduct = aiOutputToUi(row.aiMetadata);
+  // 用 DB 真實 title/description/price (商家可能編輯過)
+  uiProduct.title = row.title;
+  uiProduct.description = row.description;
+  uiProduct.price_twd = {
+    min: Math.round(row.priceCents / 100),
+    max: Math.round(row.priceCents / 100),
+  };
   return (
     <ProductDetailLayout
       product={uiProduct}
       productId={id}
       isPublished={row.isPublished}
+      priceCents={row.priceCents}
       slug={tenant.slug}
       ownedByCurrentTenant
     />
@@ -83,6 +78,7 @@ function ProductDetailLayout({
   product,
   productId,
   isPublished,
+  priceCents,
   slug,
   ownedByCurrentTenant,
   notice,
@@ -90,13 +86,24 @@ function ProductDetailLayout({
   product: UiProductOutput;
   productId: string;
   isPublished: boolean;
+  priceCents?: number;
   slug: string;
   ownedByCurrentTenant: boolean;
   notice?: string;
 }) {
   return (
     <main className="min-h-screen px-12 py-8" style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}>
-      <div className="mx-auto max-w-6xl space-y-10">
+      <div className="mx-auto max-w-6xl space-y-8">
+        {/* 返回列表 */}
+        <Link
+          href="/merchant/products"
+          className="inline-flex items-center gap-1 text-sm hover:opacity-80"
+          style={{ color: 'var(--brand-primary)' }}
+        >
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.4} />
+          回商品列表
+        </Link>
+
         {notice && (
           <div
             className="border p-4 text-sm"
@@ -130,7 +137,7 @@ function ProductDetailLayout({
               </p>
               <p className="t-small mt-1 opacity-70">
                 {isPublished
-                  ? `顧客已可在 /store/${slug}/products/${productId.slice(0, 8)} 看到並下單`
+                  ? `顧客已可在 /store/${slug} 看到並下單`
                   : '草稿中, 顧客在 storefront 看不到'}
               </p>
             </div>
@@ -144,6 +151,14 @@ function ProductDetailLayout({
 
         <div className="grid grid-cols-3 gap-10">
           <div className="col-span-2 space-y-10">
+            {ownedByCurrentTenant && priceCents !== undefined && (
+              <EditableProductFields
+                productId={productId}
+                initialTitle={product.title}
+                initialDescription={product.description}
+                initialPriceCents={priceCents}
+              />
+            )}
             <ProductDescription text={product.description} />
             <TagsChips tags={product.seo_tags} />
             <VariantsTable variants={product.variants} />
@@ -153,6 +168,15 @@ function ProductDetailLayout({
             <PriceCard min={product.price_twd.min} max={product.price_twd.max} confidence={product.confidence} />
           </aside>
         </div>
+
+        {ownedByCurrentTenant && (
+          <div
+            className="flex justify-end border-t pt-6"
+            style={{ borderColor: 'color-mix(in srgb, var(--brand-primary) 12%, transparent)' }}
+          >
+            <DeleteProductButton productId={productId} title={product.title} />
+          </div>
+        )}
       </div>
     </main>
   );

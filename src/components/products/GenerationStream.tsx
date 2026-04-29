@@ -1,11 +1,13 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 import { StreamingField } from './StreamingField';
 import { useStreamingPipeline } from '@/hooks/useStreamingPipeline';
 import { useDemoMode } from '@/components/demo/DemoModeToggle';
-import { useImperativeHandle, forwardRef, useEffect, useRef } from 'react';
+import { useImperativeHandle, forwardRef, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { ArrowRight, Plus, Eye } from 'lucide-react';
 import type { ProductOutput } from '@/lib/types';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -18,14 +20,24 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
     const { mode } = useDemoMode();
     const wrapRef = useRef<HTMLDivElement>(null);
     const celebrated = useRef(false);
+    const [savedProductId, setSavedProductId] = useState<string | null>(null);
 
     useImperativeHandle(ref, () => ({
       async kickoff(file: File | null) {
-        // 立刻給用戶一個訊號 — kickoff 真的有被呼叫
-        console.log('[GenerationStream] kickoff', { mode, hasFile: !!file });
+        // 直接從 localStorage 讀最新 mode (避開 useDemoMode hook 的 stale closure)
+        const liveMode =
+          typeof window !== 'undefined'
+            ? ((localStorage.getItem('demoMode') as 'on' | 'off' | null) ?? mode)
+            : mode;
 
-        // Demo Mode ON: 走 fixture (省 OpenAI 額度 + 速度穩定)
-        if (mode === 'on') {
+        console.log('[GenerationStream] kickoff', {
+          hookMode: mode,
+          liveMode,
+          hasFile: !!file,
+        });
+
+        // 預覽模式: 走 fixture (不打 OpenAI)
+        if (liveMode === 'on') {
           toast.info('預覽模式 — 用範例資料展示流程', { duration: 2000 });
           await new Promise((r) => setTimeout(r, 500));
           const res = await fetch('/fixtures/products/teacup.json');
@@ -34,10 +46,9 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           return;
         }
 
-        // Demo Mode OFF: 真實 GPT-4o 流程
+        // 真實模式: 真打 GPT-4o
         if (!file) {
           toast.error('找不到上傳檔案，請重新拖曳照片');
-          // Fallback to fixture so 畫面不卡死
           const fb = await fetch('/fixtures/products/teacup.json');
           start(await fb.json());
           return;
@@ -75,7 +86,16 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           }
 
           // Step 3: 拿到 ProductOutput → 進 streaming 動畫
-          toast.success('AI 完成，開始顯示結果', { duration: 1500 });
+          toast.success(
+            `已用「${aiJson.merchantSlug ?? '當前商家'}」品牌語氣生成`,
+            {
+              description: aiJson.brandVoiceUsed
+                ? `語氣樣本: ${aiJson.brandVoiceUsed}`
+                : undefined,
+              duration: 3500,
+            },
+          );
+          if (aiJson.productId) setSavedProductId(aiJson.productId);
           start(aiJson.data as ProductOutput);
         } catch (err) {
           toast.dismiss('upload');
@@ -144,6 +164,77 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
                   <TabsTrigger value="shopee">蝦皮規格已就緒 →</TabsTrigger>
                 </TabsList>
               </Tabs>
+            </motion.div>
+          )}
+
+          {/* 完成後 CTA — 引導下一步 */}
+          {state.done && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+              className="space-y-3 border-t pt-6"
+              style={{ borderColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)' }}
+            >
+              <p className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+                完成 — 接下來
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {savedProductId ? (
+                  <Link
+                    href={`/merchant/products/${savedProductId}`}
+                    className="hover-lift inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold elev-2"
+                    style={{
+                      backgroundColor: 'var(--brand-primary)',
+                      color: 'var(--brand-bg)',
+                      borderRadius: 'var(--brand-radius)',
+                      fontFamily: 'var(--brand-font-heading)',
+                    }}
+                  >
+                    <Eye className="h-4 w-4" strokeWidth={2.4} />
+                    查看商品 / 編輯 / 上架
+                    <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.4} />
+                  </Link>
+                ) : (
+                  <Link
+                    href="/merchant/products"
+                    className="hover-lift inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold elev-2"
+                    style={{
+                      backgroundColor: 'var(--brand-primary)',
+                      color: 'var(--brand-bg)',
+                      borderRadius: 'var(--brand-radius)',
+                    }}
+                  >
+                    <Eye className="h-4 w-4" strokeWidth={2.4} />
+                    商品列表
+                    <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.4} />
+                  </Link>
+                )}
+
+                <Link
+                  href="/merchant/products/new"
+                  className="hover-lift inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium"
+                  onClick={() => {
+                    // 強制 hard reload 重置 state (再上一張不卡到上一次的 streaming state)
+                    if (typeof window !== 'undefined') {
+                      setTimeout(() => window.location.reload(), 50);
+                    }
+                  }}
+                  style={{
+                    border: '1px solid var(--brand-primary)',
+                    color: 'var(--brand-primary)',
+                    borderRadius: 'var(--brand-radius)',
+                  }}
+                >
+                  <Plus className="h-4 w-4" strokeWidth={2.4} />
+                  再上一件
+                </Link>
+              </div>
+              {savedProductId && (
+                <p className="t-caption opacity-60">
+                  · 已自動存入商品庫 (草稿狀態) — 詳情頁可編輯文字 / 改價格 / 上架
+                </p>
+              )}
             </motion.div>
           )}
         </div>

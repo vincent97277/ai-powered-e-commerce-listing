@@ -1,8 +1,8 @@
 /**
- * 本地檔案上傳 endpoint — 取代 R2 presigned URL flow
+ * 商品照片上傳 endpoint
  * 前端 POST FormData → server 寫到 public/uploads/{tenant}/{uuid}.ext
  *
- * Hackathon 簡化:
+ * V1 限制:
  * - 不做 magic byte 檔案類型驗證
  * - 不做 file dedup
  * - 不做 virus scan
@@ -10,7 +10,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { writeFileLocal } from '@/lib/storage/local-fs';
-import { getMerchantFromCookie } from '@/lib/storage/demo-merchants';
+import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 
 export const runtime = 'nodejs';
 
@@ -19,9 +19,9 @@ const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function POST(req: NextRequest) {
   try {
-    // 從 cookie 解析 merchant (hackathon hardcode tenant)
+    // 從 cookie 解析 merchant — 支援 'akami'/'afen' slug 跟新 merchant 的 UUID
     const cookieValue = req.cookies.get('demo-merchant-id')?.value;
-    const merchant = getMerchantFromCookie(cookieValue);
+    const merchant = await resolveMerchantFromCookie(cookieValue);
 
     const formData = await req.formData();
     const file = formData.get('file');
