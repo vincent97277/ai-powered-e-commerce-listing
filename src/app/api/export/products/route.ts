@@ -95,6 +95,13 @@ export async function GET(req: NextRequest) {
 
     const today = new Date().toISOString().slice(0, 10);
 
+    // V1.5 review M2: silent truncate signal — 讓 client 知道有沒有滿格 5000
+    const truncated = items.length === 5000 ? '1' : '0';
+    const truncationHeaders = {
+      'X-Export-Row-Count': String(items.length),
+      'X-Export-Truncated': truncated,
+    };
+
     if (format === 'shopee_csv') {
       const csv = generateShopeeCsv(items);
       const filename = `products-shopee-${today}.csv`;
@@ -104,6 +111,7 @@ export async function GET(req: NextRequest) {
           'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': buildContentDisposition(filename),
           'Cache-Control': 'no-store',
+          ...truncationHeaders,
         },
       });
     }
@@ -117,6 +125,7 @@ export async function GET(req: NextRequest) {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': buildContentDisposition(filename),
         'Cache-Control': 'no-store',
+        ...truncationHeaders,
       },
     });
   } catch (err) {

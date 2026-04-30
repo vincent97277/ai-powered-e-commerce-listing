@@ -131,6 +131,9 @@ export async function GET(req: NextRequest) {
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     const filename = `orders-${today}.xlsx`;
 
+    // V1.5 review M2: silent truncate signal — 讓 client 知道有沒有滿格 5000
+    const truncated = exportRows.length === 5000 ? '1' : '0';
+
     // NextResponse 不直收 Node Buffer (TS 型別); 轉 Uint8Array view
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
@@ -138,6 +141,8 @@ export async function GET(req: NextRequest) {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': buildContentDisposition(filename),
         'Cache-Control': 'no-store',
+        'X-Export-Row-Count': String(exportRows.length),
+        'X-Export-Truncated': truncated,
       },
     });
   } catch (err) {

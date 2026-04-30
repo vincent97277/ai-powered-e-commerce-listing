@@ -80,10 +80,10 @@ export function ExportDropdown({ kind, currentFilter }: Props) {
 
   const items: Array<{ label: string; sub?: string; format: 'xlsx' | 'shopee_csv' }> =
     kind === 'orders'
-      ? [{ label: 'Excel (.xlsx)', sub: '訂單 13 欄 + 狀態時間軸', format: 'xlsx' }]
+      ? [{ label: 'Excel (.xlsx)', sub: '訂單 13 欄 + 狀態時間軸 · 單次最多 5000 筆', format: 'xlsx' }]
       : [
-          { label: 'Excel (.xlsx)', sub: '商品 9 欄 + 變體 JSON', format: 'xlsx' },
-          { label: '蝦皮 CSV (UTF-8 BOM)', sub: '21 欄完整規格', format: 'shopee_csv' },
+          { label: 'Excel (.xlsx)', sub: '商品 9 欄 + 變體 JSON · 單次最多 5000 筆', format: 'xlsx' },
+          { label: '蝦皮 CSV (UTF-8 BOM)', sub: '21 欄完整規格 · 單次最多 5000 筆', format: 'shopee_csv' },
         ];
 
   return (

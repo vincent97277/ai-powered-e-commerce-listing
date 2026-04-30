@@ -157,9 +157,17 @@ function productToRows(p: Product): string[][] {
   const opts1 = axis1.options.length > 0 ? axis1.options : [''];
   const opts2 = axis2 && axis2.options.length > 0 ? axis2.options : [''];
 
+  // V1.5 review M3: SKU sanitization — option 字串 (e.g. "M-L", '中"号') 不得帶 hyphen / 引號 / 空白,
+  // 否則 SKU 變 ambiguous + 蝦皮上架可能拒. Unicode-aware: 中文/日文/數字保留, 其他換 _
+  const sanitizeSkuPart = (s: string): string =>
+    s.replace(/[^\p{L}\p{N}]+/gu, '_').slice(0, 16) || 'opt';
+
   for (const o1 of opts1) {
     for (const o2 of opts2) {
-      const optionSku = [sku, o1, o2].filter(Boolean).join('-');
+      const skuParts = [sku];
+      if (o1) skuParts.push(sanitizeSkuPart(o1));
+      if (o2) skuParts.push(sanitizeSkuPart(o2));
+      const optionSku = skuParts.join('-');
       rows.push([
         categoryCode,
         title,

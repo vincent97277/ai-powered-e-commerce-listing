@@ -162,4 +162,37 @@ describe('generateShopeeCsv', () => {
     // 描述 cell 應該被 " 包住, 內部 " 變 ""
     expect(csv).toContain('"內含 ""雙引號"" 與 逗號, 換行"');
   });
+
+  // V1.5 review M3: option 字串裡 hyphen / 引號 / 特殊字會把 SKU 變 ambiguous
+  it('case 6: variant option 含 hyphen / 引號 → SKU sanitization (M3 fix)', () => {
+    const product = buildProduct({
+      title: '測試 SKU sanitize',
+      description: '驗 V1.5 M3',
+      aiMetadata: {
+        title: '測試 SKU sanitize',
+        description: '驗 V1.5 M3',
+        category: '服飾配件',
+        seo_tags: [],
+        variants: [
+          { name: '尺寸', options: ['M-L', '中"号'] },
+        ],
+        price_twd: { min: 390, max: 390 },
+        confidence: 0.9,
+      },
+    });
+    const csv = generateShopeeCsv([product]);
+    const body = csv.slice(1);
+    const lines = body.split(/\r\n/).filter((l) => l !== '');
+    expect(lines.length).toBe(3); // header + 2 data rows
+
+    // 商品選項貨號 (col index 12 — see schema)
+    const sku1 = lines[1].split(',')[12];
+    const sku2 = lines[2].split(',')[12];
+    // hyphen 在原 option 內被換成 _, 確保 SKU 不會被多餘 hyphen 切錯
+    expect(sku1).not.toContain('-M-L-');
+    expect(sku1).toMatch(/-M_L$/);
+    // 雙引號 / CJK 處理 — 中文保留 (Unicode \p{L}), 雙引號被換掉
+    // 注意 column 12 是 raw split, 含 "" RFC4180 escape 內含的引號可能殘留
+    expect(sku2).toMatch(/-中_号$|-中_号"$/);
+  });
 });
