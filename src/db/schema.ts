@@ -312,6 +312,43 @@ export const importSessions = pgTable(
   }),
 );
 
+/* ─────────────────────────── 10b. ai_usage_events ─────────────────────────── */
+/**
+ * 每次 AI 呼叫的細粒度 token 用量 (V1.5 smoke fix)
+ *
+ * 為什麼存在 (跟 import_sessions.tokens_in/out 並列):
+ *   - import_sessions 只覆蓋 IG/蝦皮 batch import (worker path)
+ *   - 同步 photo upload (/api/products/generate) 沒有 import session
+ *     → V1.5 之前同步呼叫的 token 用量完全沒落盤, DailyCostChip 永遠 NT$0
+ *   - 新表只記錄 sync path; batch import 仍寫 import_sessions
+ *   - getDailyCostCents 加總兩張表
+ *
+ * Append-only audit log: 只 INSERT, 不 UPDATE/DELETE
+ * RLS: tenant_id = current_setting('app.tenant_id') (跟 products 同 pattern)
+ */
+export const aiUsageEvents = pgTable(
+  'ai_usage_events',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => merchants.id, { onDelete: 'cascade' }),
+    tokensIn: integer('tokens_in').notNull().default(0),
+    tokensOut: integer('tokens_out').notNull().default(0),
+    /** 'photo_upload' | 'ig_import' | 'shopee_import' | other (text 不上 enum, V2 可加新 source) */
+    source: text('source').notNull(),
+    /** V1.5 寫死 gpt-4o-2024-11-20, multi-model V2 才用 */
+    model: text('model').notNull().default('gpt-4o-2024-11-20'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    tenantCreatedIdx: index('ai_usage_events_tenant_created_idx').on(
+      t.tenantId,
+      t.createdAt,
+    ),
+  }),
+);
+
 /* ─────────────────────────── 11. admin_sessions ─────────────────────────── */
 /**
  * Admin login HMAC-bound session (V1 #41, RA11)
@@ -373,6 +410,10 @@ export const importSessionsRelations = relations(importSessions, ({ one }) => ({
   merchant: one(merchants, { fields: [importSessions.merchantId], references: [merchants.id] }),
 }));
 
+export const aiUsageEventsRelations = relations(aiUsageEvents, ({ one }) => ({
+  tenant: one(merchants, { fields: [aiUsageEvents.tenantId], references: [merchants.id] }),
+}));
+
 /* ─────────────────────────── TS Types Export ─────────────────────────── */
 export type Merchant = InferSelectModel<typeof merchants>;
 export type NewMerchant = InferInsertModel<typeof merchants>;
@@ -393,5 +434,7 @@ export type AdminActionHistory = InferSelectModel<typeof adminActionHistory>;
 export type NewAdminActionHistory = InferInsertModel<typeof adminActionHistory>;
 export type ImportSession = InferSelectModel<typeof importSessions>;
 export type NewImportSession = InferInsertModel<typeof importSessions>;
+export type AiUsageEvent = InferSelectModel<typeof aiUsageEvents>;
+export type NewAiUsageEvent = InferInsertModel<typeof aiUsageEvents>;
 export type AdminSession = InferSelectModel<typeof adminSessions>;
 export type NewAdminSession = InferInsertModel<typeof adminSessions>;

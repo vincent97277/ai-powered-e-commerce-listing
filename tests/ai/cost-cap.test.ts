@@ -16,7 +16,13 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { dbAdmin } from '@/db/admin-only';
-import { merchants, importSessions, products, type ProductAiMetadata } from '@/db/schema';
+import {
+  merchants,
+  importSessions,
+  aiUsageEvents,
+  products,
+  type ProductAiMetadata,
+} from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import {
   tokenCost,
@@ -89,27 +95,31 @@ beforeAll(async () => {
     ])
     .onConflictDoNothing();
 
-  // 確保 A/B 的 import_sessions table 是乾淨狀態 (前一輪 test 沒清乾淨也救一下)
+  // 確保 A/B 的 import_sessions / ai_usage_events 是乾淨狀態 (前一輪 test 沒清乾淨也救一下)
   await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_A));
   await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_B));
+  await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_A));
+  await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_B));
 });
 
 afterAll(async () => {
   await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_A));
   await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_B));
+  await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_A));
+  await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_B));
   await dbAdmin.delete(merchants).where(eq(merchants.id, TENANT_A));
   await dbAdmin.delete(merchants).where(eq(merchants.id, TENANT_B));
 });
 
-describe('tokenCost — pricing math (gpt-4o-2024-11-20)', () => {
-  it('GPT-4o: 1M in + 1M out → 250 + 1000 = 1250 cents', () => {
-    // $2.50 + $10 = $12.50 = 1250 cents
-    expect(tokenCost(1_000_000, 1_000_000)).toBeCloseTo(1250, 5);
+describe('tokenCost — pricing math (gpt-4o-2024-11-20, NT$ cents @ USD_TO_TWD=30)', () => {
+  it('GPT-4o: 1M in + 1M out → $12.50 USD × 30 = 37500 NT cents', () => {
+    // $2.50 + $10 = $12.50 USD × 30 TWD/USD × 100 cents/TWD = 37500 NT cents
+    expect(tokenCost(1_000_000, 1_000_000)).toBeCloseTo(37500, 4);
   });
 
-  it('GPT-4o: 200k in + 100k out → 50 + 100 = 150 cents', () => {
-    // (200000/1M)*2.5 + (100000/1M)*10 = 0.5 + 1.0 = $1.50 = 150 cents
-    expect(tokenCost(200_000, 100_000)).toBeCloseTo(150, 4);
+  it('GPT-4o: 200k in + 100k out → $1.50 USD × 30 = 4500 NT cents', () => {
+    // (200000/1M)*2.5 + (100000/1M)*10 = $1.50 USD × 30 × 100 = 4500 NT cents
+    expect(tokenCost(200_000, 100_000)).toBeCloseTo(4500, 4);
   });
 
   it('zero tokens → 0 cents', () => {
@@ -149,8 +159,8 @@ describe('getDailyCostCents — aggregator', () => {
     ]);
 
     const cost = await getDailyCostCents(TENANT_A);
-    // 1250 + 625 + 150 = 2025 cents
-    expect(cost).toBe(2025);
+    // (1250 + 625 + 150) USD cents × 30 TWD/USD = 60750 NT cents
+    expect(cost).toBe(60750);
 
     // cleanup for next test
     await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_A));
@@ -159,6 +169,47 @@ describe('getDailyCostCents — aggregator', () => {
   it('returns 0 when tenant has no sessions today', async () => {
     const cost = await getDailyCostCents(TENANT_A);
     expect(cost).toBe(0);
+  });
+
+  // V1.5 smoke fix: sync photo upload 走 ai_usage_events, 不走 import_sessions
+  it('includes ai_usage_events rows (sync photo upload path)', async () => {
+    // 200k in + 100k out via ai_usage_events = 150 USD cents × 30 = 4500 NT cents
+    await dbAdmin.insert(aiUsageEvents).values({
+      tenantId: TENANT_A,
+      tokensIn: 200_000,
+      tokensOut: 100_000,
+      source: 'photo_upload',
+    });
+
+    const cost = await getDailyCostCents(TENANT_A);
+    expect(cost).toBe(4500);
+
+    await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_A));
+  });
+
+  // V1.5 smoke fix: 同一商家同日 import_sessions + ai_usage_events 兩源加總
+  it('aggregates across import_sessions AND ai_usage_events', async () => {
+    // import_sessions: 1M in + 1M out = 1250 USD cents × 30 = 37500 NT cents
+    await dbAdmin.insert(importSessions).values({
+      merchantId: TENANT_A,
+      sourceUrl: 'https://test/agg-1',
+      sourceType: 'ig',
+      tokensIn: 1_000_000,
+      tokensOut: 1_000_000,
+    });
+    // ai_usage_events: 200k in + 100k out = 150 USD cents × 30 = 4500 NT cents
+    await dbAdmin.insert(aiUsageEvents).values({
+      tenantId: TENANT_A,
+      tokensIn: 200_000,
+      tokensOut: 100_000,
+      source: 'photo_upload',
+    });
+
+    const cost = await getDailyCostCents(TENANT_A);
+    expect(cost).toBe(37500 + 4500);
+
+    await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_A));
+    await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_A));
   });
 });
 
@@ -241,14 +292,20 @@ describe('assertWithinDailyCap', () => {
   });
 
   it('cross-tenant isolation: tenant A spending does NOT count toward tenant B cap', async () => {
-    // Tenant A 把自己 cap 燒爆 (5000 cents 全用完)
-    // 但 Tenant B 的 cap 判定不應該被 A 的用量污染
+    // Tenant A 把自己 cap 燒爆 — 一半走 import_sessions, 一半走 ai_usage_events
+    // (混用兩源是為了測 V1.5 smoke fix 的雙表加總也守 tenant 邊界)
     await dbAdmin.insert(importSessions).values({
       merchantId: TENANT_A,
       sourceUrl: 'https://test/a-burn',
       sourceType: 'ig',
-      tokensIn: 10_000_000, // 10M tokens, OpenAI = (10*2.5)+(...)
-      tokensOut: 5_000_000,
+      tokensIn: 5_000_000,
+      tokensOut: 2_500_000,
+    });
+    await dbAdmin.insert(aiUsageEvents).values({
+      tenantId: TENANT_A,
+      tokensIn: 5_000_000,
+      tokensOut: 2_500_000,
+      source: 'photo_upload',
     });
 
     // 確認 A 真的爆了
@@ -258,19 +315,28 @@ describe('assertWithinDailyCap', () => {
     // B 沒任何 session → 應該 well under B 的 1000 cap, 不 throw
     await expect(assertWithinDailyCap(TENANT_B)).resolves.toBeUndefined();
 
-    // 反向: B 自己有少量用量 → 也不該 throw
+    // 反向: B 自己有少量用量 (混用兩源) → 也不該 throw
+    // B cap = 1000 NT cents, 用 5k+1k tokens 兩筆 ≈ 63 NT cents 兩源加總 → 遠低於 cap
     await dbAdmin.insert(importSessions).values({
       merchantId: TENANT_B,
       sourceUrl: 'https://test/b-light',
       sourceType: 'ig',
-      tokensIn: 50_000,
-      tokensOut: 10_000,
+      tokensIn: 5_000,
+      tokensOut: 1_000,
+    });
+    await dbAdmin.insert(aiUsageEvents).values({
+      tenantId: TENANT_B,
+      tokensIn: 5_000,
+      tokensOut: 1_000,
+      source: 'photo_upload',
     });
     await expect(assertWithinDailyCap(TENANT_B)).resolves.toBeUndefined();
 
     // cleanup
     await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_A));
     await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_B));
+    await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_A));
+    await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_B));
   });
 });
 

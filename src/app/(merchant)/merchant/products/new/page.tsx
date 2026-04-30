@@ -3,16 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { UploadDropzone } from '@/components/products/UploadDropzone';
-import { BrandVoiceSelect } from '@/components/products/BrandVoiceSelect';
 import { GenerationStream, type GenerationStreamHandle } from '@/components/products/GenerationStream';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
-import type { BrandVoice } from '@/lib/types';
 
 export default function NewProductPage() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [voice, setVoice] = useState<BrandVoice>('minimal');
   const [started, setStarted] = useState(false);
   const streamRef = useRef<GenerationStreamHandle>(null);
   const kickedOff = useRef(false);
@@ -67,7 +64,16 @@ export default function NewProductPage() {
             }}
           />
           <div className="space-y-6">
-            <BrandVoiceSelect value={voice} onChange={setVoice} />
+            <p className="t-caption opacity-60">
+              使用品牌語氣設定 ·{' '}
+              <a
+                href="/merchant/settings"
+                className="underline"
+                style={{ color: 'var(--brand-primary)' }}
+              >
+                去調整
+              </a>
+            </p>
             <Button
               size="lg"
               onClick={handleGenerate}

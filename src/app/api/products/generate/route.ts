@@ -12,7 +12,7 @@ import { readFileLocal } from '@/lib/storage/local-fs';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { assertNotSuspended, MerchantSuspendedError } from '@/lib/merchant/suspend-guard';
 import { withTenantTx } from '@/lib/db/with-tenant';
-import { products, type ProductAiMetadata } from '@/db/schema';
+import { products, aiUsageEvents, type ProductAiMetadata } from '@/db/schema';
 import { callVisionWithRetry } from '@/lib/ai/vision';
 import { aiOutputToUi } from '@/lib/ai/flatten';
 import { assertWithinDailyCap, CapExceededError } from '@/lib/observability/ai-cost';
@@ -93,6 +93,25 @@ export async function POST(req: NextRequest) {
         { success: false, error: result.error, attempts: result.attempts },
         { status: 502 },
       );
+    }
+
+    // V1.5 smoke fix: sync vision call 也要落盤 token 用量,
+    // 不然 DailyCostChip 永遠看 import_sessions, 同步路徑顯示 NT$0
+    // 用 withTenantTx 走 RLS-safe path (set_config + WITH CHECK 雙重防呆)
+    if (result.usage.tokensIn > 0 || result.usage.tokensOut > 0) {
+      try {
+        await withTenantTx(merchant.tenantId, async (tx) => {
+          await tx.insert(aiUsageEvents).values({
+            tenantId: merchant.tenantId,
+            tokensIn: result.usage.tokensIn,
+            tokensOut: result.usage.tokensOut,
+            source: 'photo_upload',
+          });
+        });
+      } catch (logErr) {
+        // 記不到 usage 不該擋商品上架 — 商家已經付了 vision 費用, 後續 UI 用 cost cap 守
+        console.error('[/api/products/generate] ai_usage_events insert failed', logErr);
+      }
     }
 
     const uiData = aiOutputToUi(result.data);

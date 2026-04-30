@@ -18,4 +18,5 @@ export type ProductOutput = {
   confidence: number;
 };
 
-export type BrandVoice = 'minimal' | 'warm' | 'playful' | 'luxury';
+// V1.5 smoke fix: BrandVoice 4-enum 已移除 — 單一來源是 /merchant/settings.brandVoice (free text)
+// 商家設定頁直接吃 prompt, 不再走 select picker
