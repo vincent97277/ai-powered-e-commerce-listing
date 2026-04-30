@@ -17,6 +17,7 @@ import { eq, desc } from 'drizzle-orm';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { StatusFlipPanel } from './StatusFlipPanel';
 import { PrintableInvoice } from './PrintableInvoice';
+import { updateInternalNoteForm } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -313,18 +314,14 @@ function Field({
   );
 }
 
-async function InternalNoteForm({
+function InternalNoteForm({
   orderId,
   initialNote,
 }: {
   orderId: string;
   initialNote: string | null;
 }) {
-  const { updateInternalNote } = await import('./actions');
-  async function saveNote(formData: FormData) {
-    'use server';
-    await updateInternalNote(orderId, String(formData.get('note') ?? ''));
-  }
+  const saveNote = updateInternalNoteForm.bind(null, orderId);
   return (
     <div className="space-y-2">
       <p className="t-caption font-medium opacity-60">內部備註 (僅商家可見)</p>

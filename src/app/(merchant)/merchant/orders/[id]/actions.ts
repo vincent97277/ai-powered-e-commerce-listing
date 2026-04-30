@@ -181,6 +181,11 @@ export async function markRefunded(
   });
 }
 
+/** Form-shaped wrapper for <form action={saveNote.bind(null, orderId)}> */
+export async function updateInternalNoteForm(orderId: string, formData: FormData): Promise<void> {
+  await updateInternalNote(orderId, String(formData.get('note') ?? ''));
+}
+
 /** 更新內部備註 (商家私用) */
 export async function updateInternalNote(
   orderId: string,
