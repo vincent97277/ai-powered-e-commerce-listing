@@ -6,10 +6,26 @@ import { cookies } from 'next/headers';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { products, orderItems, merchants } from '@/db/schema';
-import { asc, desc, eq, lte, sql } from 'drizzle-orm';
+import { asc, desc, eq, lte, sql, type SQL } from 'drizzle-orm';
 import { Plus, Package, ImageIcon, AlertTriangle } from 'lucide-react';
 import { ProductRowActions } from './ProductRowActions';
 import { dbAdmin } from '@/db/admin-only';
+import { ExportDropdown } from '@/components/merchant/ExportDropdown';
+
+/** V1.5 B1: 健康度 filter 種類 (對齊 src/lib/merchant/health-checks.ts). */
+const HEALTH_FILTERS = ['no_photo', 'short_title', 'zero_stock', 'zero_price'] as const;
+type HealthFilter = (typeof HEALTH_FILTERS)[number];
+
+const HEALTH_FILTER_LABELS: Record<HealthFilter, string> = {
+  no_photo: '缺照片',
+  short_title: '標題太短',
+  zero_stock: '缺貨',
+  zero_price: '未定價',
+};
+
+function isHealthFilter(s: unknown): s is HealthFilter {
+  return typeof s === 'string' && (HEALTH_FILTERS as readonly string[]).includes(s);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +49,7 @@ export default async function MerchantProductsList({
   const params = await searchParams;
   const sortKey: SortKey = isSortKey(params.sort) ? params.sort : 'sales';
   const lowStockOnly = params.filter === 'low-stock';
+  const healthFilter: HealthFilter | null = isHealthFilter(params.filter) ? params.filter : null;
 
   const c = await cookies();
   const merchant = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
@@ -63,9 +80,21 @@ export default async function MerchantProductsList({
       })
       .from(products);
 
-    const filtered = lowStockOnly
-      ? base.where(lte(products.stockQuantity, threshold))
-      : base;
+    let whereClause: SQL | undefined;
+    if (lowStockOnly) {
+      whereClause = lte(products.stockQuantity, threshold);
+    } else if (healthFilter === 'no_photo') {
+      // V1.5 review M4: fixture demo 圖也算 no_photo (跟 health-checks.ts 對齊)
+      whereClause = sql`${products.r2Key} IS NULL OR ${products.r2Key} = '' OR ${products.r2Key} LIKE '%/fixtures/%'`;
+    } else if (healthFilter === 'short_title') {
+      whereClause = sql`length(${products.title}) < 8`;
+    } else if (healthFilter === 'zero_stock') {
+      whereClause = sql`${products.stockQuantity} = 0`;
+    } else if (healthFilter === 'zero_price') {
+      whereClause = sql`${products.priceCents} = 0 OR ${products.priceCents} IS NULL`;
+    }
+
+    const filtered = whereClause ? base.where(whereClause) : base;
 
     const sorted =
       sortKey === 'sales'
@@ -98,8 +127,9 @@ export default async function MerchantProductsList({
             </h1>
             <p className="t-small mt-1 opacity-60">
               {lowStockOnly ? `低庫存 (≤${threshold}) ` : ''}
+              {healthFilter ? `${HEALTH_FILTER_LABELS[healthFilter]} ` : ''}
               {items.length} 件 · {items.filter((p) => p.isPublished).length} 件已上架
-              {!lowStockOnly && (() => {
+              {!lowStockOnly && !healthFilter && (() => {
                 const lowCount = items.filter((p) => p.stockQuantity <= threshold).length;
                 return lowCount > 0 ? ` · ${lowCount} 件低庫存` : '';
               })()}
@@ -140,6 +170,7 @@ export default async function MerchantProductsList({
               ))}
             </select>
             {lowStockOnly && <input type="hidden" name="filter" value="low-stock" />}
+            {healthFilter && <input type="hidden" name="filter" value={healthFilter} />}
             <button
               type="submit"
               className="text-xs opacity-60 underline hover:opacity-100"
@@ -149,6 +180,25 @@ export default async function MerchantProductsList({
             </button>
           </form>
           <div className="ml-auto flex items-center gap-2">
+            {healthFilter && (
+              <Link
+                href={`/merchant/products?sort=${sortKey}`}
+                className="inline-flex items-center gap-1 rounded px-3 py-1.5 text-xs font-medium"
+                style={{
+                  backgroundColor: 'var(--warning)',
+                  color: 'var(--brand-bg)',
+                  borderRadius: 'var(--brand-radius)',
+                }}
+              >
+                健康度: {HEALTH_FILTER_LABELS[healthFilter]} · 清除
+              </Link>
+            )}
+            <ExportDropdown
+              kind="products"
+              currentFilter={{
+                filter: lowStockOnly ? 'low-stock' : healthFilter ?? undefined,
+              }}
+            />
             <Link
               href={lowStockOnly ? `/merchant/products?sort=${sortKey}` : `/merchant/products?sort=${sortKey}&filter=low-stock`}
               className="inline-flex items-center gap-1 rounded px-3 py-1.5 text-xs font-medium"

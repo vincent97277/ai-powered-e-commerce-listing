@@ -15,6 +15,7 @@ import { withTenantTx } from '@/lib/db/with-tenant';
 import { products, type ProductAiMetadata } from '@/db/schema';
 import { callVisionWithRetry } from '@/lib/ai/vision';
 import { aiOutputToUi } from '@/lib/ai/flatten';
+import { assertWithinDailyCap, CapExceededError } from '@/lib/observability/ai-cost';
 import sharp from 'sharp';
 
 export const runtime = 'nodejs';
@@ -49,6 +50,25 @@ export async function POST(req: NextRequest) {
         { success: false, error: `storage key 不屬於當前商家 (${merchant.slug})` },
         { status: 403 },
       );
+    }
+
+    // V1.5 A2: 每日 AI 成本守門 — 超過 cap 直接 429, 不打 vision API
+    try {
+      await assertWithinDailyCap(merchant.tenantId);
+    } catch (err) {
+      if (err instanceof CapExceededError) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'AI_COST_CAP_EXCEEDED',
+            message: err.message,
+            usedCents: err.usedCents,
+            capCents: err.capCents,
+          },
+          { status: 429 },
+        );
+      }
+      throw err;
     }
 
     // 讀檔 + 縮圖

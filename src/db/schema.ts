@@ -301,6 +301,8 @@ export const importSessions = pgTable(
     /** RA13 cost cap accumulator */
     tokensIn: integer('tokens_in').notNull().default(0),
     tokensOut: integer('tokens_out').notNull().default(0),
+    /** V1.5 Track A1: 紀錄這次 import 用哪個 vision provider (debug + future cost-by-provider 報表) */
+    provider: text('provider').notNull().default('gemini'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

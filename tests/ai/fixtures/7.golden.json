@@ -1,0 +1,7 @@
+{
+  "name": "blurry #2 — food, low light",
+  "category": "食品飲料",
+  "title_length_band": "15-30",
+  "confidence_threshold": 0.3,
+  "injection_safe": false
+}

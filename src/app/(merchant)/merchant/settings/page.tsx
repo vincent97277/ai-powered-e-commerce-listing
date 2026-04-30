@@ -7,6 +7,8 @@ import { dbAdmin } from '@/db/admin-only';
 import { merchants } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { SettingsForm } from './SettingsForm';
+import { getDailyCostSnapshot } from '@/lib/observability/ai-cost';
+import { DailyCostChip } from './DailyCostChip';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,13 +23,16 @@ export default async function SettingsPage() {
     .where(eq(merchants.id, current.tenantId))
     .limit(1);
 
+  // V1.5 A2: 今日 AI 用量 (server-side, 跟 form 一起 SSR)
+  const { usedCents, capCents } = await getDailyCostSnapshot(current.tenantId);
+
   return (
     <main
       className="min-h-screen px-12 py-10"
       style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}
     >
       <div className="mx-auto max-w-3xl space-y-8">
-        <header>
+        <header className="space-y-3">
           <p className="t-caption" style={{ color: 'var(--brand-primary)' }}>
             商家設定
           </p>
@@ -37,6 +42,7 @@ export default async function SettingsPage() {
           <p className="t-small mt-1 opacity-60">
             店名 / 網址 / 品牌語氣 / 視覺主題 — 改了立刻套用
           </p>
+          <DailyCostChip usedCents={usedCents} capCents={capCents} />
         </header>
 
         <SettingsForm

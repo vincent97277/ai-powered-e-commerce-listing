@@ -8,6 +8,7 @@ import { withTenantTx } from '@/lib/db/with-tenant';
 import { orders, orderItems } from '@/db/schema';
 import { desc, eq, sql } from 'drizzle-orm';
 import { ShoppingCart } from 'lucide-react';
+import { ExportDropdown } from '@/components/merchant/ExportDropdown';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,7 +78,7 @@ export default async function MerchantOrdersList({
             </p>
           </div>
 
-          {/* Filter chips */}
+          {/* Filter chips + Export */}
           <nav className="flex flex-wrap items-center gap-2">
             <FilterChip href="/merchant/orders" active={filterStatus === null} label="全部" />
             {STATUS_FILTERS.map((s) => (
@@ -89,6 +90,12 @@ export default async function MerchantOrdersList({
                 color={STATUS_LABEL[s]?.color}
               />
             ))}
+            <div className="ml-auto">
+              <ExportDropdown
+                kind="orders"
+                currentFilter={{ status: filterStatus ?? undefined }}
+              />
+            </div>
           </nav>
         </header>
 

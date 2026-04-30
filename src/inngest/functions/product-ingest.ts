@@ -13,13 +13,13 @@
  * v2 升回 R2: read-from-fs / write-processed 兩步換成 R2 即可
  */
 
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import sharp from 'sharp';
 import { callVisionWithRetry } from '@/lib/ai/vision';
 import { inngest } from '../client';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { dbAdmin } from '@/db/admin-only';
-import { merchants, products, type ProductAiMetadata } from '@/db/schema';
+import { importSessions, merchants, products, type ProductAiMetadata } from '@/db/schema';
 import {
   readFileLocal,
   writeProcessedLocal,
@@ -83,6 +83,29 @@ export const productIngestFn = inngest.createFunction(
         maxRetries: 2,
       });
     });
+
+    // V1.5 review C1: 把 vision 回傳的 token usage 累積進 import_sessions, 給 cost cap 讀
+    // step.run idempotency: 同一 step ID retry 時 Inngest 不重跑 → 不會重複加 usage
+    // 沒 importSessionId (e.g. 同步 generate API 不會走 inngest) 就跳過
+    // 失敗 case usage 會是 0/0, write 也沒副作用 — 但仍寫入 (provider 一致性)
+    if (importSessionId && (visionResult.usage.tokensIn > 0 || visionResult.usage.tokensOut > 0)) {
+      await step.run('record-token-usage', async () => {
+        // import_sessions 沒 tenant_id 欄位 (RLS via JOIN merchants), 但 withTenantTx 會
+        // SET LOCAL app.tenant_id, RLS policy 走 JOIN 認得 merchant_id = tenantId 的 session
+        const tokensIn = visionResult.usage.tokensIn;
+        const tokensOut = visionResult.usage.tokensOut;
+        await withTenantTx(tenantId, async (tx) => {
+          await tx
+            .update(importSessions)
+            .set({
+              tokensIn: sql`${importSessions.tokensIn} + ${tokensIn}`,
+              tokensOut: sql`${importSessions.tokensOut} + ${tokensOut}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(importSessions.id, importSessionId));
+        });
+      });
+    }
 
     // Step 6a: 失敗分支 (RA20: 寫 needs_review status, 不 throw 讓 parent retry)
     if (!visionResult.success) {

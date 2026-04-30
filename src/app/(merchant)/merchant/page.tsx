@@ -11,6 +11,8 @@ import { count, eq, sum, sql, desc, gte, lte } from 'drizzle-orm';
 import { Plus, Package, ShoppingCart, ExternalLink, TrendingUp, Settings } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { PendingCallout } from '@/components/merchant/PendingCallout';
+import { HealthCallout } from '@/components/merchant/HealthCallout';
+import { getHealthIssues } from '@/lib/merchant/health-checks';
 import { dbAdmin } from '@/db/admin-only';
 
 export const dynamic = 'force-dynamic';
@@ -109,27 +111,30 @@ export default async function MerchantDashboard() {
     .limit(1);
   const lowStockThreshold = merchantRow?.lowStockThreshold ?? 5;
 
-  const [callout] = await withTenantTx(merchant.tenantId, async (tx) => {
-    const [orderCounts, lowStock] = await Promise.all([
-      tx
-        .select({
-          pending: sql<number>`count(*) filter (where ${orders.status} = 'pending')::int`.mapWith(Number),
-          paid: sql<number>`count(*) filter (where ${orders.status} = 'paid')::int`.mapWith(Number),
-        })
-        .from(orders),
-      tx
-        .select({ n: count(products.id) })
-        .from(products)
-        .where(lte(products.stockQuantity, lowStockThreshold)),
-    ]);
-    return [
-      {
+  // V1.5 B1: PendingCallout + HealthCallout 平行抓 (兩個獨立 tenant tx)
+  const [calloutBundle, healthIssues] = await Promise.all([
+    withTenantTx(merchant.tenantId, async (tx) => {
+      const [orderCounts, lowStock] = await Promise.all([
+        tx
+          .select({
+            pending: sql<number>`count(*) filter (where ${orders.status} = 'pending')::int`.mapWith(Number),
+            paid: sql<number>`count(*) filter (where ${orders.status} = 'paid')::int`.mapWith(Number),
+          })
+          .from(orders),
+        tx
+          .select({ n: count(products.id) })
+          .from(products)
+          .where(lte(products.stockQuantity, lowStockThreshold)),
+      ]);
+      return {
         pending: orderCounts[0]?.pending ?? 0,
         paid: orderCounts[0]?.paid ?? 0,
         lowStock: lowStock[0]?.n ?? 0,
-      },
-    ];
-  });
+      };
+    }),
+    getHealthIssues(merchant.tenantId),
+  ]);
+  const callout = calloutBundle;
 
   // 上架轉換率
   const publishRate = productStats.total > 0
@@ -204,6 +209,9 @@ export default async function MerchantDashboard() {
           lowStockCount={callout.lowStock}
           lowStockThreshold={lowStockThreshold}
         />
+
+        {/* V1.5 B1 HealthCallout (issues=[] 不顯示) */}
+        <HealthCallout issues={healthIssues} />
 
         {/* KPI cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

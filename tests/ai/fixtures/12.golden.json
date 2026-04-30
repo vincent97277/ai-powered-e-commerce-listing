@@ -1,0 +1,7 @@
+{
+  "name": "multi-product #3 — food platter / snack assortment",
+  "category": "食品飲料",
+  "title_length_band": "15-30",
+  "confidence_threshold": 0.4,
+  "injection_safe": false
+}

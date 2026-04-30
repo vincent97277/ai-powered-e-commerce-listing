@@ -37,6 +37,7 @@ import {
 import { and, count, eq, gt, sql } from 'drizzle-orm';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { createAdminSession, ADMIN_SESSION_COOKIE } from '@/lib/admin-session';
+import { getHealthIssues } from '@/lib/merchant/health-checks';
 
 // 用獨立 tenant 避免污染 demo data
 const T1 = '88888888-1111-1111-1111-111111111111';
@@ -722,6 +723,147 @@ describe('Settings 更新', () => {
     // 直接驗 SQL constraint 沒擋 (應用層驗 only) — 確認 OK insert 12345 但 actions.ts 會 reject
     // 不真寫, 只確認 schema 無 CHECK constraint, 應用層擔
     expect(true).toBe(true); // placeholder
+  });
+});
+
+// ─────────────── V1.5 B1: Health checks ───────────────
+describe('Health checks (V1.5 B1)', () => {
+  // 獨立 tenant + 4 個 products with 各自 health issue
+  const TH = '88888888-7777-7777-7777-777777777777';
+  const P_NO_PHOTO = '99999999-aaaa-aaaa-aaaa-aaaaaaaa0001';
+  const P_SHORT_TITLE = '99999999-aaaa-aaaa-aaaa-aaaaaaaa0002';
+  const P_ZERO_STOCK = '99999999-aaaa-aaaa-aaaa-aaaaaaaa0003';
+  const P_NORMAL = '99999999-aaaa-aaaa-aaaa-aaaaaaaa0004';
+  const aiMeta = {
+    title: 'p',
+    description: 'd',
+    category: '其他' as const,
+    seo_tags: [],
+    variants: [],
+    price_twd: { min: 1, max: 1 },
+    confidence: 0.9,
+  };
+
+  beforeAll(async () => {
+    await dbAdmin
+      .insert(merchants)
+      .values({ id: TH, slug: 'integ-health-shop', name: 'Integ Health Shop' })
+      .onConflictDoNothing();
+    await dbAdmin
+      .insert(products)
+      .values([
+        // 1: 沒照片 (r2Key 空字串) — 標題 12 字 OK, 庫存 5 OK, 定價 100 OK
+        {
+          id: P_NO_PHOTO,
+          tenantId: TH,
+          title: '正常標題長度十二個字',
+          description: 'desc',
+          r2Key: '',
+          priceCents: 100,
+          stockQuantity: 5,
+          aiMetadata: aiMeta,
+        },
+        // 2: 標題太短 (5 字) — 有照片, 庫存 5, 定價 100
+        {
+          id: P_SHORT_TITLE,
+          tenantId: TH,
+          title: '短標題哦',
+          description: 'desc',
+          r2Key: 'health/p2.jpg',
+          priceCents: 100,
+          stockQuantity: 5,
+          aiMetadata: aiMeta,
+        },
+        // 3: 缺貨 (stock=0) — 標題 OK, 有照片, 定價 100
+        {
+          id: P_ZERO_STOCK,
+          tenantId: TH,
+          title: '缺貨商品標題夠長啦',
+          description: 'desc',
+          r2Key: 'health/p3.jpg',
+          priceCents: 100,
+          stockQuantity: 0,
+          aiMetadata: aiMeta,
+        },
+        // 4: normal — 全部 OK
+        {
+          id: P_NORMAL,
+          tenantId: TH,
+          title: '正常商品標題長度足夠',
+          description: 'desc',
+          r2Key: 'health/p4.jpg',
+          priceCents: 100,
+          stockQuantity: 5,
+          aiMetadata: aiMeta,
+        },
+      ])
+      .onConflictDoNothing();
+  });
+
+  afterAll(async () => {
+    await dbAdmin.delete(products).where(eq(products.tenantId, TH));
+    await dbAdmin.delete(merchants).where(eq(merchants.id, TH));
+  });
+
+  it('回 3 個 issues, 跳過 normal product, 各 count 對', async () => {
+    const issues = await getHealthIssues(TH);
+
+    expect(issues.length).toBe(3);
+
+    // 每個 issue 各 1 件 (因為 4 件商品中 3 件各有一個問題, 1 件全 OK)
+    const byType = Object.fromEntries(issues.map((i) => [i.type, i]));
+    expect(byType.no_photo?.count).toBe(1);
+    expect(byType.short_title?.count).toBe(1);
+    expect(byType.zero_stock?.count).toBe(1);
+    expect(byType.zero_price).toBeUndefined(); // 0 件 → 不在列表
+
+    // label / filterUrl 結構正確
+    expect(byType.no_photo?.label).toMatch(/缺照片/);
+    expect(byType.no_photo?.filterUrl).toBe('/merchant/products?filter=no_photo');
+    expect(byType.short_title?.filterUrl).toBe('/merchant/products?filter=short_title');
+    expect(byType.zero_stock?.filterUrl).toBe('/merchant/products?filter=zero_stock');
+  });
+
+  it('全 0 issues → 回 [] (健康 merchant)', async () => {
+    // 用 T2 (Integ Shop B / integ-shop-c — V1 沒商品, 全乾淨)
+    const issues = await getHealthIssues(T2);
+    expect(issues).toEqual([]);
+  });
+
+  it('top 3 排序 by count desc + 多個同 type 累加', async () => {
+    // 在 TH 多塞 5 件 zero_stock, 讓 zero_stock 衝到第一
+    const extras: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const id = `99999999-bbbb-bbbb-bbbb-bbbbbbbb000${i}`;
+      extras.push(id);
+      await dbAdmin
+        .insert(products)
+        .values({
+          id,
+          tenantId: TH,
+          title: '夠長的商品標題用來避免短標題',
+          description: 'desc',
+          r2Key: 'health/extra.jpg',
+          priceCents: 100,
+          stockQuantity: 0,
+          aiMetadata: aiMeta,
+        })
+        .onConflictDoNothing();
+    }
+    try {
+      const issues = await getHealthIssues(TH);
+      expect(issues.length).toBe(3);
+      // zero_stock 現在 6 件 (1 + 5), 應 rank 1
+      expect(issues[0].type).toBe('zero_stock');
+      expect(issues[0].count).toBe(6);
+      // 後兩個是 no_photo / short_title (各 1)
+      const remaining = issues.slice(1).map((i) => i.type).sort();
+      expect(remaining).toEqual(['no_photo', 'short_title']);
+    } finally {
+      for (const id of extras) {
+        await dbAdmin.delete(products).where(eq(products.id, id));
+      }
+    }
   });
 });
 

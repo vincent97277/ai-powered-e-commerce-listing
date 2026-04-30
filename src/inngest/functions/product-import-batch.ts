@@ -25,6 +25,7 @@ import { eq, sql } from 'drizzle-orm';
 import { inngest } from '../client';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { importSessions } from '@/db/schema';
+import { getActiveAiProvider } from '@/lib/ai/vision';
 import { safeFetch } from '@/lib/import/url-guard';
 import { parseIgHtml, IgParseError } from '@/lib/import/ig-fetcher';
 import { parseShopeeHtml, ShopeeParseError } from '@/lib/import/shopee-fetcher';
@@ -34,6 +35,7 @@ import {
 } from '@/lib/import/normalizer';
 import { downloadImageToStorage } from '@/lib/import/image-downloader';
 import { logImport } from '@/lib/observability/import-log';
+import { assertWithinDailyCap, CapExceededError } from '@/lib/observability/ai-cost';
 
 const MAX_ITEMS_PER_SESSION = 20;
 const MIN_ITEMS_WARN = 5;
@@ -53,12 +55,13 @@ export const productImportBatchFn = inngest.createFunction(
     const startedAt = Date.now();
     logger.info('product.import.batch start', { sessionId, sourceType, sourceUrl });
 
-    // Step 0: status='fetching'
+    // Step 0: status='fetching' + record active AI provider (V1.5 A1)
+    const activeProvider = getActiveAiProvider();
     await step.run('mark-fetching', async () => {
       await withTenantTx(tenantId, async (tx) => {
         await tx
           .update(importSessions)
-          .set({ status: 'fetching', updatedAt: new Date() })
+          .set({ status: 'fetching', provider: activeProvider, updatedAt: new Date() })
           .where(eq(importSessions.id, sessionId));
       });
     });
@@ -150,6 +153,49 @@ export const productImportBatchFn = inngest.createFunction(
 
     if (items.length < MIN_ITEMS_WARN) {
       logger.warn(`只找到 ${items.length} 件, 建議至少 ${MIN_ITEMS_WARN} 件`);
+    }
+
+    // Step 3.5: V1.5 A2 cost cap gate — 超過 cap 前不要再 dispatch child events
+    // (個別 child 失敗仍會被 product.ingest 自身處理, 這裡只擋整批送進去)
+    const capCheck = await step.run('check-cost-cap', async () => {
+      try {
+        await assertWithinDailyCap(tenantId);
+        return { exceeded: false as const };
+      } catch (err) {
+        if (err instanceof CapExceededError) {
+          return {
+            exceeded: true as const,
+            message: err.message,
+            usedCents: err.usedCents,
+            capCents: err.capCents,
+          };
+        }
+        throw err; // 非預期錯誤 → 讓 Inngest retry
+      }
+    });
+
+    if (capCheck.exceeded) {
+      await markFailed(tenantId, sessionId, '今日 AI 額度已達上限');
+      logImport({
+        merchantId,
+        sourceType,
+        url: sourceUrl,
+        itemCount: items.length,
+        durationMs: Date.now() - startedAt,
+        success: false,
+        error: `AI_COST_CAP_EXCEEDED: ${capCheck.message}`,
+      });
+      logger.warn('product.import.batch aborted: cost cap exceeded', {
+        sessionId,
+        usedCents: capCheck.usedCents,
+        capCents: capCheck.capCents,
+      });
+      return {
+        success: false,
+        reason: 'AI_COST_CAP_EXCEEDED',
+        usedCents: capCheck.usedCents,
+        capCents: capCheck.capCents,
+      };
     }
 
     // Step 4: per-item processing — 序列, 每個 item 一個 step.run (RA1: retry safe)
