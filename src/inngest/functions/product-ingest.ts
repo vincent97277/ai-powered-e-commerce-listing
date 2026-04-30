@@ -87,7 +87,7 @@ export const productIngestFn = inngest.createFunction(
     // V1.5 review C1: 把 vision 回傳的 token usage 累積進 import_sessions, 給 cost cap 讀
     // step.run idempotency: 同一 step ID retry 時 Inngest 不重跑 → 不會重複加 usage
     // 沒 importSessionId (e.g. 同步 generate API 不會走 inngest) 就跳過
-    // 失敗 case usage 會是 0/0, write 也沒副作用 — 但仍寫入 (provider 一致性)
+    // 失敗 case usage 會是 0/0, write 也沒副作用 — 直接跳過寫入
     if (importSessionId && (visionResult.usage.tokensIn > 0 || visionResult.usage.tokensOut > 0)) {
       await step.run('record-token-usage', async () => {
         // import_sessions 沒 tenant_id 欄位 (RLS via JOIN merchants), 但 withTenantTx 會

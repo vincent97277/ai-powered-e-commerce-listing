@@ -10,15 +10,12 @@
  *   - 不寫資料 (純讀 + 計算), 不會洩漏 cross-tenant 資料 (永遠 WHERE merchant_id = $1)
  *
  * Pricing 寫死 (V1.5 不上 admin override UI, V2 再說):
- *   - Gemini 2.5 Flash: $0.30 / $2.50 per 1M tokens
- *   - GPT-4o:           $2.50 / $10  per 1M tokens
- *   - 圖片在兩家都是當 input token 算 (Gemini 約 258 tokens / 1024px image)
+ *   - GPT-4o (gpt-4o-2024-11-20): $2.50 / $10 per 1M tokens
+ *   - 圖片在 OpenAI 是當 input token 算
  *     → 不在這邊另外加, 直接信任 import_sessions.tokensIn 已含圖片成本
  *
  * 時區: 台灣 UTC+8 — 「今日」= TPE 00:00 → now
  *   import_sessions.created_at 是 timestamptz, 所以比對時轉到 TPE 算 boundary
- *
- * Old rows fallback: A1 之前的 session 沒寫 provider 欄位, 預設 'gemini' (跟 A1 default 一致, 也比較保守 — Gemini 比 OpenAI 便宜, 算出來金額較小, 不會誤觸 cap)
  */
 import { eq, and, gte } from 'drizzle-orm';
 import { dbAdmin } from '@/db/admin-only';
@@ -26,36 +23,19 @@ import { merchants, importSessions } from '@/db/schema';
 
 /* ─────────────────────────── Pricing constants ─────────────────────────── */
 
-/** 每 1M token 的價格 (USD); cent = USD * 100 */
+/** 每 1M token 的價格 (USD); cent = USD * 100 — gpt-4o-2024-11-20 */
 const PRICING = {
-  gemini: {
-    inputPerMillion: 0.3,
-    outputPerMillion: 2.5,
-  },
-  openai: {
-    inputPerMillion: 2.5,
-    outputPerMillion: 10,
-  },
+  inputPerMillion: 2.5,
+  outputPerMillion: 10,
 } as const;
-
-export type AiProviderName = keyof typeof PRICING;
 
 /**
  * 算單筆 session 的成本 (cents, float — 不在這 round, 加總後再 round 避免累積誤差)
- *
- * V1.5 review H3: 拿掉 dead `_model` 參數 — 目前只用 provider 區分價格,
- *                 V2 真要 per-model SKU 再加, YAGNI.
  */
-export function tokenCost(
-  provider: AiProviderName | string,
-  tokensIn: number,
-  tokensOut: number,
-): number {
-  const p = (provider in PRICING ? provider : 'gemini') as AiProviderName;
-  const rates = PRICING[p];
+export function tokenCost(tokensIn: number, tokensOut: number): number {
   const usd =
-    (tokensIn / 1_000_000) * rates.inputPerMillion +
-    (tokensOut / 1_000_000) * rates.outputPerMillion;
+    (tokensIn / 1_000_000) * PRICING.inputPerMillion +
+    (tokensOut / 1_000_000) * PRICING.outputPerMillion;
   return usd * 100; // cents
 }
 
@@ -88,7 +68,6 @@ export async function getDailyCostCents(tenantId: string): Promise<number> {
     .select({
       tokensIn: importSessions.tokensIn,
       tokensOut: importSessions.tokensOut,
-      provider: importSessions.provider,
     })
     .from(importSessions)
     .where(
@@ -100,7 +79,7 @@ export async function getDailyCostCents(tenantId: string): Promise<number> {
 
   let totalCents = 0;
   for (const r of rows) {
-    totalCents += tokenCost(r.provider ?? 'gemini', r.tokensIn ?? 0, r.tokensOut ?? 0);
+    totalCents += tokenCost(r.tokensIn ?? 0, r.tokensOut ?? 0);
   }
   return Math.round(totalCents);
 }
@@ -171,6 +150,5 @@ export async function getDailyCostSnapshot(
 
 /**
  * 暴露 getTpeMidnightUtc 給 test (避免 test 重新算 boundary 時誤差)
- * V1.5 review H3: 拿掉 dead `sql` re-export — 從來沒人用過.
  */
 export const __test = { getTpeMidnightUtc };

@@ -25,7 +25,6 @@ import { eq, sql } from 'drizzle-orm';
 import { inngest } from '../client';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { importSessions } from '@/db/schema';
-import { getActiveAiProvider } from '@/lib/ai/vision';
 import { safeFetch } from '@/lib/import/url-guard';
 import { parseIgHtml, IgParseError } from '@/lib/import/ig-fetcher';
 import { parseShopeeHtml, ShopeeParseError } from '@/lib/import/shopee-fetcher';
@@ -55,13 +54,12 @@ export const productImportBatchFn = inngest.createFunction(
     const startedAt = Date.now();
     logger.info('product.import.batch start', { sessionId, sourceType, sourceUrl });
 
-    // Step 0: status='fetching' + record active AI provider (V1.5 A1)
-    const activeProvider = getActiveAiProvider();
+    // Step 0: status='fetching'
     await step.run('mark-fetching', async () => {
       await withTenantTx(tenantId, async (tx) => {
         await tx
           .update(importSessions)
-          .set({ status: 'fetching', provider: activeProvider, updatedAt: new Date() })
+          .set({ status: 'fetching', updatedAt: new Date() })
           .where(eq(importSessions.id, sessionId));
       });
     });

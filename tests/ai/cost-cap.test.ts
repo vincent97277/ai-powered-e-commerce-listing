@@ -2,8 +2,8 @@
  * V1.5 Track A2 — daily AI cost cap enforcement test suite
  *
  * 5 cases:
- *   1. tokenCost: Gemini & GPT-4o pricing math 對 (per-1M token)
- *   2. getDailyCostCents: 加總當日 sessions 對 (provider-aware)
+ *   1. tokenCost: GPT-4o pricing math 對 (per-1M token)
+ *   2. getDailyCostCents: 加總當日 sessions 對
  *   3. assertWithinDailyCap: 沒超過 cap → 不 throw
  *   4. assertWithinDailyCap: 超過 cap → throw CapExceededError (含 code/usedCents/capCents)
  *   5. cross-tenant isolation: tenant A 用量不影響 tenant B 的 cap 判定
@@ -101,40 +101,29 @@ afterAll(async () => {
   await dbAdmin.delete(merchants).where(eq(merchants.id, TENANT_B));
 });
 
-describe('tokenCost — pricing math', () => {
-  it('Gemini 2.5 Flash: 1M in + 1M out → 30 + 250 = 280 cents', () => {
-    // $0.30 + $2.50 = $2.80 = 280 cents
-    expect(tokenCost('gemini', 1_000_000, 1_000_000)).toBeCloseTo(280, 5);
-  });
-
+describe('tokenCost — pricing math (gpt-4o-2024-11-20)', () => {
   it('GPT-4o: 1M in + 1M out → 250 + 1000 = 1250 cents', () => {
     // $2.50 + $10 = $12.50 = 1250 cents
-    expect(tokenCost('openai', 1_000_000, 1_000_000)).toBeCloseTo(1250, 5);
+    expect(tokenCost(1_000_000, 1_000_000)).toBeCloseTo(1250, 5);
   });
 
-  it('Gemini: 100k in + 50k out → ~3 + ~12.5 = 15.5 cents', () => {
-    // (100000/1M)*0.3 + (50000/1M)*2.5 = 0.03 + 0.125 = $0.155 = 15.5 cents
-    expect(tokenCost('gemini', 100_000, 50_000)).toBeCloseTo(15.5, 4);
+  it('GPT-4o: 200k in + 100k out → 50 + 100 = 150 cents', () => {
+    // (200000/1M)*2.5 + (100000/1M)*10 = 0.5 + 1.0 = $1.50 = 150 cents
+    expect(tokenCost(200_000, 100_000)).toBeCloseTo(150, 4);
   });
 
   it('zero tokens → 0 cents', () => {
-    expect(tokenCost('gemini', 0, 0)).toBe(0);
-    expect(tokenCost('openai', 0, 0)).toBe(0);
-  });
-
-  it('unknown provider → fallback to gemini pricing (conservative)', () => {
-    // Gemini 比 OpenAI 便宜 — 抓不到的 provider 用 Gemini 算 = 不會誤殺
-    expect(tokenCost('unknown-provider', 1_000_000, 1_000_000)).toBeCloseTo(280, 5);
+    expect(tokenCost(0, 0)).toBe(0);
   });
 });
 
 describe('getDailyCostCents — aggregator', () => {
-  it('sums today sessions for one tenant (provider-aware)', async () => {
-    // Seed 3 sessions for tenant A:
-    //  - Gemini: 1M in + 1M out = 280 cents
-    //  - Gemini: 500k in + 500k out = 140 cents (round((0.15 + 1.25)) = 140)
-    //  - OpenAI: 200k in + 100k out = 150 cents ((200000/1M)*2.5 + (100000/1M)*10 = 0.5 + 1.0 = $1.50 = 150 cents)
-    // total = 570 cents
+  it('sums today sessions for one tenant', async () => {
+    // Seed 3 sessions for tenant A (all OpenAI pricing now):
+    //  - 1M in + 1M out = 1250 cents
+    //  - 500k in + 500k out = 625 cents
+    //  - 200k in + 100k out = 150 cents
+    // total = 2025 cents
     await dbAdmin.insert(importSessions).values([
       {
         merchantId: TENANT_A,
@@ -142,7 +131,6 @@ describe('getDailyCostCents — aggregator', () => {
         sourceType: 'ig',
         tokensIn: 1_000_000,
         tokensOut: 1_000_000,
-        provider: 'gemini',
       },
       {
         merchantId: TENANT_A,
@@ -150,7 +138,6 @@ describe('getDailyCostCents — aggregator', () => {
         sourceType: 'shopee',
         tokensIn: 500_000,
         tokensOut: 500_000,
-        provider: 'gemini',
       },
       {
         merchantId: TENANT_A,
@@ -158,13 +145,12 @@ describe('getDailyCostCents — aggregator', () => {
         sourceType: 'ig',
         tokensIn: 200_000,
         tokensOut: 100_000,
-        provider: 'openai',
       },
     ]);
 
     const cost = await getDailyCostCents(TENANT_A);
-    // 280 + 140 + 150 = 570 cents
-    expect(cost).toBe(570);
+    // 1250 + 625 + 150 = 2025 cents
+    expect(cost).toBe(2025);
 
     // cleanup for next test
     await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_A));
@@ -178,17 +164,16 @@ describe('getDailyCostCents — aggregator', () => {
 
 describe('assertWithinDailyCap', () => {
   it('does not throw when usage is under cap', async () => {
-    // Tenant A cap = 5000 cents. Seed 100 cents用量 (well under)
+    // Tenant A cap = 5000 cents. Seed small usage (well under)
+    // (50k/1M)*2.5 + (10k/1M)*10 = 0.125 + 0.1 = $0.225 = 22.5 cents → 23 (rounded)
     await dbAdmin.insert(importSessions).values({
       merchantId: TENANT_A,
       sourceUrl: 'https://test/under-cap',
       sourceType: 'ig',
-      tokensIn: 100_000,
-      tokensOut: 30_000,
-      provider: 'gemini',
+      tokensIn: 50_000,
+      tokensOut: 10_000,
     });
 
-    // (100k/1M)*0.3 + (30k/1M)*2.5 = 0.03 + 0.075 = $0.105 = 10.5 cents → 11 (rounded)
     await expect(assertWithinDailyCap(TENANT_A)).resolves.toBeUndefined();
 
     await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_A));
@@ -205,7 +190,6 @@ describe('assertWithinDailyCap', () => {
         sourceType: 'ig',
         tokensIn: 500_000,
         tokensOut: 500_000,
-        provider: 'openai',
       },
       {
         merchantId: TENANT_B,
@@ -213,7 +197,6 @@ describe('assertWithinDailyCap', () => {
         sourceType: 'ig',
         tokensIn: 500_000,
         tokensOut: 500_000,
-        provider: 'openai',
       },
     ]);
 
@@ -266,7 +249,6 @@ describe('assertWithinDailyCap', () => {
       sourceType: 'ig',
       tokensIn: 10_000_000, // 10M tokens, OpenAI = (10*2.5)+(...)
       tokensOut: 5_000_000,
-      provider: 'openai',
     });
 
     // 確認 A 真的爆了
@@ -283,7 +265,6 @@ describe('assertWithinDailyCap', () => {
       sourceType: 'ig',
       tokensIn: 50_000,
       tokensOut: 10_000,
-      provider: 'gemini',
     });
     await expect(assertWithinDailyCap(TENANT_B)).resolves.toBeUndefined();
 

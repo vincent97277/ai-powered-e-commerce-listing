@@ -19,7 +19,6 @@
     "docker:reset": "docker compose down -v && docker compose up -d"
   },
   "dependencies": {
-    "@ai-sdk/google": "^1.2.22",
     "@ai-sdk/openai": "^1.0.0",
     "@base-ui/react": "^1.4.1",
     "@hookform/resolvers": "^3.9.0",

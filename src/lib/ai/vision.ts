@@ -1,8 +1,5 @@
 /**
- * Vision call wrapper (V1.5: Gemini-default with OpenAI rollback)
- *
- * V1.5 Track A1: 預設 Gemini 2.5 Flash, 設 AI_PROVIDER=openai 可 rollback 回 GPT-4o。
- * 沒上 provider abstraction layer (Eng E1: YAGNI; Vercel AI SDK 已抽象)。
+ * Vision call wrapper (OpenAI GPT-4o)
  *
  * 用 Vercel AI SDK 的 generateObject() 配 productSchema，
  * 自動拿到 typed + 已驗證的 ProductOutput。
@@ -12,41 +9,20 @@
  * - retry 觸發條件：
  *   1. fetch / network / 429 rate limit / 5xx error (透過 APICallError.statusCode 判定)
  *   2. Zod schema 驗證失敗（LLM 偶爾會吐多餘欄位、漏欄位）
- *   3. fallback: 字串比對 (相容舊 OpenAI 路徑與非 APICallError 例外)
+ *   3. fallback: 字串比對 (相容非 APICallError 例外)
  * - 不 retry：4xx 認證錯誤、quota 用完（因為 retry 也救不了）
  *
  * 失敗 fallback：包成 { success: false, error } 回給 caller，
  * 由 Inngest worker 決定要寫 placeholder row 還是丟到 DLQ。
  */
 
-import { google } from '@ai-sdk/google';
 import { openai } from '@ai-sdk/openai';
 import { APICallError, generateObject } from 'ai';
 import { buildSystemPrompt } from './prompt';
 import { productSchema, type ProductOutput } from './schema';
 
-/** module-load-time provider selection (env-var only, no per-merchant flip) */
-export type AiProvider = 'gemini' | 'openai';
-
-const RAW_PROVIDER = (process.env.AI_PROVIDER ?? 'gemini').toLowerCase();
-export const AI_PROVIDER: AiProvider = RAW_PROVIDER === 'openai' ? 'openai' : 'gemini';
-
-/** 對外曝露 (worker 寫 import_sessions.provider 用) */
-export function getActiveAiProvider(): AiProvider {
-  return AI_PROVIDER;
-}
-
-// Gemini 2.5 Flash: ~$0.30/$2.50 per 1M tokens (vs GPT-4o $2.50/$10)
 // GPT-4o 2024-11-20: V1 用過的版本, vision 品質和 latency 平衡點
-const GEMINI_MODEL_ID = 'gemini-2.5-flash';
-const OPENAI_MODEL_ID = 'gpt-4o-2024-11-20';
-
-export const ACTIVE_MODEL_ID = AI_PROVIDER === 'gemini' ? GEMINI_MODEL_ID : OPENAI_MODEL_ID;
-
-/** 拿 model handle — 隔離 provider 差異, 上層只看 ai SDK 的 LanguageModel interface */
-function getModel() {
-  return AI_PROVIDER === 'gemini' ? google(GEMINI_MODEL_ID) : openai(OPENAI_MODEL_ID);
-}
+const MODEL_ID = 'gpt-4o-2024-11-20';
 
 // ============================================================
 // Retry 判定: 先試 APICallError (SDK-typed), 再 fallback 字串比對
@@ -70,14 +46,13 @@ function isRetryableViaApiCallError(err: unknown): boolean | null {
 
 function isRetryableViaMessage(err: unknown): boolean {
   const msg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
-  // network / rate limit / 5xx / Zod parse / Gemini-specific quota strings
+  // network / rate limit / 5xx / Zod parse
   return (
     msg.includes('econnreset') ||
     msg.includes('etimedout') ||
     msg.includes('fetch failed') ||
     msg.includes('rate limit') ||
     msg.includes('quota') ||
-    msg.includes('resource_exhausted') ||
     msg.includes('429') ||
     msg.includes('500') ||
     msg.includes('502') ||
@@ -119,19 +94,17 @@ export type VisionResult =
       success: true;
       data: ProductOutput;
       attempts: number;
-      provider: AiProvider;
       usage: VisionUsage;
     }
   | {
       success: false;
       error: string;
       attempts: number;
-      provider: AiProvider;
       usage: VisionUsage;
     };
 
 export async function callVisionWithRetry(opts: {
-  /** 線上 URL (production worker 路徑) 或 Buffer (eval suite 從 fixture 讀本地 jpeg) */
+  /** 線上 URL (production worker 路徑) 或 Buffer (test 從 fixture 讀本地 jpeg) */
   imageUrl?: string;
   imageBuffer?: Buffer | Uint8Array;
   brandVoice: string;
@@ -154,7 +127,7 @@ export async function callVisionWithRetry(opts: {
       // generateObject 自動：呼叫 LLM → 解析 JSON → Zod 驗證
       // 只要任一步失敗都會 throw，外層 catch 接到後決定要不要 retry
       const result = await generateObject({
-        model: getModel(),
+        model: openai(MODEL_ID),
         schema: productSchema,
         system,
         // multi-modal message：text + image
@@ -173,7 +146,7 @@ export async function callVisionWithRetry(opts: {
             ],
           },
         ],
-        // 對應 OpenAI/Gemini 的 max_tokens / temperature
+        // 對應 OpenAI 的 max_tokens / temperature
         maxTokens: 1500,
         temperature: 0.7,
       });
@@ -189,7 +162,6 @@ export async function callVisionWithRetry(opts: {
         success: true,
         data: result.object,
         attempts: attempt + 1,
-        provider: AI_PROVIDER,
         usage,
       };
     } catch (err) {
@@ -206,7 +178,6 @@ export async function callVisionWithRetry(opts: {
     success: false,
     error: msg,
     attempts: totalAttempts,
-    provider: AI_PROVIDER,
     usage: { tokensIn: 0, tokensOut: 0 },
   };
 }
