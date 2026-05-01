@@ -1,229 +1,295 @@
-# Local-First Setup — demo-sass-2
+# Local Setup
 
-> Hackathon scope cut: 不用 Neon/R2/Vercel/Sentry。只本地 Postgres + 本地檔案系統 + Inngest dev server。
-> 只剩 OpenAI 是 optional 真連 (沒填走 Demo Mode fixture)。
+Dev onboarding for someone (or future-you) cloning `demo-sass-2`. For project-level context first, read [README.md](./README.md). For architecture depth: [ARCHITECTURE.md](./ARCHITECTURE.md). For version history: [STATUS.md](./STATUS.md) and [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 
-## TL;DR — 5 個指令啟動
+## TL;DR — five commands
 
 ```bash
-# 1. Postgres 已經在跑 (Homebrew postgresql@16)
-brew services list | grep postgres   # 確認 started
+docker compose up -d                                        # 1. Postgres + roles
+cp .env.local.example .env.local                            # 2. Env (defaults work)
+bun install                                                 # 3. Deps
+bun run db:push                                             # 4. Migrate (0000..0007)
+bun run dev                                                 # 5. http://localhost:3000
+```
 
-# 2. 建 DB + roles
-psql -h localhost -d postgres -c "CREATE DATABASE demo_sass_2;"
-psql -h localhost -d demo_sass_2 -f db/init/01-roles.sql
+If you want AI features (photo upload, IG/蝦皮 import) end-to-end, you also need:
 
-# 3. 建表 + RLS
-pnpm db:generate                      # 產 0000_*_initial.sql
-psql -h localhost -d demo_sass_2 -f drizzle/migrations/0000_*.sql
-psql -h localhost -d demo_sass_2 -f drizzle/migrations/0001_init_rls.sql
-
-# 4. Seed 兩個 demo merchant (見下方 SQL)
-
-# 5. Run
-pnpm dev                              # http://localhost:3000
-pnpm inngest:dev                      # 另一個 terminal，AI pipeline worker
+```bash
+# Add OPENAI_API_KEY to .env.local, then:
+bunx inngest-cli dev -u http://localhost:3000/api/inngest   # second terminal
 ```
 
 ---
 
-## 詳細步驟
+## Prerequisites
 
-### Step 1 — 確認 Postgres 在跑
+- **Node 20+** (for Next.js 15 / React 19)
+- **Bun** (preferred) — `curl -fsSL https://bun.sh/install | bash`. `pnpm` and `npm` work but the scripts assume `bun` for speed.
+- **Docker Desktop** (for the Postgres 16 container)
+- **OpenAI API key** — only required if you want to test AI photo → listing or batch import. Without it, the rest of the app runs.
+- **Inngest dev CLI** — only required for batch import (`/merchant/products/import`). Auto-fetched by `bunx`.
 
-如果你已經有 `postgresql@16` 從 Homebrew 跑，跳過：
+---
 
-```bash
-brew services list | grep postgres
-# postgresql@16 started ...   ← 應該看到
-```
+## Step-by-step
 
-如果沒裝：
-```bash
-brew install postgresql@16
-brew services start postgresql@16
-```
-
-### Step 2 — 建 database + roles
+### 1. Boot Postgres + roles
 
 ```bash
-# 建 DB
-psql -h localhost -d postgres -c "CREATE DATABASE demo_sass_2;"
-
-# 建 web_anon (RLS enforce) + web_admin (BYPASSRLS) 兩個 role
-psql -h localhost -d demo_sass_2 -f db/init/01-roles.sql
-
-# 驗證
-psql -h localhost -d demo_sass_2 -c "SELECT rolname, rolbypassrls FROM pg_roles WHERE rolname IN ('web_anon','web_admin');"
-# 預期:
-#  web_anon  | f
-#  web_admin | t
+docker compose up -d
 ```
 
-### Step 3 — `.env.local`
+This starts Postgres 16 on `localhost:5432` and runs `db/init/01-roles.sql` automatically (creates `web_anon` and `web_admin` roles with the passwords baked into `.env.local.example`).
 
-從 `.env.local.example` 複製，預設值已經對齊本地 Postgres：
+Verify:
+
+```bash
+docker compose ps
+# demo-sass-2-postgres    healthy
+
+docker exec -it demo-sass-2-postgres psql -U owner -d demo_sass_2 \
+  -c "SELECT rolname, rolbypassrls FROM pg_roles WHERE rolname IN ('web_anon','web_admin');"
+# web_anon  | f
+# web_admin | t
+```
+
+`BYPASSRLS = t` on `web_admin` is non-negotiable — Postgres role inheritance does NOT propagate this attribute, so it must be set on the LOGIN role directly.
+
+### 2. Environment variables
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-OpenAI key 可選 — 不填只能跑 Demo Mode。
+| Var | Required | What it's for |
+|---|---|---|
+| `DATABASE_URL` | yes | Owner connection — used by `drizzle-kit` for migrations |
+| `DATABASE_URL_USER` | yes | `web_anon` connection — RLS-enforced, all user-facing reads/writes |
+| `DATABASE_URL_ADMIN` | yes | `web_admin` connection — `BYPASSRLS`, only allowed paths in `eslint.config.mjs` |
+| `NEXT_PUBLIC_APP_URL` | yes | Used by GPT-4o vision calls to build presigned image URLs |
+| `OPENAI_API_KEY` | for AI | Photo upload + IG/蝦皮 import. Without it those routes 503; rest of the app runs |
+| `INNGEST_EVENT_KEY` | dev: no | Empty in local dev (the dev CLI handles auth). Required for prod deploy |
+| `INNGEST_SIGNING_KEY` | dev: no | Same as above |
+| `DEMO_MERCHANT_AKAMI_ID` | yes | UUID for the `akami` seed merchant |
+| `DEMO_MERCHANT_AFEN_ID` | yes | UUID for the `afen` seed merchant |
+| `ADMIN_PASSWORD` | yes | Password for `/admin/login`. **Change from `changeme`** before sharing |
+| `ADMIN_SESSION_SECRET` | yes | HMAC secret. Generate with `openssl rand -hex 32`. Must be ≥32 chars |
 
-### Step 4 — 建表 + RLS migration
+Defaults in `.env.local.example` align with the Docker container — no edits needed for local dev unless you want AI.
+
+### 3. Install + migrate
 
 ```bash
-# 產 Drizzle 建表 SQL (從 src/db/schema.ts)
-pnpm db:generate
-
-# 跑 0000 (建表) + 0001 (RLS policy)
-psql -h localhost -d demo_sass_2 -f drizzle/migrations/0000_*.sql
-psql -h localhost -d demo_sass_2 -f drizzle/migrations/0001_init_rls.sql
+bun install
+bun run db:push
 ```
 
-### Step 5 — Seed demo merchants
+`db:push` runs `drizzle-kit push`, which applies the schema in `src/db/schema.ts`. To apply individual migrations instead (useful when bisecting):
 
-```sql
-psql -h localhost -d demo_sass_2 <<'EOF'
-INSERT INTO merchants (id, slug, name, brand_voice, theme_vars) VALUES
+```bash
+docker exec -i demo-sass-2-postgres psql -U owner -d demo_sass_2 \
+  < drizzle/migrations/0000_moaning_mimic.sql
+# ...repeat for 0001..0007
+```
+
+Each migration has a paired `*.rollback.sql`. To roll back V1.7's onboarding hardening for example:
+
+```bash
+docker exec -i demo-sass-2-postgres psql -U owner -d demo_sass_2 \
+  < drizzle/migrations/0007_v17_onboarding_hardening.rollback.sql
+```
+
+### 4. Seed two demo merchants
+
+```bash
+docker exec -i demo-sass-2-postgres psql -U owner -d demo_sass_2 <<'EOF'
+INSERT INTO merchants (id, slug, name, brand_voice, theme_vars, approved_at, approved_by_admin) VALUES
   ('11111111-1111-1111-1111-111111111111',
    'akami',
    '阿明選物',
    '日式侘寂選物，質感溫潤，文字偏內斂。',
-   '{"--brand-primary":"#8B7355","--brand-bg":"#FAF8F5","--brand-text":"#2C2416","--brand-radius":"2px","--brand-font-heading":"Noto Serif TC,serif"}'::jsonb),
+   '{"--brand-primary":"#8B7355","--brand-bg":"#FAF8F5","--brand-text":"#2C2416","--brand-radius":"2px","--brand-font-heading":"Noto Serif TC,serif"}'::jsonb,
+   NOW(), 'system'),
   ('22222222-2222-2222-2222-222222222222',
    'afen',
    '阿芬鹹酥雞',
    '夜市熱賣親切庶民，文字活潑，敢用台語。',
-   '{"--brand-primary":"#E63946","--brand-bg":"#FFF8E7","--brand-text":"#1D3557","--brand-radius":"12px","--brand-font-heading":"Noto Sans TC,sans-serif"}'::jsonb)
+   '{"--brand-primary":"#E63946","--brand-bg":"#FFF8E7","--brand-text":"#1D3557","--brand-radius":"12px","--brand-font-heading":"Noto Sans TC,sans-serif"}'::jsonb,
+   NOW(), 'system')
 ON CONFLICT (id) DO NOTHING;
 EOF
 ```
 
-### Step 6 — 跑 RLS e2e test 確認隔離 work
+Note: V1.7 added `approved_at` — pre-existing merchants need it set or storefronts will show 「暫停營業中」.
+
+### 5. Run
 
 ```bash
-pnpm test:rls
-# 預期:
-# ✓ T1: missing tenant context returns zero rows
-# ✓ T2: tenant A cannot read tenant B rows
-# ✓ T3: web_anon cannot escalate to bypass RLS
-# Tests  3 passed (3)
+bun run dev
 ```
 
-### Step 7 — 啟動 dev server
+http://localhost:3000.
+
+For AI batch import, run the Inngest dev CLI in a second terminal:
 
 ```bash
-pnpm dev                          # http://localhost:3000
-# 另一個 terminal:
-pnpm inngest:dev                  # http://localhost:8288 (Inngest UI)
+bunx inngest-cli dev -u http://localhost:3000/api/inngest
+# Inngest UI at http://localhost:8288
 ```
 
 ---
 
-## URL 對照
+## URL reference
 
-| URL | 用途 |
+| URL | Use |
 |---|---|
-| http://localhost:3000 | 首頁 |
-| http://localhost:3000/merchant/products/new | 拍照上傳 + Streaming wow #1 |
-| http://localhost:3000/merchant/products/test | 商品詳情卡片 (產品 ID 可隨便填) |
-| http://localhost:3000/admin | 平台後台 (列出兩個 merchant) |
-| http://localhost:3000/store/akami | 阿明選物 storefront |
-| http://localhost:3000/store/afen | 阿芬鹹酥雞 storefront |
+| http://localhost:3000 | Marketplace home (lists approved merchants) |
+| http://localhost:3000/store/akami | Storefront for 阿明選物 |
+| http://localhost:3000/store/afen | Storefront for 阿芬鹹酥雞 |
+| http://localhost:3000/merchant | Merchant dashboard (KPIs + inbox) |
+| http://localhost:3000/merchant/products | Product list (CRUD + AI generate + import) |
+| http://localhost:3000/merchant/products/new | Single-photo AI generation |
+| http://localhost:3000/merchant/orders | Order list + status flow |
+| http://localhost:3000/merchant/settings | Brand vars + low-stock threshold + daily AI cap |
+| http://localhost:3000/merchant-switcher | V1.7 full-list switcher (search + paginate) |
+| http://localhost:3000/admin/login | Admin password gate |
+| http://localhost:3000/admin | Admin overview + merchant ranking |
+| http://localhost:3000/admin/queue | Cross-merchant operator queue (P1–P5) |
+| http://localhost:3000/admin/cost | Platform AI cost dashboard (14-day, anomaly) |
+| http://localhost:3000/admin/merchants/{id} | Merchant detail + approve / suspend / rename |
+| http://localhost:3000/onboarding | Public signup (rate-limited, honeypot, reserved-slug guard) |
 | http://localhost:8288 | Inngest dev UI (job runs / logs) |
 
-切換 merchant：右上角 avatar dropdown，整頁色彩 / 字型 transition。
-
-Demo Mode toggle：右下角，按 OFF 走真 GPT-4o (需 OPENAI_API_KEY)。
+Switching merchant: top-right MerchantSwitcher (V1.7 — top 10 + inline search; full list at `/merchant-switcher`).
 
 ---
 
-## 完整驗證清單 (orchestration 跑過了)
+## Admin login
 
-✅ `pnpm install` 成功
-✅ `pnpm dlx shadcn add ...` 12 components 生成
-✅ `npx tsc --noEmit` 0 errors
-✅ `pnpm lint` 0 errors / 0 warnings
-✅ `pnpm build` 7 routes compile
-✅ `pnpm dev` 5 routes 都 200
-✅ `pnpm test:rls` 3/3 tests pass — multi-tenant 隔離真的 work
-✅ `POST /api/uploads` 上傳真的寫進 `public/uploads/{tenant}/{uuid}.png`
-✅ Demo merchant seed 完成 (akami + afen)
+```
+URL:      http://localhost:3000/admin/login
+Password: <whatever you set in ADMIN_PASSWORD>
+```
+
+The default in `.env.local.example` is `changeme`. The session cookie is HMAC-signed with `ADMIN_SESSION_SECRET` and TTL'd 24h. To revoke a session:
+
+```sql
+DELETE FROM admin_sessions WHERE id = '<session_uuid>';
+```
+
+The `(admin)` layout calls `validateAdminSession()` against the DB on every render (V1.6 E11 fix), so revoked sessions stop working immediately on the next request — not just on cookie expiry.
 
 ---
 
-## 常見坑
+## Tests
 
-### 1. `/store/akami` 回 404
+```bash
+bunx vitest run                                     # full suite (154 tests)
+bunx vitest run tests/rls.e2e.test.ts               # one file
+bunx vitest run tests/ai/cost-cap.test.ts           # AI cost cap
+bunx vitest run --reporter=verbose                  # see each test name
+bun run test:rls                                    # alias for the RLS suite
+bunx tsc --noEmit                                   # type check
+bun run lint                                        # ESLint (incl. dbAdmin allowlist)
+```
 
-商家 slug cache 卡住舊的 null result。**修法**：
+Tests connect to the same Docker Postgres. RLS suite runs as `web_anon`; everything else uses `dbAdmin` for fixture setup speed and uses UUID prefix `99999999-...` for cleanup namespacing.
+
+Manual smoke: `tests/v1-smoke.md` (25 steps, 10–15 minutes).
+
+---
+
+## Common gotchas
+
+### `/store/akami` returns 404
+
+Slug cache stuck on a stale negative result. Fix:
 
 ```bash
 rm -rf .next
-pnpm dev
+bun run dev
 ```
 
-或在 `/merchant/settings` 改 slug 時呼叫 `invalidateSlug()` (見 `src/lib/tenant/resolver.ts`)。
+The `(merchant)/settings` action calls `invalidateSlug()` on slug change — this avoids the issue in production. See `src/lib/tenant/resolver.ts`.
 
-### 2. RLS test 跑完 demo merchant 不見
+### RLS test wipes demo merchants
 
-Test 的 `afterAll` 用了同樣的 UUID 範圍清理。修在 `tests/rls.e2e.test.ts` 用 `99999999-...` 開頭的 UUID 避免衝突 (已修)。
+Older test fixtures used the same UUID range as the seed. Fixed: tests now use `99999999-...`-prefixed UUIDs and `afterAll` only cleans its prefix. If you hit it on an old branch, re-seed using Step 4.
 
-如果再撞到，重 seed:
+### Cost chip stuck at NT$0 after a real photo upload
+
+V1.5 bug — fixed in `13a9957`. Verify migration `0006_ai_usage_events.sql` was applied:
+
 ```bash
-psql -h localhost -d demo_sass_2 -f db/init/02-seed-demo-merchants.sql
+docker exec -it demo-sass-2-postgres psql -U owner -d demo_sass_2 \
+  -c "\d ai_usage_events"
 ```
-(這個 file 還沒寫，照 Step 5 的 SQL 寫成檔案即可)
 
-### 3. `pnpm test:vision` fail (no OpenAI key)
+### Inngest dev CLI can't reach the app
 
-預期。沒填 `OPENAI_API_KEY` 就只能用 Demo Mode (右下角 toggle)。
+Default URL is `http://localhost:3000/api/inngest`. If `bun run dev` ended up on port 3001 (3000 occupied), point the CLI explicitly:
 
-### 4. Inngest dev 連不上
-
-`pnpm inngest:dev` 預設連 `http://localhost:3000/api/inngest`。如果 dev 跑在 3001 (port 3000 被占)，改用：
 ```bash
-npx inngest-cli@latest dev -u http://localhost:3001/api/inngest
+bunx inngest-cli dev -u http://localhost:3001/api/inngest
 ```
 
-### 5. 上傳成功但 Inngest 沒跑
+### `OPENAI_API_KEY` missing → 503 on AI routes
 
-確認 `pnpm inngest:dev` 真的在跑。`http://localhost:8288` 應該開得起來。
+Expected. The product-listing UI and batch import return 503 until the key is set. The rest of the app (storefronts, admin, orders, manual product CRUD) runs fine.
+
+### Storefront for a freshly-onboarded merchant shows 「暫停營業中」
+
+V1.7 added `approved_at` — new signups are suspended-by-default until admin approves. Hit `/admin/merchants/{id}` and click 「核可商家」, or set `approved_at` directly:
+
+```sql
+UPDATE merchants SET approved_at = NOW(), approved_by_admin = 'system' WHERE slug = '<slug>';
+```
+
+### `dbAdmin` import error in lint
+
+ESLint blocks `dbAdmin` outside the allowlist in `eslint.config.mjs`. If you genuinely need cross-tenant access (rare — almost always you want `withTenantTx` + `dbUser`), add the file path to the allowlist with a one-line justification.
 
 ---
 
-## v2 升級回雲端
+## Resetting
 
-切回 Neon/R2/Vercel 時要改：
+```bash
+docker compose down -v   # destroy volume — full reset
+docker compose up -d
+bun run db:push          # re-migrate
+# then re-seed (Step 4)
+```
 
-| 服務 | 改哪裡 |
+---
+
+## Useful files
+
+| File | Why |
 |---|---|
-| **Neon** | `src/db/index.ts` 換 `drizzle-orm/neon-serverless` driver；`.env` 換 Neon connection string |
-| **R2** | 改用 `src/lib/storage/r2-client.ts.legacy` 改回 `.ts`；server action 換成 presigned URL flow；`useFileUpload` 直傳 R2 |
-| **Vercel** | `pnpm dlx vercel --prod` |
-| **Sentry** | 加 `instrumentation.ts` + `sentry.client.config.ts` |
-
-所有 v2 spec 在 `~/.gstack/projects/demo-sass-2/engineering-handoff-specs-*.md`。
+| `src/db/schema.ts` | Drizzle schema — single source of truth for the data model |
+| `src/lib/db/with-tenant.ts` | RLS context helper — every tenant write goes through this |
+| `src/lib/import/url-guard.ts` | SSRF defense — every external fetch goes through this |
+| `src/lib/observability/ai-cost.ts` | AI cost cap gate (`assertWithinDailyCap`) |
+| `src/lib/observability/ai-cost-pricing.ts` | USD→TWD rate + GPT-4o pricing constants (sole source) |
+| `src/lib/admin-session.ts` + `admin-session-edge.ts` | Admin session helpers — split for Edge runtime |
+| `src/lib/admin/operator-queue.ts` | Cross-merchant operator queue compound CTE |
+| `eslint.config.mjs` | `dbAdmin` allowlist — extend carefully |
+| `drizzle/migrations/` | Forward + rollback SQL, one pair per version |
+| `tests/v1-smoke.md` | 25-step manual QA checklist |
 
 ---
 
-## Hackathon Day 流程
+## v2 cloud deploy
 
-開工前 (08:30)：跑上面 Step 1-7 一次
+When switching to Neon + R2 + Vercel:
 
-09:00-18:00 build：
-- 純 UI / animation / pitch 微調
-- Demo Mode 大部分時間開著 (省 OpenAI 額度)
-- 接 OpenAI key 做幾次真實生成 sample 證明真的 work
+| Service | Where it changes |
+|---|---|
+| **Neon** | `src/db/index.ts` — swap to `drizzle-orm/neon-serverless` driver. `.env` — Neon connection strings. **Important**: Neon roles need `CREATE ROLE web_anon WITH LOGIN PASSWORD '...'` + `CREATE ROLE web_admin WITH LOGIN PASSWORD '...' BYPASSRLS` re-applied via SQL editor (`docker compose` ran `01-roles.sql` automatically; Neon does not). |
+| **R2** | `src/lib/storage/` — promote the `.legacy` R2 client. Server actions switch to presigned URL flow. `useFileUpload` direct-uploads to R2. |
+| **Vercel** | `bunx vercel --prod` after pulling `.env.local` to Vercel env. |
+| **Inngest** | Add `INNGEST_EVENT_KEY` + `INNGEST_SIGNING_KEY` from app.inngest.com. The `/api/inngest` route is already serverless-ready. |
 
-18:00 後：
-- 錄 90s backup 影片 (Demo Mode 開著錄)
-- 演練 5 分鐘 demo ≥3 次
-
-不需要：
-- ❌ Vercel deploy (本地跑就好)
-- ❌ R2 setup
-- ❌ Neon dashboard 設密碼
+V1.7 `approved_at` flow + reserved-slug list + IP rate limit work the same in production. Inngest worker logs map cleanly to the prod dashboard.
