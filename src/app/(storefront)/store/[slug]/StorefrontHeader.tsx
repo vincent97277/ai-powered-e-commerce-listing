@@ -10,7 +10,7 @@ export function StorefrontHeader({ slug, merchantName }: { slug: string; merchan
 
   return (
     <header
-      className="sticky top-0 z-30 flex items-center justify-between border-b px-6 py-4 backdrop-blur-sm md:px-12"
+      className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b px-4 py-4 backdrop-blur-sm sm:px-8 lg:px-12"
       style={{
         backgroundColor: 'color-mix(in srgb, var(--brand-bg) 90%, transparent)',
         borderColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
@@ -18,7 +18,7 @@ export function StorefrontHeader({ slug, merchantName }: { slug: string; merchan
     >
       <Link
         href={`/store/${slug}`}
-        className="t-h3 hover:opacity-80"
+        className="t-h3 truncate hover:opacity-80"
         style={{ fontFamily: 'var(--brand-font-heading)', color: 'var(--brand-primary)' }}
       >
         {merchantName}
@@ -26,7 +26,7 @@ export function StorefrontHeader({ slug, merchantName }: { slug: string; merchan
 
       <Link
         href={`/store/${slug}/cart`}
-        className="relative inline-flex items-center gap-2 rounded-md border px-4 py-2 transition-colors hover:bg-brand-soft"
+        className="relative inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-md border px-4 py-2 transition-colors hover:bg-brand-soft"
         style={{
           borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
           borderRadius: 'var(--brand-radius)',

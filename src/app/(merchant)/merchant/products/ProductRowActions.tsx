@@ -53,7 +53,7 @@ export function ProductRowActions({
           href={`/store/${merchantSlug}/products/${productId}`}
           target="_blank"
           title="從顧客視角看"
-          className="rounded p-2 transition-colors hover:bg-brand-soft"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-2.5 transition-colors hover:bg-brand-soft sm:min-h-0 sm:min-w-0 sm:p-2"
           style={{ color: 'var(--brand-primary)' }}
         >
           <ExternalLink className="h-4 w-4" strokeWidth={2.2} />
@@ -63,7 +63,7 @@ export function ProductRowActions({
       <Link
         href={`/merchant/products/${productId}`}
         title="編輯詳情"
-        className="rounded p-2 transition-colors hover:bg-brand-soft"
+        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-2.5 transition-colors hover:bg-brand-soft sm:min-h-0 sm:min-w-0 sm:p-2"
         style={{ color: 'var(--brand-primary)' }}
       >
         <Edit3 className="h-4 w-4" strokeWidth={2.2} />
@@ -74,7 +74,7 @@ export function ProductRowActions({
         disabled={pending}
         onClick={handleToggle}
         title={isPublished ? '下架' : '上架'}
-        className="rounded p-2 transition-colors hover:bg-brand-soft disabled:opacity-50"
+        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-2.5 transition-colors hover:bg-brand-soft disabled:opacity-50 sm:min-h-0 sm:min-w-0 sm:p-2"
         style={{ color: 'var(--brand-primary)' }}
       >
         {isPublished ? <Lock className="h-4 w-4" strokeWidth={2.2} /> : <Globe className="h-4 w-4" strokeWidth={2.2} />}
@@ -85,7 +85,7 @@ export function ProductRowActions({
         disabled={pending}
         onClick={handleDelete}
         title={confirming ? '再點一次確認刪除' : '刪除'}
-        className="rounded p-2 transition-colors hover:bg-brand-soft disabled:opacity-50"
+        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-2.5 transition-colors hover:bg-brand-soft disabled:opacity-50 sm:min-h-0 sm:min-w-0 sm:p-2"
         style={{
           color: confirming ? 'var(--error)' : 'color-mix(in srgb, var(--brand-text) 50%, transparent)',
         }}

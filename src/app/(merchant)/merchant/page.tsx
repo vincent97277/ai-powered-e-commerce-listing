@@ -6,14 +6,12 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { withTenantTx } from '@/lib/db/with-tenant';
-import { products, orders, orderItems, merchants } from '@/db/schema';
-import { count, eq, sum, sql, desc, gte, lte } from 'drizzle-orm';
+import { products, orders, orderItems } from '@/db/schema';
+import { count, eq, sum, sql, desc, gte } from 'drizzle-orm';
 import { Plus, Package, ShoppingCart, ExternalLink, TrendingUp, Settings } from 'lucide-react';
 import { KpiCard } from '@/components/dashboard/KpiCard';
-import { PendingCallout } from '@/components/merchant/PendingCallout';
-import { HealthCallout } from '@/components/merchant/HealthCallout';
-import { getHealthIssues } from '@/lib/merchant/health-checks';
-import { dbAdmin } from '@/db/admin-only';
+import { MerchantInbox } from '@/components/merchant/MerchantInbox';
+import { getInboxItems } from '@/lib/merchant/inbox';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,38 +101,9 @@ export default async function MerchantDashboard() {
       .limit(5);
   });
 
-  // V1 #72: 待處理 callout query (Promise.all 平行 → 同 withTenantTx)
-  const [merchantRow] = await dbAdmin
-    .select({ lowStockThreshold: merchants.lowStockThreshold })
-    .from(merchants)
-    .where(eq(merchants.id, merchant.tenantId))
-    .limit(1);
-  const lowStockThreshold = merchantRow?.lowStockThreshold ?? 5;
-
-  // V1.5 B1: PendingCallout + HealthCallout 平行抓 (兩個獨立 tenant tx)
-  const [calloutBundle, healthIssues] = await Promise.all([
-    withTenantTx(merchant.tenantId, async (tx) => {
-      const [orderCounts, lowStock] = await Promise.all([
-        tx
-          .select({
-            pending: sql<number>`count(*) filter (where ${orders.status} = 'pending')::int`.mapWith(Number),
-            paid: sql<number>`count(*) filter (where ${orders.status} = 'paid')::int`.mapWith(Number),
-          })
-          .from(orders),
-        tx
-          .select({ n: count(products.id) })
-          .from(products)
-          .where(lte(products.stockQuantity, lowStockThreshold)),
-      ]);
-      return {
-        pending: orderCounts[0]?.pending ?? 0,
-        paid: orderCounts[0]?.paid ?? 0,
-        lowStock: lowStock[0]?.n ?? 0,
-      };
-    }),
-    getHealthIssues(merchant.tenantId),
-  ]);
-  const callout = calloutBundle;
+  // V1.6 B5: MerchantInbox 統一資料源 (取代 V1 #72 PendingCallout + V1.5 B1 HealthCallout)
+  // 7 種 signal type 在一個 withTenantTx 內拉完, RLS-safe.
+  const inboxItems = await getInboxItems(merchant.tenantId);
 
   // 上架轉換率
   const publishRate = productStats.total > 0
@@ -147,12 +116,12 @@ export default async function MerchantDashboard() {
 
   return (
     <main
-      className="min-h-screen px-12 py-10"
+      className="min-h-screen px-4 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-10"
       style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}
     >
-      <div className="mx-auto max-w-6xl space-y-10">
+      <div className="mx-auto max-w-6xl space-y-8 sm:space-y-10">
         {/* Header */}
-        <header className="flex items-end justify-between gap-6">
+        <header className="flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div className="space-y-2">
             <p className="t-caption" style={{ color: 'var(--brand-primary)' }}>
               商家後台 · {merchant.name}
@@ -173,10 +142,10 @@ export default async function MerchantDashboard() {
               </Link>
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex w-full gap-2 sm:w-auto">
             <Link
               href="/merchant/settings"
-              className="hover-lift inline-flex items-center gap-2 px-4 py-3 text-sm"
+              className="hover-lift inline-flex min-h-[44px] items-center justify-center gap-2 px-4 py-3 text-sm"
               style={{
                 border: '1px solid color-mix(in srgb, var(--brand-primary) 28%, transparent)',
                 color: 'var(--brand-primary)',
@@ -188,7 +157,7 @@ export default async function MerchantDashboard() {
             </Link>
             <Link
               href="/merchant/products/new"
-              className="hover-lift inline-flex items-center gap-2 px-6 py-3 text-base font-semibold elev-2"
+              className="hover-lift inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 px-6 py-3 text-base font-semibold elev-2 sm:flex-initial"
               style={{
                 backgroundColor: 'var(--brand-primary)',
                 color: 'var(--brand-bg)',
@@ -202,19 +171,24 @@ export default async function MerchantDashboard() {
           </div>
         </header>
 
-        {/* V1 #72 PendingCallout (全 0 不顯示) */}
-        <PendingCallout
-          pendingOrders={callout.pending}
-          paidOrders={callout.paid}
-          lowStockCount={callout.lowStock}
-          lowStockThreshold={lowStockThreshold}
-        />
+        {/* V1.6 B5 MerchantInbox — 取代 PendingCallout + HealthCallout, 7 種 signal 一個容器 */}
+        {/* items=[] → MerchantInbox return null, preserve V1 hide-when-zero behavior */}
+        <MerchantInbox items={inboxItems} />
 
-        {/* V1.5 B1 HealthCallout (issues=[] 不顯示) */}
-        <HealthCallout issues={healthIssues} />
+        {/* Mobile-only KPI summary chip (B1 spirit, < sm 螢幕一行收) */}
+        <div
+          className="t-caption flex flex-wrap items-center gap-x-3 gap-y-1 tabular-nums opacity-60 sm:hidden"
+        >
+          <span>近 7 天</span>
+          <span>GMV NT$ {(last7Revenue / 100).toLocaleString()}</span>
+          <span>·</span>
+          <span>訂單 {last7Orders}</span>
+          <span>·</span>
+          <span>商品 {productStats.total}</span>
+        </div>
 
-        {/* KPI cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* KPI cards (desktop full grid; mobile 收成上面的 summary chip) */}
+        <div className="hidden gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard
             href="/merchant/products"
             icon={Package}
@@ -249,7 +223,7 @@ export default async function MerchantDashboard() {
         <div className="grid gap-6 lg:grid-cols-3">
           {/* 近 7 天訂單 bar chart */}
           <div
-            className="lg:col-span-2 border p-6"
+            className="lg:col-span-2 border p-4 sm:p-6"
             style={{
               borderColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
               borderRadius: 'var(--brand-radius)',
@@ -273,12 +247,15 @@ export default async function MerchantDashboard() {
               )}
             </div>
 
-            <div className="flex h-40 items-end gap-2">
+            <div className="flex h-40 items-end gap-1 sm:gap-2">
               {days.map((d) => {
                 const h = d.count === 0 ? 4 : Math.max(8, (d.count / maxCount) * 140);
                 return (
                   <div key={d.day} className="flex flex-1 flex-col items-center gap-2">
-                    <div className="text-xs tabular-nums" style={{ color: d.count > 0 ? 'var(--brand-primary)' : 'transparent' }}>
+                    <div
+                      className="hidden text-xs tabular-nums sm:block"
+                      style={{ color: d.count > 0 ? 'var(--brand-primary)' : 'transparent' }}
+                    >
                       {d.count}
                     </div>
                     <div
@@ -289,7 +266,7 @@ export default async function MerchantDashboard() {
                         borderRadius: 'var(--brand-radius)',
                       }}
                     />
-                    <div className="text-xs tabular-nums opacity-50">{d.label}</div>
+                    <div className="text-[10px] tabular-nums opacity-50 sm:text-xs">{d.label}</div>
                   </div>
                 );
               })}
@@ -347,7 +324,7 @@ export default async function MerchantDashboard() {
 
         {/* 最近訂單 */}
         <div
-          className="border p-6"
+          className="border p-4 sm:p-6"
           style={{
             borderColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
             borderRadius: 'var(--brand-radius)',
@@ -375,14 +352,14 @@ export default async function MerchantDashboard() {
               {recentOrders.map((o) => (
                 <div
                   key={o.id}
-                  className="flex items-center gap-4 text-sm"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm sm:gap-4"
                   style={{
                     paddingBottom: '8px',
                     borderBottom: '1px solid color-mix(in srgb, var(--brand-primary) 10%, transparent)',
                   }}
                 >
                   <span className="font-mono text-xs opacity-60">#{o.id.slice(0, 8)}</span>
-                  <span className="flex-1 truncate">{o.customerEmail}</span>
+                  <span className="min-w-0 flex-1 truncate">{o.customerEmail}</span>
                   <span className="t-tabular font-semibold" style={{ color: 'var(--brand-primary)' }}>
                     NT$ {(o.totalCents / 100).toLocaleString()}
                   </span>

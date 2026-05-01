@@ -169,15 +169,43 @@ describe('admin auth — HTTP integration (middleware /admin gate)', () => {
     expect(r.status).toBe(307);
   });
 
-  it('GET /admin 帶簽好的 cookie → 通過 middleware (但 server component 還沒做, 預期 404)', async () => {
+  it('GET /admin 帶簽好的 cookie 但 DB row 不存在 → layout 檔住 → 307 redirect (V1.6 E11)', async () => {
+    // 簽 HMAC 合法但 DB 沒對應 admin_sessions row 的 cookie.
+    // middleware 純 crypto check 會放行, 但 (admin)/layout.tsx 的 validateAdminSession
+    // 查 DB 找不到 row → redirect to /admin/login. 這是 E11 修補的核心保證.
     const sid = '44444444-4444-4444-4444-444444444444';
     const cookie = signSessionCookie(sid);
     const r = await tryFetch('/admin', {
       headers: { cookie: `${ADMIN_SESSION_COOKIE}=${cookie}` },
     });
     if (!r) return;
-    // middleware 通過 (不再 307); /admin server component 尚未建 → 預期 200/404 都接受
-    expect(r.status).not.toBe(307);
+    expect(r.status).toBe(307);
+    const location = r.headers.get('location') ?? '';
+    expect(location).toContain('/admin/login');
+  });
+
+  it('V1.6 E11: revoked session — HMAC 對但 DB row 沒了 → layout redirect to /admin/login', async () => {
+    // 1. 建合法 session (DB row 寫入 + 簽好 HMAC cookie)
+    const { cookieValue, sessionId } = await createAdminSession({ ip: 'test-suite' });
+
+    // 2. middleware HMAC 過, layout DB check 也過 → 應該不是 307
+    const before = await tryFetch('/admin', {
+      headers: { cookie: `${ADMIN_SESSION_COOKIE}=${cookieValue}` },
+    });
+    if (!before) return; // dev server 沒跑就跳過 HTTP 部分
+    expect(before.status).not.toBe(307);
+
+    // 3. Revoke (DELETE row) — cookie HMAC 還是合法, 但 DB row 不見
+    await revokeAdminSession(sessionId);
+
+    // 4. 再打一次: middleware 仍過 (純 crypto), 但 layout 的 validateAdminSession 會回 null → redirect
+    const after = await tryFetch('/admin', {
+      headers: { cookie: `${ADMIN_SESSION_COOKIE}=${cookieValue}` },
+    });
+    if (!after) return;
+    expect(after.status).toBe(307);
+    const location = after.headers.get('location') ?? '';
+    expect(location).toContain('/admin/login');
   });
 });
 

@@ -113,11 +113,11 @@ export default async function MerchantProductsList({
 
   return (
     <main
-      className="min-h-screen px-12 py-10"
+      className="min-h-screen px-4 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-10"
       style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}
     >
       <div className="mx-auto max-w-6xl space-y-6">
-        <header className="flex items-end justify-between gap-6">
+        <header className="flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div>
             <p className="t-caption" style={{ color: 'var(--brand-primary)' }}>
               商品管理
@@ -137,7 +137,7 @@ export default async function MerchantProductsList({
           </div>
           <Link
             href="/merchant/products/new"
-            className="hover-lift inline-flex items-center gap-2 px-6 py-3 text-base font-semibold elev-2"
+            className="hover-lift inline-flex min-h-[44px] w-full items-center justify-center gap-2 px-6 py-3 text-base font-semibold elev-2 sm:w-auto"
             style={{
               backgroundColor: 'var(--brand-primary)',
               color: 'var(--brand-bg)',
@@ -151,14 +151,14 @@ export default async function MerchantProductsList({
         </header>
 
         {/* Sort + filter toolbar */}
-        <nav className="flex flex-wrap items-center gap-3">
+        <nav className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <form className="flex items-center gap-2">
             <label htmlFor="sort" className="t-caption opacity-60">排序</label>
             <select
               id="sort"
               name="sort"
               defaultValue={sortKey}
-              className="border bg-transparent px-3 py-1.5 text-sm"
+              className="min-h-[44px] border bg-transparent px-3 py-1.5 text-sm sm:min-h-0"
               style={{
                 borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
                 borderRadius: 'var(--brand-radius)',
@@ -173,17 +173,17 @@ export default async function MerchantProductsList({
             {healthFilter && <input type="hidden" name="filter" value={healthFilter} />}
             <button
               type="submit"
-              className="text-xs opacity-60 underline hover:opacity-100"
+              className="min-h-[44px] px-2 text-xs opacity-60 underline hover:opacity-100 sm:min-h-0 sm:px-0"
               style={{ color: 'var(--brand-primary)' }}
             >
               套用
             </button>
           </form>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="-mx-4 flex items-center gap-2 overflow-x-auto whitespace-nowrap px-4 sm:mx-0 sm:ml-auto sm:overflow-visible sm:px-0">
             {healthFilter && (
               <Link
                 href={`/merchant/products?sort=${sortKey}`}
-                className="inline-flex items-center gap-1 rounded px-3 py-1.5 text-xs font-medium"
+                className="inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded px-3 py-1.5 text-xs font-medium"
                 style={{
                   backgroundColor: 'var(--warning)',
                   color: 'var(--brand-bg)',
@@ -201,7 +201,7 @@ export default async function MerchantProductsList({
             />
             <Link
               href={lowStockOnly ? `/merchant/products?sort=${sortKey}` : `/merchant/products?sort=${sortKey}&filter=low-stock`}
-              className="inline-flex items-center gap-1 rounded px-3 py-1.5 text-xs font-medium"
+              className="inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded px-3 py-1.5 text-xs font-medium"
               style={
                 lowStockOnly
                   ? {
@@ -250,15 +250,127 @@ export default async function MerchantProductsList({
             </Link>
           </div>
         ) : (
-          <div
-            className="overflow-hidden border"
-            style={{
-              borderColor: 'color-mix(in srgb, var(--brand-primary) 16%, transparent)',
-              borderRadius: 'var(--brand-radius)',
-              backgroundColor: 'var(--brand-bg)',
-            }}
-          >
-            <table className="w-full">
+          <>
+            {/* Mobile card list (<md) */}
+            <div className="space-y-3 md:hidden">
+              {items.map((p) => {
+                const hasImg = p.r2Key && !p.r2Key.includes('/fixtures/');
+                const stockBadge =
+                  p.stockQuantity === 0
+                    ? { label: '無貨', bg: 'color-mix(in srgb, var(--brand-text) 90%, transparent)', fg: 'var(--brand-bg)' }
+                    : p.stockQuantity <= threshold
+                      ? { label: `⚠ ${p.stockQuantity}`, bg: 'color-mix(in srgb, var(--error) 14%, transparent)', fg: 'var(--error)' }
+                      : null;
+                const statusLabel =
+                  p.productStatus === 'needs_review' ? '需審查' : p.isPublished ? '已上架' : '草稿';
+                const statusBg =
+                  p.productStatus === 'needs_review'
+                    ? 'color-mix(in srgb, var(--warning) 14%, transparent)'
+                    : p.isPublished
+                      ? 'color-mix(in srgb, var(--success) 12%, transparent)'
+                      : 'color-mix(in srgb, var(--brand-primary) 8%, transparent)';
+                const statusFg =
+                  p.productStatus === 'needs_review'
+                    ? 'var(--warning)'
+                    : p.isPublished
+                      ? 'var(--success)'
+                      : 'color-mix(in srgb, var(--brand-text) 60%, transparent)';
+                return (
+                  <div
+                    key={p.id}
+                    className="border p-3"
+                    style={{
+                      borderColor: 'color-mix(in srgb, var(--brand-primary) 16%, transparent)',
+                      borderRadius: 'var(--brand-radius)',
+                      backgroundColor: 'var(--brand-bg)',
+                    }}
+                  >
+                    <Link
+                      href={`/merchant/products/${p.id}`}
+                      className="flex min-h-[44px] items-start gap-3"
+                    >
+                      <div
+                        className="h-14 w-14 shrink-0 overflow-hidden"
+                        style={{
+                          borderRadius: 'var(--brand-radius)',
+                          backgroundColor: 'color-mix(in srgb, var(--brand-primary) 8%, transparent)',
+                        }}
+                      >
+                        {hasImg ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={`/uploads/${p.r2Key}`} alt={p.title} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center">
+                            <ImageIcon className="h-5 w-5 opacity-40" style={{ color: 'var(--brand-primary)' }} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className="t-body line-clamp-2 font-medium"
+                          style={{ fontFamily: 'var(--brand-font-heading)' }}
+                        >
+                          {p.title}
+                        </p>
+                        <p className="t-tabular mt-1 text-sm font-semibold" style={{ color: 'var(--brand-primary)' }}>
+                          NT$ {(p.priceCents / 100).toLocaleString()}
+                        </p>
+                      </div>
+                    </Link>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3"
+                      style={{ borderColor: 'color-mix(in srgb, var(--brand-primary) 10%, transparent)' }}
+                    >
+                      <span
+                        className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs"
+                        style={{
+                          backgroundColor: statusBg,
+                          color: statusFg,
+                          borderRadius: 'var(--brand-radius)',
+                        }}
+                      >
+                        {statusLabel}
+                      </span>
+                      {stockBadge ? (
+                        <span
+                          className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold tabular-nums"
+                          style={{
+                            backgroundColor: stockBadge.bg,
+                            color: stockBadge.fg,
+                            borderRadius: 'var(--brand-radius)',
+                          }}
+                        >
+                          {stockBadge.label}
+                        </span>
+                      ) : (
+                        <span className="text-xs tabular-nums opacity-60">庫存 {p.stockQuantity}</span>
+                      )}
+                      {p.soldCount > 0 && (
+                        <span className="text-xs tabular-nums opacity-60">已售 {p.soldCount}</span>
+                      )}
+                      <div className="ml-auto">
+                        <ProductRowActions
+                          productId={p.id}
+                          isPublished={p.isPublished}
+                          merchantSlug={merchant.slug}
+                          title={p.title}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table (md+) */}
+            <div
+              className="hidden overflow-hidden border md:block"
+              style={{
+                borderColor: 'color-mix(in srgb, var(--brand-primary) 16%, transparent)',
+                borderRadius: 'var(--brand-radius)',
+                backgroundColor: 'var(--brand-bg)',
+              }}
+            >
+              <table className="w-full">
               <thead
                 style={{
                   borderBottom: '1px solid color-mix(in srgb, var(--brand-primary) 14%, transparent)',
@@ -400,7 +512,8 @@ export default async function MerchantProductsList({
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </div>
     </main>

@@ -28,7 +28,7 @@ export default async function SettingsPage() {
 
   return (
     <main
-      className="min-h-screen px-12 py-10"
+      className="min-h-screen px-4 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-10"
       style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}
     >
       <div className="mx-auto max-w-3xl space-y-8">

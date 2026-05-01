@@ -30,6 +30,11 @@ import {
   assertWithinDailyCap,
   CapExceededError,
 } from '@/lib/observability/ai-cost';
+import {
+  getPlatformCostToday,
+  getCostTimeseries14d,
+  flagAnomaly,
+} from '@/lib/observability/ai-cost-platform';
 import { getHealthIssues } from '@/lib/merchant/health-checks';
 
 // V1.5 review C1: mock `ai` SDK 的 generateObject 給 vision usage plumbing test 用.
@@ -386,5 +391,144 @@ describe('getHealthIssues — no_photo includes fixture path', () => {
 
     // cleanup
     await dbAdmin.delete(products).where(eq(products.tenantId, TENANT_A));
+  });
+});
+
+/* ─────────────────────────── V1.6 A9: platform-wide cost aggregation ─────────────────────────── */
+
+/**
+ * 跟 per-tenant getDailyCostCents 不一樣的地方:
+ *   - 跨 tenant 加總 (含 top-N breakdown)
+ *   - 14 天 timeseries (TPE local date GROUP BY)
+ *   - 2× anomaly flag
+ *
+ * 共用 TENANT_A / TENANT_B 但每個 test 自己 cleanup, 免污染後續 test.
+ */
+describe('V1.6 A9 — platform-wide cost aggregation', () => {
+  // 每個 test 跑完都把兩 tenant 的 import_sessions / ai_usage_events 清乾淨
+  // 不能放 outer beforeAll / afterAll 因為跟這檔其他 describe 共用 tenant rows
+  async function cleanupCostRows() {
+    await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_A));
+    await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_B));
+    await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_A));
+    await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_B));
+  }
+
+  it('getPlatformCostToday — sums across multiple tenants AND both source tables', async () => {
+    await cleanupCostRows();
+
+    // tenant A: import_sessions 1M+1M = 37500 NT cents + ai_usage_events 200k+100k = 4500
+    //                                                         → A 總額 42000 cents
+    // tenant B: ai_usage_events 500k+500k = (1.25+5)$=6.25 USD ×30×100 = 18750 NT cents
+    //                                                         → B 總額 18750 cents
+    // platform total = 60750 cents
+    await dbAdmin.insert(importSessions).values({
+      merchantId: TENANT_A,
+      sourceUrl: 'https://test/platform-a',
+      sourceType: 'ig',
+      tokensIn: 1_000_000,
+      tokensOut: 1_000_000,
+    });
+    await dbAdmin.insert(aiUsageEvents).values([
+      {
+        tenantId: TENANT_A,
+        tokensIn: 200_000,
+        tokensOut: 100_000,
+        source: 'photo_upload',
+      },
+      {
+        tenantId: TENANT_B,
+        tokensIn: 500_000,
+        tokensOut: 500_000,
+        source: 'photo_upload',
+      },
+    ]);
+
+    const res = await getPlatformCostToday(10);
+    expect(res.totalCents).toBe(42000 + 18750);
+    expect(res.perTenantTopN).toHaveLength(2);
+    // A 比 B 多 → 排第一
+    expect(res.perTenantTopN[0]!.tenantId).toBe(TENANT_A);
+    expect(res.perTenantTopN[0]!.cents).toBe(42000);
+    expect(res.perTenantTopN[0]!.slug).toBe('cost-cap-a');
+    expect(res.perTenantTopN[1]!.tenantId).toBe(TENANT_B);
+    expect(res.perTenantTopN[1]!.cents).toBe(18750);
+
+    await cleanupCostRows();
+  });
+
+  it('getCostTimeseries14d — returns 14 points with today aggregated correctly', async () => {
+    await cleanupCostRows();
+
+    // 今日 (TPE) 塞 1M+1M = 37500 cents 走 import_sessions
+    await dbAdmin.insert(importSessions).values({
+      merchantId: TENANT_A,
+      sourceUrl: 'https://test/timeseries',
+      sourceType: 'ig',
+      tokensIn: 1_000_000,
+      tokensOut: 1_000_000,
+    });
+
+    const series = await getCostTimeseries14d();
+    expect(series).toHaveLength(14);
+
+    // 最後一個 point 是今天 (順序: 13 天前 → 今天遞增)
+    // 拿 TPE local date 比對 — 用跟 implementation 同樣的算法
+    const now = new Date();
+    const tpeNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const todayLabel = `${tpeNow.getUTCFullYear()}-${String(tpeNow.getUTCMonth() + 1).padStart(2, '0')}-${String(tpeNow.getUTCDate()).padStart(2, '0')}`;
+
+    expect(series[13]!.date).toBe(todayLabel);
+    expect(series[13]!.cents).toBe(37500);
+
+    // date 嚴格遞增 (lexicographic on YYYY-MM-DD = chronological)
+    for (let i = 1; i < series.length; i++) {
+      expect(series[i]!.date > series[i - 1]!.date).toBe(true);
+    }
+
+    await cleanupCostRows();
+  });
+
+  it('flagAnomaly — returns isAnomaly:true when today > 2× prev_7d_avg', async () => {
+    await cleanupCostRows();
+
+    // 建 baseline: 過去 7 天 (不含今天) 每天 1M+1M tokens = 37500 cents/day
+    // → prev_7d_avg = 37500 cents, 2× threshold = 75000 cents
+    // 用 created_at 顯式倒回 1~7 天前 (TPE) 避開「今天」邊界
+    const dayMs = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const baselineRows = Array.from({ length: 7 }, (_, i) => ({
+      merchantId: TENANT_A,
+      sourceUrl: `https://test/anomaly-baseline-${i}`,
+      sourceType: 'ig' as const,
+      tokensIn: 1_000_000,
+      tokensOut: 1_000_000,
+      // i+1 天前的 此刻 — 確保 < 今日 TPE 00:00 邊界 (除非「現在」剛好 00:00, 罕見邊界這 test 接受)
+      createdAt: new Date(now - (i + 1) * dayMs),
+    }));
+    await dbAdmin.insert(importSessions).values(baselineRows);
+
+    // 今天塞 4M+4M tokens = 4 × 37500 = 150000 cents > 2 × 37500 = 75000 → 異常
+    await dbAdmin.insert(aiUsageEvents).values({
+      tenantId: TENANT_A,
+      tokensIn: 4_000_000,
+      tokensOut: 4_000_000,
+      source: 'photo_upload',
+    });
+
+    const res = await flagAnomaly();
+    expect(res.isAnomaly).toBe(true);
+    expect(res.reason).toBe('今日 > 2× 過去 7 天平均');
+    expect(res.prev7dAvgCents).toBe(37500);
+    expect(res.todayCents).toBe(150000);
+    expect(res.todayCents).toBeGreaterThan(2 * res.prev7dAvgCents);
+
+    // bonus: 確認 prev_7d_avg=0 → isAnomaly:false (基準不足 short-circuit)
+    await cleanupCostRows();
+    const empty = await flagAnomaly();
+    expect(empty.isAnomaly).toBe(false);
+    expect(empty.reason).toBe('基準資料不足');
+
+    await cleanupCostRows();
   });
 });

@@ -58,7 +58,7 @@ export default async function MerchantOrdersList({
 
   return (
     <main
-      className="min-h-screen px-12 py-10"
+      className="min-h-screen px-4 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-10"
       style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}
     >
       <div className="mx-auto max-w-6xl space-y-8">
@@ -79,18 +79,20 @@ export default async function MerchantOrdersList({
           </div>
 
           {/* Filter chips + Export */}
-          <nav className="flex flex-wrap items-center gap-2">
-            <FilterChip href="/merchant/orders" active={filterStatus === null} label="全部" />
-            {STATUS_FILTERS.map((s) => (
-              <FilterChip
-                key={s}
-                href={`/merchant/orders?status=${s}`}
-                active={filterStatus === s}
-                label={STATUS_LABEL[s]?.text ?? s}
-                color={STATUS_LABEL[s]?.color}
-              />
-            ))}
-            <div className="ml-auto">
+          <nav className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+            <div className="-mx-4 flex items-center gap-2 overflow-x-auto whitespace-nowrap px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+              <FilterChip href="/merchant/orders" active={filterStatus === null} label="全部" />
+              {STATUS_FILTERS.map((s) => (
+                <FilterChip
+                  key={s}
+                  href={`/merchant/orders?status=${s}`}
+                  active={filterStatus === s}
+                  label={STATUS_LABEL[s]?.text ?? s}
+                  color={STATUS_LABEL[s]?.color}
+                />
+              ))}
+            </div>
+            <div className="sm:ml-auto">
               <ExportDropdown
                 kind="orders"
                 currentFilter={{ status: filterStatus ?? undefined }}
@@ -119,15 +121,62 @@ export default async function MerchantOrdersList({
             </p>
           </div>
         ) : (
-          <div
-            className="overflow-hidden border"
-            style={{
-              borderColor: 'color-mix(in srgb, var(--brand-primary) 16%, transparent)',
-              borderRadius: 'var(--brand-radius)',
-              backgroundColor: 'var(--brand-bg)',
-            }}
-          >
-            <table className="w-full">
+          <>
+            {/* Mobile card list (<md) */}
+            <div className="space-y-3 md:hidden">
+              {rows.map((o) => {
+                const status = STATUS_LABEL[o.status] ?? { text: o.status, color: 'inherit' };
+                return (
+                  <Link
+                    key={o.id}
+                    href={`/merchant/orders/${o.id}`}
+                    className="block border p-3"
+                    style={{
+                      borderColor: 'color-mix(in srgb, var(--brand-primary) 16%, transparent)',
+                      borderRadius: 'var(--brand-radius)',
+                      backgroundColor: 'var(--brand-bg)',
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="t-tabular font-mono text-xs" style={{ color: 'var(--brand-primary)' }}>
+                        #{o.id.slice(0, 8)}
+                      </span>
+                      <span
+                        className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs"
+                        style={{
+                          backgroundColor: `color-mix(in srgb, ${status.color} 12%, transparent)`,
+                          color: status.color,
+                          borderRadius: 'var(--brand-radius)',
+                        }}
+                      >
+                        <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: status.color }} />
+                        {status.text}
+                      </span>
+                    </div>
+                    <p className="mt-2 truncate text-sm">{o.customerEmail}</p>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <span className="t-tabular text-base font-semibold" style={{ color: 'var(--brand-primary)' }}>
+                        NT$ {(o.totalCents / 100).toLocaleString()}
+                      </span>
+                      <span className="text-xs tabular-nums opacity-50">
+                        {o.itemCount} 件 · {formatRelative(o.createdAt)}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Desktop table (md+) */}
+            <div
+              className="hidden overflow-hidden border md:block"
+              style={{
+                borderColor: 'color-mix(in srgb, var(--brand-primary) 16%, transparent)',
+                borderRadius: 'var(--brand-radius)',
+                backgroundColor: 'var(--brand-bg)',
+              }}
+            >
+              <table className="w-full">
               <thead
                 style={{
                   borderBottom: '1px solid color-mix(in srgb, var(--brand-primary) 14%, transparent)',
@@ -191,7 +240,8 @@ export default async function MerchantOrdersList({
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </div>
     </main>
@@ -213,7 +263,7 @@ function FilterChip({
   return (
     <Link
       href={href}
-      className="inline-flex items-center rounded px-3 py-1.5 text-xs font-medium transition"
+      className="inline-flex shrink-0 items-center rounded px-3 py-2 text-xs font-medium transition sm:py-1.5"
       style={
         active
           ? {

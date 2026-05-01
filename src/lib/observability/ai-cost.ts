@@ -26,33 +26,11 @@
 import { eq, and, gte } from 'drizzle-orm';
 import { dbAdmin } from '@/db/admin-only';
 import { merchants, importSessions, aiUsageEvents } from '@/db/schema';
+import { tokenCost } from './ai-cost-pricing';
 
-/* ─────────────────────────── Pricing constants ─────────────────────────── */
-
-/** 每 1M token 的價格 (USD) — gpt-4o-2024-11-20 */
-const PRICING = {
-  inputPerMillion: 2.5,
-  outputPerMillion: 10,
-} as const;
-
-/**
- * USD → TWD 換算率 (寫死 ≈ 30, V2 再上動態匯率)
- * 影響: tokenCost 回傳的 cents 是「NT$ cents」, 對齊 merchants.dailyAiCostCentsCap 單位
- */
-const USD_TO_TWD = 30;
-
-/**
- * 算單筆 session 的成本 (NT$ cents, float — 不在這 round, 加總後再 round 避免累積誤差)
- *
- * 單位: 1 cent = NT$0.01. 5000 cents = NT$50.
- *   舉例: 1540 input + 79 output tokens = $0.00465 USD ≈ NT$0.14 ≈ 14 cents
- */
-export function tokenCost(tokensIn: number, tokensOut: number): number {
-  const usd =
-    (tokensIn / 1_000_000) * PRICING.inputPerMillion +
-    (tokensOut / 1_000_000) * PRICING.outputPerMillion;
-  return usd * USD_TO_TWD * 100; // NT$ cents
-}
+// V1.6 A9 prep: pricing math 移至 ai-cost-pricing.ts (見該檔 docstring).
+// 這邊 re-export tokenCost 維持 backward compat — cost-cap.test.ts 仍從 '@/lib/observability/ai-cost' import.
+export { tokenCost };
 
 /* ─────────────────────────── Daily window helper ─────────────────────────── */
 

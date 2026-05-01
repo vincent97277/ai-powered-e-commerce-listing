@@ -46,7 +46,7 @@ export function DailyCostChip({
 
   return (
     <div
-      className="inline-flex items-center gap-2 rounded px-3 py-1.5 text-xs font-medium tabular-nums"
+      className="inline-flex max-w-full items-start gap-2 rounded px-3 py-1.5 text-xs font-medium tabular-nums sm:items-center"
       style={{
         backgroundColor: `color-mix(in srgb, ${colorVar} 8%, transparent)`,
         border: `1px solid color-mix(in srgb, ${colorVar} 30%, transparent)`,
@@ -56,9 +56,11 @@ export function DailyCostChip({
       role="status"
       aria-label={label}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2.4} />
-      <span>
-        {label} — 今日已用: NT${usedTwd} / 上限 NT${capTwd}
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 sm:mt-0" strokeWidth={2.4} />
+      <span className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-1">
+        <span>{label}</span>
+        <span className="hidden sm:inline">—</span>
+        <span>今日已用 NT${usedTwd} / 上限 NT${capTwd}</span>
       </span>
     </div>
   );

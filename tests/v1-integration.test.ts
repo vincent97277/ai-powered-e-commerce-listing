@@ -38,6 +38,7 @@ import { and, count, eq, gt, sql } from 'drizzle-orm';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { createAdminSession, ADMIN_SESSION_COOKIE } from '@/lib/admin-session';
 import { getHealthIssues } from '@/lib/merchant/health-checks';
+import { getInboxItems } from '@/lib/merchant/inbox';
 
 // 用獨立 tenant 避免污染 demo data
 const T1 = '88888888-1111-1111-1111-111111111111';
@@ -927,6 +928,216 @@ describe('Import idempotency dedup', () => {
 
     // cleanup
     await dbAdmin.delete(importSessions).where(eq(importSessions.id, first.id));
+  });
+});
+
+// ─────────────── V1.6 B5: MerchantInbox aggregator ───────────────
+describe('MerchantInbox getInboxItems (V1.6 B5)', () => {
+  // 獨立 tenant 避開 T1 / TH 的 fixture
+  const TG = 'aaaaaaaa-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+  const G_PAID = '99999999-cccc-cccc-cccc-ccccccccc001'; // P1 paid_unshipped (1 筆)
+  const G_PENDING = '99999999-cccc-cccc-cccc-ccccccccc002'; // P5 pending_unpaid (1 筆)
+  const G_NO_PHOTO = '99999999-cccc-cccc-cccc-ccccccccc101'; // P3 no_photo
+  const G_SHORT_TITLE = '99999999-cccc-cccc-cccc-ccccccccc102'; // P4 short_title
+  const G_ZERO_STOCK_A = '99999999-cccc-cccc-cccc-ccccccccc103'; // P2 zero_stock #1
+  const G_ZERO_STOCK_B = '99999999-cccc-cccc-cccc-ccccccccc104'; // P2 zero_stock #2 (count desc test)
+  const G_ZERO_PRICE = '99999999-cccc-cccc-cccc-ccccccccc105'; // P2 zero_price
+  const G_LOW_STOCK = '99999999-cccc-cccc-cccc-ccccccccc106'; // P3 low_stock
+  const aiMeta = {
+    title: 'p',
+    description: 'd',
+    category: '其他' as const,
+    seo_tags: [],
+    variants: [],
+    price_twd: { min: 1, max: 1 },
+    confidence: 0.9,
+  };
+
+  // 健康 tenant — 沒商品沒訂單, getInboxItems 應回 []
+  const TG_HEALTHY = 'aaaaaaaa-cccc-cccc-cccc-cccccccccccc';
+
+  beforeAll(async () => {
+    await dbAdmin
+      .insert(merchants)
+      .values([
+        // 主 tenant: lowStockThreshold=5 (default), 之後讓 G_LOW_STOCK 卡 stock=3 觸發 low_stock
+        { id: TG, slug: 'integ-inbox-shop', name: 'Integ Inbox Shop', lowStockThreshold: 5 },
+        { id: TG_HEALTHY, slug: 'integ-inbox-healthy', name: 'Integ Inbox Healthy' },
+      ])
+      .onConflictDoNothing();
+
+    await dbAdmin
+      .insert(products)
+      .values([
+        // no_photo (r2Key 空字串) — 標題 14 字, 庫存 5, 定價 100
+        {
+          id: G_NO_PHOTO,
+          tenantId: TG,
+          title: '正常商品標題長度十二個字元',
+          description: 'desc',
+          r2Key: '',
+          priceCents: 100,
+          stockQuantity: 50,
+          aiMetadata: aiMeta,
+        },
+        // short_title (5 字)
+        {
+          id: G_SHORT_TITLE,
+          tenantId: TG,
+          title: '短標題啊',
+          description: 'desc',
+          r2Key: 'inbox/p2.jpg',
+          priceCents: 100,
+          stockQuantity: 50,
+          aiMetadata: aiMeta,
+        },
+        // zero_stock #1
+        {
+          id: G_ZERO_STOCK_A,
+          tenantId: TG,
+          title: '缺貨商品標題夠長啊啦',
+          description: 'desc',
+          r2Key: 'inbox/p3.jpg',
+          priceCents: 100,
+          stockQuantity: 0,
+          aiMetadata: aiMeta,
+        },
+        // zero_stock #2 — 同 P2, count=2 用來驗證 group 內 count desc
+        {
+          id: G_ZERO_STOCK_B,
+          tenantId: TG,
+          title: '另一個缺貨商品標題夠長',
+          description: 'desc',
+          r2Key: 'inbox/p4.jpg',
+          priceCents: 100,
+          stockQuantity: 0,
+          aiMetadata: aiMeta,
+        },
+        // zero_price (priceCents=0) — 標題 OK, 庫存 50 (不算 zero_stock / low_stock)
+        {
+          id: G_ZERO_PRICE,
+          tenantId: TG,
+          title: '沒定價但庫存夠的商品標題',
+          description: 'desc',
+          r2Key: 'inbox/p5.jpg',
+          priceCents: 0,
+          stockQuantity: 50,
+          aiMetadata: aiMeta,
+        },
+        // low_stock (stock=3, threshold=5, > 0 → 不算 zero_stock)
+        {
+          id: G_LOW_STOCK,
+          tenantId: TG,
+          title: '低庫存商品標題夠長啊啦',
+          description: 'desc',
+          r2Key: 'inbox/p6.jpg',
+          priceCents: 100,
+          stockQuantity: 3,
+          aiMetadata: aiMeta,
+        },
+      ])
+      .onConflictDoNothing();
+
+    await dbAdmin
+      .insert(orders)
+      .values([
+        {
+          id: G_PAID,
+          tenantId: TG,
+          customerEmail: 'inbox-paid@test',
+          customerName: 'Inbox Paid',
+          customerPhone: '0900-000-101',
+          customerAddress: 'Inbox Addr 1',
+          totalCents: 50000,
+          status: 'paid',
+        },
+        {
+          id: G_PENDING,
+          tenantId: TG,
+          customerEmail: 'inbox-pending@test',
+          customerName: 'Inbox Pending',
+          customerPhone: '0900-000-102',
+          customerAddress: 'Inbox Addr 2',
+          totalCents: 30000,
+          status: 'pending',
+        },
+      ])
+      .onConflictDoNothing();
+  });
+
+  afterAll(async () => {
+    await dbAdmin.delete(orders).where(eq(orders.tenantId, TG));
+    await dbAdmin.delete(products).where(eq(products.tenantId, TG));
+    await dbAdmin.delete(merchants).where(eq(merchants.id, TG));
+    await dbAdmin.delete(merchants).where(eq(merchants.id, TG_HEALTHY));
+  });
+
+  it('aggregates 7 signal types correctly with mixed issues', async () => {
+    const items = await getInboxItems(TG);
+
+    const byType = Object.fromEntries(items.map((i) => [i.type, i]));
+    // P1
+    expect(byType.paid_unshipped?.count).toBe(1);
+    expect(byType.paid_unshipped?.severity).toBe('P1');
+    // P2
+    expect(byType.zero_stock?.count).toBe(2);
+    expect(byType.zero_stock?.severity).toBe('P2');
+    expect(byType.zero_price?.count).toBe(1);
+    expect(byType.zero_price?.severity).toBe('P2');
+    // P3
+    expect(byType.no_photo?.count).toBe(1);
+    expect(byType.no_photo?.severity).toBe('P3');
+    expect(byType.low_stock?.count).toBe(1);
+    expect(byType.low_stock?.severity).toBe('P3');
+    // P4
+    expect(byType.short_title?.count).toBe(1);
+    expect(byType.short_title?.severity).toBe('P4');
+    // P5
+    expect(byType.pending_unpaid?.count).toBe(1);
+    expect(byType.pending_unpaid?.severity).toBe('P5');
+
+    // label / filterUrl shape sanity
+    expect(byType.paid_unshipped?.filterUrl).toBe('/merchant/orders?status=paid');
+    expect(byType.pending_unpaid?.filterUrl).toBe('/merchant/orders?status=pending');
+    expect(byType.low_stock?.filterUrl).toBe('/merchant/products?filter=low-stock');
+    expect(byType.low_stock?.label).toMatch(/低庫存/);
+    expect(byType.no_photo?.label).toMatch(/缺照片/);
+  });
+
+  it('sorted by severity P1 → P5 (asc), then count desc within group', async () => {
+    const items = await getInboxItems(TG);
+    const severities = items.map((i) => i.severity);
+
+    // P1 first, P5 last; severities 應 monotonic non-decreasing (P1, P2, P2, P3, P3, P4, P5)
+    expect(severities[0]).toBe('P1');
+    expect(severities[severities.length - 1]).toBe('P5');
+    const rank: Record<string, number> = { P1: 1, P2: 2, P3: 3, P4: 4, P5: 5 };
+    for (let i = 1; i < severities.length; i++) {
+      expect(rank[severities[i]]).toBeGreaterThanOrEqual(rank[severities[i - 1]]);
+    }
+
+    // Within P2 (zero_stock=2, zero_price=1) → zero_stock 先 (count desc)
+    const p2 = items.filter((i) => i.severity === 'P2');
+    expect(p2[0].type).toBe('zero_stock');
+    expect(p2[0].count).toBe(2);
+    expect(p2[1].type).toBe('zero_price');
+    expect(p2[1].count).toBe(1);
+  });
+
+  it('returns [] when merchant has no signals (healthy tenant)', async () => {
+    const items = await getInboxItems(TG_HEALTHY);
+    expect(items).toEqual([]);
+  });
+
+  it('drops signals with count=0 (no zero-noise chips)', async () => {
+    const items = await getInboxItems(TG);
+    // 沒 zero count 出現
+    for (const item of items) {
+      expect(item.count).toBeGreaterThan(0);
+    }
+    // healthy tenant 應沒 paid_unshipped
+    const healthy = await getInboxItems(TG_HEALTHY);
+    expect(healthy.find((i) => i.type === 'paid_unshipped')).toBeUndefined();
   });
 });
 

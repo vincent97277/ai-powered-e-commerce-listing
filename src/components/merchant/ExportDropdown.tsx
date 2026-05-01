@@ -9,10 +9,14 @@
  *
  * 不引外部 dropdown lib — 用 Tailwind + native onBlur 收合, 鍵盤可關 (ESC).
  * 點 item → 直接 window.location 觸發 GET /api/export/...?format=...&...filters,
- * 瀏覽器自動觸發下載對話框. 同時顯示一段 hint 提示 UTF-8 編碼.
+ * 瀏覽器自動觸發下載對話框.
+ *
+ * V1.6 B4 update: 下載完成 hint 改用 Sonner toast (取代 inline ad-hoc div).
+ * Sonner Toaster 在 src/app/layout.tsx:39 已 mount globally.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Download, ChevronDown } from 'lucide-react';
+import { toast } from 'sonner';
 
 type Kind = 'orders' | 'products';
 
@@ -24,7 +28,6 @@ type Props = {
 
 export function ExportDropdown({ kind, currentFilter }: Props) {
   const [open, setOpen] = useState(false);
-  const [hint, setHint] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // ESC / 點外面 → 關
@@ -69,13 +72,12 @@ export function ExportDropdown({ kind, currentFilter }: Props) {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setHint(
-      format === 'shopee_csv'
-        ? 'CSV 已下載 (UTF-8 BOM). 若 Excel 開啟見亂碼, 請選 UTF-8 編碼匯入.'
-        : 'Excel 已下載.',
-    );
-    // 6 秒後自動清掉 hint
-    window.setTimeout(() => setHint(null), 6000);
+
+    if (format === 'shopee_csv') {
+      toast.success('CSV 已下載 (UTF-8 BOM). 若 Excel 開啟見亂碼, 請選 UTF-8 編碼匯入.');
+    } else {
+      toast.success('Excel 已下載.');
+    }
   }
 
   const items: Array<{ label: string; sub?: string; format: 'xlsx' | 'shopee_csv' }> =
@@ -139,22 +141,6 @@ export function ExportDropdown({ kind, currentFilter }: Props) {
               )}
             </button>
           ))}
-        </div>
-      )}
-
-      {hint && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="absolute right-0 top-full mt-1 max-w-[320px] rounded px-3 py-2 text-xs"
-          style={{
-            backgroundColor: 'color-mix(in srgb, var(--success) 10%, transparent)',
-            color: 'var(--success)',
-            border: '1px solid color-mix(in srgb, var(--success) 30%, transparent)',
-            borderRadius: 'var(--brand-radius)',
-          }}
-        >
-          {hint}
         </div>
       )}
     </div>

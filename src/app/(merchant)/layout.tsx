@@ -68,7 +68,7 @@ export default async function MerchantLayout({ children }: { children: React.Rea
   return (
     <ThemeProvider merchants={merchants} initialMerchantId={currentId}>
       {isSuspended && (
-        <div className="border-b border-red-200 bg-red-50 px-12 py-3 text-sm text-red-800">
+        <div className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 sm:px-8 lg:px-12">
           <strong>你的商家已被平台暫停營業</strong>
           {suspendedReason && <span> — {suspendedReason}</span>}
           <span className="ml-2 text-xs text-red-600">
@@ -77,7 +77,7 @@ export default async function MerchantLayout({ children }: { children: React.Rea
         </div>
       )}
       <header
-        className="flex items-center justify-between border-b px-12 py-4"
+        className="flex items-center justify-between gap-3 border-b px-4 py-4 sm:px-8 lg:px-12"
         style={{
           backgroundColor: 'var(--brand-bg)',
           borderColor: 'color-mix(in srgb, var(--brand-primary) 20%, transparent)',

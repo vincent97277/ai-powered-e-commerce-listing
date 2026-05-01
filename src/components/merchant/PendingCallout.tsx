@@ -1,3 +1,4 @@
+// DEPRECATED V1.6: replaced by MerchantInbox. Kept one release for rollback. Delete in V1.7.
 /**
  * PendingCallout — 商家 dashboard 待處理 callout (V1 #72)
  *

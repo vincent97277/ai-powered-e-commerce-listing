@@ -26,7 +26,7 @@ export default async function StorefrontPage({ params }: { params: Promise<{ slu
   if (meta.suspendedAt) {
     return (
       <main
-        className="flex min-h-screen items-center justify-center px-6"
+        className="flex min-h-screen items-center justify-center px-4 sm:px-6"
         style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}
       >
         <div className="max-w-md text-center">
@@ -62,13 +62,13 @@ export default async function StorefrontPage({ params }: { params: Promise<{ slu
 
   return (
     <main
-      className="min-h-screen px-6 py-12 md:px-12"
+      className="min-h-screen px-4 py-8 sm:px-8 sm:py-12 lg:px-12"
       style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}
     >
       <div className="mx-auto max-w-6xl">
         {items.length === 0 ? (
           <div
-            className="flex flex-col items-center justify-center gap-4 py-32 text-center"
+            className="flex flex-col items-center justify-center gap-4 px-4 py-20 text-center sm:py-32"
             style={{
               borderRadius: 'calc(var(--brand-radius) * 4)',
               backgroundColor: 'color-mix(in srgb, var(--brand-primary) 4%, transparent)',
@@ -84,7 +84,7 @@ export default async function StorefrontPage({ params }: { params: Promise<{ slu
             </div>
           </div>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
             {items.map((p) => {
               const hasImg = p.r2Key && !p.r2Key.includes('/fixtures/');
               return (
