@@ -32,7 +32,8 @@ export const resolveTenantBySlug = (slug: string) =>
     { tags: [tagFor(slug)], revalidate: 300 } // 5 分鐘 fallback，但 tag 失效優先
   )();
 
-/** 同時拿 tenant_id + 公開資料 (商家名 + 停權狀態), 給 storefront 用 */
+/** 同時拿 tenant_id + 公開資料 (商家名 + 停權 + 審核狀態), 給 storefront 用.
+ *  V1.7 D1: 加 approvedAt — null 表示等待 admin 核可, storefront 視為「暫停營業中」 */
 export const resolveStorefrontMeta = (slug: string) =>
   unstable_cache(
     async (): Promise<{
@@ -40,6 +41,7 @@ export const resolveStorefrontMeta = (slug: string) =>
       name: string;
       suspendedAt: Date | null;
       suspendedReason: string | null;
+      approvedAt: Date | null;
     } | null> => {
       const rows = await dbAdmin
         .select({
@@ -47,6 +49,7 @@ export const resolveStorefrontMeta = (slug: string) =>
           name: merchants.name,
           suspendedAt: merchants.suspendedAt,
           suspendedReason: merchants.suspendedReason,
+          approvedAt: merchants.approvedAt,
         })
         .from(merchants)
         .where(eq(merchants.slug, slug))
@@ -57,6 +60,7 @@ export const resolveStorefrontMeta = (slug: string) =>
         name: rows[0].name,
         suspendedAt: rows[0].suspendedAt,
         suspendedReason: rows[0].suspendedReason,
+        approvedAt: rows[0].approvedAt,
       };
     },
     [`storefront-meta-${slug}`],

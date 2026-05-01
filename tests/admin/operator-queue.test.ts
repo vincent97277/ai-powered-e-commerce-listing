@@ -50,6 +50,10 @@ async function cleanup() {
 }
 
 beforeAll(async () => {
+  // V1.7 D1: 全部 fixture merchants 設 approvedAt (= 已核可), 否則新加的
+  // pending_approval signal 會把這些 fixture 都列入 queue → 干擾既有 assertions.
+  // approveByAdmin = 'fixture' 標記它是 test data.
+  const now = new Date();
   await dbAdmin
     .insert(merchants)
     .values([
@@ -57,18 +61,24 @@ beforeAll(async () => {
         id: TENANT_C,
         slug: 'queue-test-c',
         name: 'Queue Test C',
+        approvedAt: now,
+        approvedByAdmin: 'fixture',
       },
       {
         id: TENANT_D,
         slug: 'queue-test-d',
         name: 'Queue Test D',
+        approvedAt: now,
+        approvedByAdmin: 'fixture',
       },
       {
         id: TENANT_SUSPENDED,
         slug: 'queue-test-suspended',
         name: 'Queue Test Suspended',
-        suspendedAt: new Date(),
+        suspendedAt: now,
         suspendedReason: 'operator-queue test fixture',
+        approvedAt: now,
+        approvedByAdmin: 'fixture',
       },
     ])
     .onConflictDoNothing();

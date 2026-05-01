@@ -111,6 +111,11 @@ export default async function AdminMerchantDetail({
             </p>
             <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight">
               {merchant.name}
+              {merchant.approvedAt == null && (
+                <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
+                  待審核
+                </span>
+              )}
               {merchant.suspendedAt && (
                 <span className="rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
                   已停權
@@ -142,6 +147,7 @@ export default async function AdminMerchantDetail({
             merchantId={id}
             currentSlug={merchant.slug}
             isSuspended={merchant.suspendedAt !== null}
+            isPendingApproval={merchant.approvedAt == null}
           />
         </header>
 
@@ -215,6 +221,7 @@ const ACTION_LABEL: Record<string, string> = {
   suspend: '已停權',
   activate: '已啟用',
   rename_slug: '改 slug',
+  approve_merchant: '已核可',
 };
 
 function TabLink({

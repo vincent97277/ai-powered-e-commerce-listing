@@ -5,17 +5,25 @@
  * Linear-tone: minimal chrome, dialog confirm 用 native dialog (V1 不引入 shadcn dialog wrap)
  */
 import { useState, useTransition } from 'react';
-import { suspendMerchant, activateMerchant, renameSlug } from './actions';
+import {
+  suspendMerchant,
+  activateMerchant,
+  renameSlug,
+  approveMerchant,
+} from './actions';
 import { toast } from 'sonner';
 
 export function MerchantActions({
   merchantId,
   currentSlug,
   isSuspended,
+  isPendingApproval,
 }: {
   merchantId: string;
   currentSlug: string;
   isSuspended: boolean;
+  /** V1.7 D1: approved_at IS NULL → 顯示「核可」按鈕 (高 priority, 排第一) */
+  isPendingApproval: boolean;
 }) {
   const [pending, start] = useTransition();
   const [showSuspend, setShowSuspend] = useState(false);
@@ -47,6 +55,15 @@ export function MerchantActions({
     });
   }
 
+  function handleApprove() {
+    if (!confirm('核可此商家? 核可後 storefront 對外開放, 商家可上架商品.')) return;
+    start(async () => {
+      const result = await approveMerchant(merchantId);
+      if (result.error) toast.error(result.error);
+      else toast.success('已核可, storefront 對外開放');
+    });
+  }
+
   function handleRename(formData: FormData) {
     start(async () => {
       const newSlug = String(formData.get('newSlug') ?? '').trim();
@@ -66,6 +83,16 @@ export function MerchantActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {isPendingApproval && (
+        <button
+          onClick={handleApprove}
+          disabled={pending}
+          className="rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+          aria-label="核可此商家"
+        >
+          核可商家
+        </button>
+      )}
       {isSuspended ? (
         <button
           onClick={handleActivate}

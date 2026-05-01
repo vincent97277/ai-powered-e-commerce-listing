@@ -22,8 +22,11 @@ export default async function StorefrontPage({ params }: { params: Promise<{ slu
     notFound();
   }
 
-  // 商家被平台停權 — 顯示「暫停營業中」(200 OK 不是 503, SEO 不爆)
-  if (meta.suspendedAt) {
+  // 商家被平台停權 OR 還沒被 admin 核可 (V1.7 D1) — 顯示「暫停營業中」
+  // 兩種狀態 customer-facing 體驗一樣 (店面對外不可見), 內部 reason 不對外露.
+  // 200 OK 不是 503, SEO 不爆.
+  const isUnavailable = meta.suspendedAt != null || meta.approvedAt == null;
+  if (isUnavailable) {
     return (
       <main
         className="flex min-h-screen items-center justify-center px-4 sm:px-6"
@@ -41,7 +44,7 @@ export default async function StorefrontPage({ params }: { params: Promise<{ slu
           >
             {meta.name} 暫停營業中
           </h1>
-          {meta.suspendedReason ? (
+          {meta.suspendedAt && meta.suspendedReason ? (
             <p className="t-small mt-3 opacity-70">{meta.suspendedReason}</p>
           ) : (
             <p className="t-small mt-3 opacity-60">店家暫時無法接受訂單, 請稍後再來</p>

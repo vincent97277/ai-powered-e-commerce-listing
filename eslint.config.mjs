@@ -53,6 +53,7 @@ export default [
       'src/lib/merchant/**',               // V1 suspend guard (#53): 純 read merchant 狀態
       'src/lib/observability/**',          // V1 import-log (#69): logger 不 import dbAdmin 但語意上屬同類
       'src/lib/admin/**',                  // V1.6 A8 operator queue: cross-tenant admin observability
+      'src/lib/onboarding/**',             // V1.7 D1 onboarding hardening: IP rate-limit + abuse log (admin observability)
     ],
     rules: { 'no-restricted-imports': 'off' },
   },

@@ -54,8 +54,25 @@ beforeAll(async () => {
   await dbAdmin
     .insert(merchants)
     .values([
-      { id: T1, slug: 'integ-shop-a', name: 'Integ Shop A', lowStockThreshold: 5, dailyAiCostCentsCap: 5000 },
-      { id: T2, slug: 'integ-shop-b', name: 'Integ Shop B' },
+      // V1.7 D1: integration fixtures need approvedAt set, otherwise storefront / suspend
+      // tests fail (unapproved merchants are 暫停營業中). 'fixture' label distinguishes test
+      // data from real legacy/admin/system approvals.
+      {
+        id: T1,
+        slug: 'integ-shop-a',
+        name: 'Integ Shop A',
+        lowStockThreshold: 5,
+        dailyAiCostCentsCap: 5000,
+        approvedAt: new Date(),
+        approvedByAdmin: 'fixture',
+      },
+      {
+        id: T2,
+        slug: 'integ-shop-b',
+        name: 'Integ Shop B',
+        approvedAt: new Date(),
+        approvedByAdmin: 'fixture',
+      },
     ])
     .onConflictDoNothing();
   await dbAdmin

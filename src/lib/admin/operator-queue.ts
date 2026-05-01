@@ -33,6 +33,7 @@ import { dbAdmin } from '@/db/admin-only';
 export type Severity = 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
 
 export type SignalType =
+  | 'pending_approval' // P1 等待 admin 核可 (V1.7 D1)
   | 'paid_unshipped'   // P1 已付款待出貨
   | 'zero_stock'       // P2 商品零庫存
   | 'zero_price'       // P2 商品 $0 價格
@@ -69,6 +70,10 @@ const SIGNAL_META: Record<
   SignalType,
   { severity: Severity; reason: (n: number) => string }
 > = {
+  pending_approval: {
+    severity: 'P1',
+    reason: () => `新商家待審核 · 點擊核可`,
+  },
   paid_unshipped: {
     severity: 'P1',
     reason: (n) => `已付款待出貨 · ${n} 筆`,
@@ -110,6 +115,8 @@ type AggRow = {
   id: string;
   slug: string;
   name: string;
+  /** V1.7 D1: 1 if approved_at IS NULL else 0 (cast as int for downstream summing) */
+  pending_approval: string | number;
   no_photo: string | number;
   short_title: string | number;
   zero_stock: string | number;
@@ -165,6 +172,7 @@ export async function getOperatorQueue(): Promise<QueueItem[]> {
       m.id,
       m.slug,
       m.name,
+      CASE WHEN m.approved_at IS NULL THEN 1 ELSE 0 END AS pending_approval,
       COALESCE(ps.no_photo, 0)        AS no_photo,
       COALESCE(ps.short_title, 0)     AS short_title,
       COALESCE(ps.zero_stock, 0)      AS zero_stock,
@@ -184,6 +192,7 @@ export async function getOperatorQueue(): Promise<QueueItem[]> {
     // Per-merchant: expand each non-zero signal into a QueueItem.
     // Order doesn't matter here — we sort the whole list at the end.
     const counts: Array<{ type: SignalType; count: number }> = [
+      { type: 'pending_approval', count: Number(r.pending_approval) },
       { type: 'paid_unshipped', count: Number(r.paid_unshipped) },
       { type: 'zero_stock', count: Number(r.zero_stock) },
       { type: 'zero_price', count: Number(r.zero_price) },

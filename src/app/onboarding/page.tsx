@@ -71,6 +71,27 @@ export default function OnboardingPage() {
               boxShadow: 'var(--elev-2)',
             }}
           >
+            {/*
+              V1.7 D1 honeypot. 真實使用者看不到 (off-screen + tabIndex=-1 + aria-hidden);
+              spam bot 通常 fill all fields → server action 看到非空就走 fake-success 分支.
+              欄位名故意取「網站」這類 bot 喜歡填的東西.
+            */}
+            <input
+              type="text"
+              name="hp_url"
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                left: '-9999px',
+                top: 'auto',
+                width: 1,
+                height: 1,
+                overflow: 'hidden',
+              }}
+            />
+
             <div className="space-y-2">
               <Label htmlFor="name" className="t-caption" style={{ color: 'var(--brand-primary)' }}>
                 店名
@@ -150,6 +171,22 @@ export default function OnboardingPage() {
                 }}
               >
                 {state.error}
+              </div>
+            )}
+
+            {state.pendingFake && (
+              // Honeypot 觸發後的 fake-success message — 對 bot 看起來跟真的成功一樣,
+              // 但其實沒建商家. 真實使用者也不該看到這個分支 (除非他們手動填了 hidden input).
+              <div
+                className="border p-3 text-sm"
+                style={{
+                  borderColor: 'color-mix(in srgb, var(--brand-primary) 30%, transparent)',
+                  backgroundColor: 'color-mix(in srgb, var(--brand-primary) 6%, transparent)',
+                  color: 'var(--brand-text)',
+                  borderRadius: 'var(--brand-radius)',
+                }}
+              >
+                註冊已送出, 等待 admin 人工審核. 通常 1 個工作天內處理.
               </div>
             )}
 

@@ -6,11 +6,13 @@
  *
  * 1. 熱門店鋪 (按 GMV desc, 空狀態 fallback createdAt desc)
  * 2. 新進駐 (近 7 天 onboarded)
- * 都過濾 suspendedAt IS NULL (停權商家不公開)
+ * 都過濾:
+ *   - suspendedAt IS NULL  (停權商家不公開)
+ *   - approvedAt IS NOT NULL (V1.7 D1: 還沒被 admin 核可的不公開)
  */
 import { dbAdmin } from '@/db/admin-only';
 import { merchants, orders, products } from '@/db/schema';
-import { count, desc, isNull, sql } from 'drizzle-orm';
+import { count, desc, isNotNull, isNull, sql, and } from 'drizzle-orm';
 
 export type FeaturedMerchant = {
   id: string;
@@ -57,7 +59,7 @@ export async function getFeaturedMerchants(limit = 6): Promise<FeaturedMerchant[
       ),
     })
     .from(merchants)
-    .where(isNull(merchants.suspendedAt))
+    .where(and(isNull(merchants.suspendedAt), isNotNull(merchants.approvedAt)))
     .orderBy(
       sql`COALESCE((SELECT SUM(${orders.totalCents})::bigint FROM ${orders} WHERE ${orders.tenantId} = ${merchants.id} AND ${orders.status} IN ('paid','shipped','completed')), 0) DESC, ${merchants.createdAt} DESC`,
     )
@@ -88,7 +90,9 @@ export async function getRecentMerchants(limit = 6): Promise<FeaturedMerchant[]>
       ),
     })
     .from(merchants)
-    .where(sql`${merchants.suspendedAt} IS NULL AND ${merchants.createdAt} >= ${sevenDaysAgo}`)
+    .where(
+      sql`${merchants.suspendedAt} IS NULL AND ${merchants.approvedAt} IS NOT NULL AND ${merchants.createdAt} >= ${sevenDaysAgo}`,
+    )
     .orderBy(desc(merchants.createdAt))
     .limit(limit);
 
@@ -111,7 +115,7 @@ export async function getPlatformStats(): Promise<{ merchantCount: number; produ
   const [m] = await dbAdmin
     .select({ n: count(merchants.id) })
     .from(merchants)
-    .where(isNull(merchants.suspendedAt));
+    .where(and(isNull(merchants.suspendedAt), isNotNull(merchants.approvedAt)));
   const [p] = await dbAdmin.select({ n: count(products.id) }).from(products);
   return { merchantCount: m?.n ?? 0, productCount: p?.n ?? 0 };
 }

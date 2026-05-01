@@ -1,5 +1,10 @@
 /**
  * Storefront layout — 注入該商家的 brand theme + 共用 header
+ *
+ * V1.7 D1: layout 層不擋 unapproved/suspended 商家進來 (theme/header 仍可 render),
+ *   讓 page.tsx (root + product detail + cart) 各自處理. 因為 cart/checkout
+ *   也應該在 unapproved/suspended 狀態下被擋, 但那些 page 自己會 query meta
+ *   再決定. layout 只負責注入 theme.
  */
 import { ThemeProviderForStore } from './ThemeForStore';
 import { resolveStorefrontMeta, resolveSlugRedirect } from '@/lib/tenant/resolver';

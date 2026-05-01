@@ -2,14 +2,20 @@
 
 /**
  * Admin actions: suspend / activate / rename_slug (V1 #51, RA19)
+ *                approve_merchant (V1.7 D1)
  * 全部 dbAdmin.transaction 包 update + audit insert (atomic)
  * 失敗 → returning {error}, UI toast
  */
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { dbAdmin } from '@/db/admin-only';
 import { merchants, adminActionHistory } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { invalidateSlug } from '@/lib/tenant/resolver';
+import {
+  ADMIN_SESSION_COOKIE,
+  validateAdminSession,
+} from '@/lib/admin-session';
 
 const SLUG_REGEX = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/;
 
@@ -100,6 +106,68 @@ export async function activateMerchant(merchantId: string): Promise<ActionResult
     return {};
   } catch (err) {
     return { error: err instanceof Error ? err.message : '啟用失敗' };
+  }
+}
+
+/**
+ * V1.7 D1: Approve merchant — set approved_at = now() + log adminActionHistory.
+ * Only operates if approvedAt IS NULL (idempotent guard).
+ *
+ * adminSessionId 從 admin-session cookie 取出 (中介 layer 已驗過 cookie 簽章 + DB row 存在,
+ * 這裡再 validate 一次防止 layout cache 失效到這個 action 之間 attacker 拿到舊 cookie).
+ */
+export async function approveMerchant(merchantId: string): Promise<ActionResult> {
+  // 二次驗 admin session — defense in depth
+  const c = await cookies();
+  const cookieValue = c.get(ADMIN_SESSION_COOKIE)?.value;
+  const adminSessionId = await validateAdminSession(cookieValue);
+  if (!adminSessionId) {
+    return { error: '無效的 admin session, 請重新登入' };
+  }
+
+  let merchantSlug: string | undefined;
+  try {
+    await dbAdmin.transaction(async (tx) => {
+      const [m] = await tx
+        .select({
+          id: merchants.id,
+          slug: merchants.slug,
+          approvedAt: merchants.approvedAt,
+        })
+        .from(merchants)
+        .where(eq(merchants.id, merchantId))
+        .limit(1);
+      if (!m) throw new Error('商家不存在');
+      if (m.approvedAt) throw new Error('商家已核可');
+      merchantSlug = m.slug;
+
+      await tx
+        .update(merchants)
+        .set({
+          approvedAt: new Date(),
+          approvedByAdmin: adminSessionId,
+          updatedAt: new Date(),
+        })
+        .where(eq(merchants.id, merchantId));
+
+      await tx.insert(adminActionHistory).values({
+        targetMerchantId: merchantId,
+        action: 'approve_merchant',
+        payload: { adminSessionId },
+      });
+    });
+
+    if (merchantSlug) {
+      // 對外可見 — flush slug cache + storefront page
+      invalidateSlug(merchantSlug, merchantSlug);
+      revalidatePath(`/store/${merchantSlug}`);
+    }
+    revalidatePath(`/admin/merchants/${merchantId}`);
+    revalidatePath('/admin');
+    revalidatePath('/admin/queue');
+    return {};
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : '核可失敗' };
   }
 }
 

@@ -30,6 +30,11 @@ export const merchants = pgTable(
     suspendedAt: timestamp('suspended_at', { withTimezone: true }),
     suspendedReason: text('suspended_reason'),
     previousSlug: text('previous_slug'),
+    /** V1.7 D1 onboarding hardening — admin approval queue.
+     *  approved_at IS NULL = pending approval (storefront blocked, merchant backend banner) */
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    /** admin session id (UUID) | 'legacy' (V1.6 backfill) | 'system' (seed). nullable when pending. */
+    approvedByAdmin: text('approved_by_admin'),
     /** V1 商家設定 */
     lowStockThreshold: integer('low_stock_threshold').notNull().default(5),
     dailyAiCostCentsCap: integer('daily_ai_cost_cents_cap').notNull().default(5000),
@@ -49,6 +54,10 @@ export const merchants = pgTable(
     suspendedIdx: index('merchants_suspended_idx')
       .on(t.suspendedAt)
       .where(sql`${t.suspendedAt} IS NOT NULL`),
+    /** V1.7 D1: admin approval queue 撈 pending merchants */
+    pendingApprovalIdx: index('merchants_pending_approval_idx')
+      .on(t.createdAt)
+      .where(sql`${t.approvedAt} IS NULL`),
   }),
 );
 
@@ -261,7 +270,9 @@ export const adminActionHistory = pgTable(
     targetMerchantId: uuid('target_merchant_id')
       .notNull()
       .references(() => merchants.id, { onDelete: 'cascade' }),
-    action: text('action', { enum: ['suspend', 'activate', 'rename_slug'] }).notNull(),
+    action: text('action', {
+      enum: ['suspend', 'activate', 'rename_slug', 'approve_merchant'],
+    }).notNull(),
     payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -346,6 +357,41 @@ export const aiUsageEvents = pgTable(
       t.tenantId,
       t.createdAt,
     ),
+  }),
+);
+
+/* ─────────────────────────── 10c. onboarding_attempts ─────────────────────────── */
+/**
+ * V1.7 D1 onboarding hardening — IP rate limit + abuse log.
+ *
+ * 每次 /onboarding POST 寫一行 (含 success / 各種拒絕分支), 用 ip_address + created_at idx
+ * 算 1 attempt per IP per 24h. RLS = web_admin only (cross-tenant observability).
+ *
+ * Append-only log; 不 UPDATE/DELETE.
+ */
+export const onboardingAttempts = pgTable(
+  'onboarding_attempts',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    /** x-forwarded-for first hop (raw text — IPv4 or IPv6, 不 normalize) */
+    ipAddress: text('ip_address').notNull(),
+    /** 嘗試的 slug — 即使被拒也存, 給 admin 看 abuse pattern */
+    slugAttempted: text('slug_attempted').notNull(),
+    /** success / rate_limited / invalid_slug / reserved_slug / honeypot / duplicate_slug */
+    result: text('result', {
+      enum: [
+        'success',
+        'rate_limited',
+        'invalid_slug',
+        'reserved_slug',
+        'honeypot',
+        'duplicate_slug',
+      ],
+    }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    ipCreatedIdx: index('onboarding_attempts_ip_created_idx').on(t.ipAddress, t.createdAt),
   }),
 );
 
@@ -438,3 +484,5 @@ export type AiUsageEvent = InferSelectModel<typeof aiUsageEvents>;
 export type NewAiUsageEvent = InferInsertModel<typeof aiUsageEvents>;
 export type AdminSession = InferSelectModel<typeof adminSessions>;
 export type NewAdminSession = InferInsertModel<typeof adminSessions>;
+export type OnboardingAttempt = InferSelectModel<typeof onboardingAttempts>;
+export type NewOnboardingAttempt = InferInsertModel<typeof onboardingAttempts>;
