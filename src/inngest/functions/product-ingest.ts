@@ -40,51 +40,79 @@ export const productIngestFn = inngest.createFunction(
     const { tenantId, r2Key, merchantId, sourceText, importSessionId, itemIndex } = event.data;
     logger.info('product.ingest 開始', { tenantId, r2Key, merchantId, hasSourceText: !!sourceText });
 
-    // Step 1: 從本地讀原始照片
-    const originalBuffer = await step.run('read-from-fs', async () => {
-      const buf = await readFile(r2Key);
-      return buf.toString('base64');
-    });
+    // V2.2.9: timing instrumentation — each step logs its wall time so the
+    // operator can verify, after Neon + R2 provisioning, that no single step
+    // exceeds the 10s Vercel Hobby per-fn cap. Log lines look like:
+    //   [step-timing] read-from-fs 134ms
+    // Inngest also tracks step duration in its dashboard; this is a redundant
+    // local log for `vercel logs` / `gcloud logs` grep.
+    const timed = async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
+      const t0 = Date.now();
+      const result = await fn();
+      const ms = Date.now() - t0;
+      logger.info('[step-timing]', { step: name, ms, slow: ms > 8000 });
+      if (ms > 9000) {
+        // Single step closer than 1s to Hobby limit — flag for review.
+        logger.warn('[step-timing] step approaching 10s Hobby cap', { step: name, ms });
+      }
+      return result;
+    };
+
+    // Step 1: 從 storage 讀原始照片
+    const originalBuffer = await step.run('read-from-fs', () =>
+      timed('read-from-fs', async () => {
+        const buf = await readFile(r2Key);
+        return buf.toString('base64');
+      }),
+    );
 
     // Step 2: 縮圖 + WebP
-    const processed = await step.run('process-image', async () => {
-      const buf = Buffer.from(originalBuffer, 'base64');
-      const out = await sharp(buf)
-        .rotate()
-        .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
-        .webp({ quality: 85 })
-        .toBuffer();
-      return { base64: out.toString('base64'), size: out.length };
-    });
+    const processed = await step.run('process-image', () =>
+      timed('process-image', async () => {
+        const buf = Buffer.from(originalBuffer, 'base64');
+        const out = await sharp(buf)
+          .rotate()
+          .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 85 })
+          .toBuffer();
+        return { base64: out.toString('base64'), size: out.length };
+      }),
+    );
 
-    // Step 3: 寫處理過的版本到本地
-    const processedKey = await step.run('write-processed', async () => {
-      const buf = Buffer.from(processed.base64, 'base64');
-      const { key } = await writeProcessed(tenantId, buf);
-      return key;
-    });
+    // Step 3: 寫處理過的版本回 storage
+    const processedKey = await step.run('write-processed', () =>
+      timed('write-processed', async () => {
+        const buf = Buffer.from(processed.base64, 'base64');
+        const { key } = await writeProcessed(tenantId, buf);
+        return key;
+      }),
+    );
 
     // Step 4: 抓 brand_voice (system query 走 dbAdmin)
-    const brandVoice = await step.run('fetch-brand-voice', async () => {
-      const rows = await dbAdmin
-        .select({ brandVoice: merchants.brandVoice })
-        .from(merchants)
-        .where(eq(merchants.id, tenantId))
-        .limit(1);
-      return rows[0]?.brandVoice ?? '';
-    });
+    const brandVoice = await step.run('fetch-brand-voice', () =>
+      timed('fetch-brand-voice', async () => {
+        const rows = await dbAdmin
+          .select({ brandVoice: merchants.brandVoice })
+          .from(merchants)
+          .where(eq(merchants.id, tenantId))
+          .limit(1);
+        return rows[0]?.brandVoice ?? '';
+      }),
+    );
 
-    // Step 5: GPT-4o vision (要絕對 URL — 用 NEXT_PUBLIC_APP_URL + /uploads/...)
+    // Step 5: GPT-4o vision (the slow step — typically 5-15s; biggest risk on Hobby)
     //         V1 #67 (RA12): sourceText 從 IG/蝦皮 import 帶進來, 餵 GPT-4o 重寫成 brand voice
-    const visionResult = await step.run('call-vision', async () => {
-      const imageUrl = getPublicUrl(processedKey);
-      return await callVisionWithRetry({
-        imageUrl,
-        brandVoice,
-        sourceCaption: sourceText,
-        maxRetries: 2,
-      });
-    });
+    const visionResult = await step.run('call-vision', () =>
+      timed('call-vision', async () => {
+        const imageUrl = getPublicUrl(processedKey);
+        return await callVisionWithRetry({
+          imageUrl,
+          brandVoice,
+          sourceCaption: sourceText,
+          maxRetries: 2,
+        });
+      }),
+    );
 
     // V1.5 review C1: 把 vision 回傳的 token usage 累積進 import_sessions, 給 cost cap 讀
     // step.run idempotency: 同一 step ID retry 時 Inngest 不重跑 → 不會重複加 usage
