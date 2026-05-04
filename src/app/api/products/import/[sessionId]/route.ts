@@ -4,7 +4,7 @@
  * 回 import_sessions row 狀態, 給 client polling UI 用 (2s interval)
  * 走 RLS — 商家只能看自己的 session
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { importSessions } from '@/db/schema';
@@ -13,12 +13,12 @@ import { eq } from 'drizzle-orm';
 export const runtime = 'nodejs';
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> },
 ) {
   try {
     const { sessionId } = await params;
-    const merchant = await resolveMerchantFromCookie(req.cookies.get('demo-merchant-id')?.value);
+    const merchant = await resolveMerchantFromCookie();
 
     const [session] = await withTenantTx(merchant.tenantId, async (tx) => {
       return await tx

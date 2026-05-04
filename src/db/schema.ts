@@ -30,6 +30,13 @@ export const merchants = pgTable(
     suspendedAt: timestamp('suspended_at', { withTimezone: true }),
     suspendedReason: text('suspended_reason'),
     previousSlug: text('previous_slug'),
+    /** V2 per-merchant auth (task 102 schema, task 103 lib).
+     *  email: lowercase-unique via functional partial index merchants_email_unique_idx.
+     *  password_hash: bcrypt $2a$10$… (60 chars). Both nullable until backfill via
+     *  scripts/seed-merchant-auth.ts. NOT NULL constraint deferred to V2.1 once
+     *  every merchant has logged in & set credentials. */
+    email: text('email'),
+    passwordHash: text('password_hash'),
     /** V1.7 D1 onboarding hardening — admin approval queue.
      *  approved_at IS NULL = pending approval (storefront blocked, merchant backend banner) */
     approvedAt: timestamp('approved_at', { withTimezone: true }),
@@ -415,11 +422,47 @@ export const adminSessions = pgTable(
   }),
 );
 
+/* ─────────────────────────── 12. merchant_sessions ─────────────────────────── */
+/**
+ * V2 per-merchant auth — HMAC-bound session (task 102 schema, task 103 lib).
+ *
+ * Mirror admin_sessions (V1 #41, RA11): cookie value = `{sessionId}.{HMAC-SHA256(sessionId, secret)}`,
+ * server validates 簽章 + DB row exists + expires_at > now() + revoked_at IS NULL.
+ *
+ * 跟 admin_sessions 差異:
+ *   - merchant_id FK (NOT NULL, ON DELETE CASCADE) — 一個 merchant 可以多 session (多裝置)
+ *   - revoked_at: V2.1 想 support「全部裝置登出」按鈕, 用 UPDATE revoked_at = now() 比 DELETE 好 audit
+ *
+ * RLS: ENABLE + FORCE, web_admin only. web_anon 不 GRANT.
+ */
+export const merchantSessions = pgTable(
+  'merchant_sessions',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    merchantId: uuid('merchant_id')
+      .notNull()
+      .references(() => merchants.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => ({
+    merchantIdx: index('merchant_sessions_merchant_idx').on(t.merchantId, t.expiresAt.desc()),
+  }),
+);
+
 /* ─────────────────────────── Relations ─────────────────────────── */
 export const merchantsRelations = relations(merchants, ({ many }) => ({
   users: many(merchantUsers),
   products: many(products),
   orders: many(orders),
+  sessions: many(merchantSessions),
+}));
+
+export const merchantSessionsRelations = relations(merchantSessions, ({ one }) => ({
+  merchant: one(merchants, { fields: [merchantSessions.merchantId], references: [merchants.id] }),
 }));
 
 export const merchantUsersRelations = relations(merchantUsers, ({ one }) => ({
@@ -486,3 +529,5 @@ export type AdminSession = InferSelectModel<typeof adminSessions>;
 export type NewAdminSession = InferInsertModel<typeof adminSessions>;
 export type OnboardingAttempt = InferSelectModel<typeof onboardingAttempts>;
 export type NewOnboardingAttempt = InferInsertModel<typeof onboardingAttempts>;
+export type MerchantSession = InferSelectModel<typeof merchantSessions>;
+export type NewMerchantSession = InferInsertModel<typeof merchantSessions>;

@@ -49,8 +49,7 @@ function parseDate(s: string | null | undefined): Date | null {
 
 export async function GET(req: NextRequest) {
   try {
-    const cookieValue = req.cookies.get('demo-merchant-id')?.value;
-    const merchant = await resolveMerchantFromCookie(cookieValue);
+    const merchant = await resolveMerchantFromCookie();
 
     // V1.5 review H1: 停權商家不可匯出 (對齊 /api/products/generate 的 suspend guard)
     try {

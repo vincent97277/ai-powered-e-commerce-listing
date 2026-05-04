@@ -1,6 +1,5 @@
 'use server';
 
-import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { dbAdmin } from '@/db/admin-only';
 import { merchants } from '@/db/schema';
@@ -25,8 +24,7 @@ export async function updateMerchantAction(
   patch: UpdateMerchantPatch,
 ): Promise<{ success: boolean; error?: string; newSlug?: string }> {
   try {
-    const c = await cookies();
-    const current = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
+    const current = await resolveMerchantFromCookie();
 
     // V1 #53: 停權商家不可改設定
     try {

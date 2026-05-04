@@ -3,7 +3,6 @@
  * Server component fetch initial state, ImportProgressStream client poll 2s
  */
 import Link from 'next/link';
-import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { withTenantTx } from '@/lib/db/with-tenant';
@@ -20,8 +19,7 @@ export default async function ImportProgressPage({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  const c = await cookies();
-  const merchant = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
+  const merchant = await resolveMerchantFromCookie();
 
   const [session] = await withTenantTx(merchant.tenantId, async (tx) => {
     return await tx

@@ -1,6 +1,18 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+/**
+ * ThemeProvider — applies merchant theme vars to :root (V2 task 105 simplified)
+ *
+ * V1.7 D2 had a switcher with `setCurrentId` that wrote `demo-merchant-id` cookie
+ * client-side. V2 per-merchant auth removed the switcher (一次只進一家店). The
+ * `merchants` array now contains exactly one merchant — current logged-in one —
+ * passed from (merchant)/layout.tsx. Provider is now mostly an effect that
+ * paints CSS vars + a no-op Ctx for backwards-compat with consumers that read
+ * `current` (e.g. components that need the brand-emoji / tagline).
+ *
+ * Removed: setCurrentId (no longer needed; logout is the only "switch").
+ */
+import { createContext, useContext, useEffect, type ReactNode } from 'react';
 
 export type MerchantInfo = {
   id: string;
@@ -14,12 +26,10 @@ export type MerchantInfo = {
 type Ctx = {
   /** 當前 merchant id (cookie 值) */
   currentId: string;
-  /** 所有可選的 merchant (從 DB 撈) */
+  /** 當前 merchant — V2: 永遠只有一個 (logged-in) */
   merchants: MerchantInfo[];
   /** 取當前 merchant 完整 meta */
   current: MerchantInfo;
-  /** 切換 merchant */
-  setCurrentId: (id: string) => void;
 };
 
 const ThemeCtx = createContext<Ctx | null>(null);
@@ -49,10 +59,8 @@ export function ThemeProvider({
   initialMerchantId: string;
   children: ReactNode;
 }) {
-  const [currentId, setCurrentIdState] = useState<string>(initialMerchantId);
-
   const current =
-    merchants.find((m) => m.id === currentId) ?? merchants[0] ?? FALLBACK_MERCHANT;
+    merchants.find((m) => m.id === initialMerchantId) ?? merchants[0] ?? FALLBACK_MERCHANT;
 
   useEffect(() => {
     const theme = current.themeVars ?? FALLBACK_THEME;
@@ -60,13 +68,8 @@ export function ThemeProvider({
     Object.entries(theme).forEach(([k, v]) => root.style.setProperty(k, v));
   }, [current]);
 
-  const setCurrentId = (id: string) => {
-    document.cookie = `demo-merchant-id=${id}; path=/; max-age=31536000`;
-    setCurrentIdState(id);
-  };
-
   return (
-    <ThemeCtx.Provider value={{ currentId, merchants, current, setCurrentId }}>
+    <ThemeCtx.Provider value={{ currentId: initialMerchantId, merchants, current }}>
       {children}
     </ThemeCtx.Provider>
   );

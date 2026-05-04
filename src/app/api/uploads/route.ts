@@ -19,9 +19,8 @@ const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function POST(req: NextRequest) {
   try {
-    // 從 cookie 解析 merchant — 支援 'akami'/'afen' slug 跟新 merchant 的 UUID
-    const cookieValue = req.cookies.get('demo-merchant-id')?.value;
-    const merchant = await resolveMerchantFromCookie(cookieValue);
+    // V2 task 105: cookie → merchant 已統一走 resolveMerchantFromCookie() (讀 merchant-session cookie)
+    const merchant = await resolveMerchantFromCookie();
 
     const formData = await req.formData();
     const file = formData.get('file');

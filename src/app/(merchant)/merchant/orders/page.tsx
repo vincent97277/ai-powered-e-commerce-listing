@@ -2,7 +2,6 @@
  * 商家訂單列表 — 透過 RLS 只看到自己的訂單
  */
 import Link from 'next/link';
-import { cookies } from 'next/headers';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { orders, orderItems } from '@/db/schema';
@@ -38,8 +37,7 @@ export default async function MerchantOrdersList({
   const params = await searchParams;
   const filterStatus = isValidStatusFilter(params.status) ? params.status : null;
 
-  const c = await cookies();
-  const merchant = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
+  const merchant = await resolveMerchantFromCookie();
 
   const rows = await withTenantTx(merchant.tenantId, async (tx) => {
     const baseQuery = tx

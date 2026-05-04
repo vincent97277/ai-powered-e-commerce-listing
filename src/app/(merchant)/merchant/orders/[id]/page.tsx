@@ -8,7 +8,6 @@
  * - PrintableInvoice (#57)
  */
 import Link from 'next/link';
-import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { withTenantTx } from '@/lib/db/with-tenant';
@@ -36,8 +35,7 @@ export default async function MerchantOrderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const c = await cookies();
-  const merchant = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
+  const merchant = await resolveMerchantFromCookie();
 
   // 一個 withTenantTx 取所有資料
   const data = await withTenantTx(merchant.tenantId, async (tx) => {

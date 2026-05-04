@@ -1,6 +1,5 @@
 'use server';
 
-import { cookies } from 'next/headers';
 import { inngest } from '@/inngest/client';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { assertNotSuspended } from '@/lib/merchant/suspend-guard';
@@ -11,8 +10,7 @@ import { assertNotSuspended } from '@/lib/merchant/suspend-guard';
 export async function triggerIngest(opts: {
   r2Key: string;
 }): Promise<{ ingested: boolean }> {
-  const cookieStore = await cookies();
-  const merchant = await resolveMerchantFromCookie(cookieStore.get('demo-merchant-id')?.value);
+  const merchant = await resolveMerchantFromCookie();
 
   // V1 #53: 停權商家不可上架新商品
   await assertNotSuspended(merchant.tenantId);

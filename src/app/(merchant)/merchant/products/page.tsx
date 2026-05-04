@@ -2,7 +2,6 @@
  * 商家商品列表 — 看自己所有商品 (透過 RLS, 只看到自己的)
  */
 import Link from 'next/link';
-import { cookies } from 'next/headers';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { products, orderItems, merchants } from '@/db/schema';
@@ -60,8 +59,7 @@ export default async function MerchantProductsList({
   const lowStockOnly = params.filter === 'low-stock';
   const healthFilter: HealthFilter | null = isHealthFilter(params.filter) ? params.filter : null;
 
-  const c = await cookies();
-  const merchant = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
+  const merchant = await resolveMerchantFromCookie();
 
   // 取 lowStockThreshold from merchants (RLS 過, 但商家自己看自己沒問題)
   const [merchantRow] = await dbAdmin

@@ -160,6 +160,70 @@ export default function OnboardingPage() {
               </p>
             </div>
 
+            {/* V2 task 104 — 商家登入帳密. approve 通過後用這組從 /merchant/login 進後台. */}
+            <div className="space-y-2">
+              <Label htmlFor="email" className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+                登入 email
+              </Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                required
+                maxLength={254}
+                autoComplete="email"
+                placeholder="you@example.com"
+                style={{
+                  borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+                  borderRadius: 'var(--brand-radius)',
+                }}
+              />
+              <p className="t-caption opacity-50">
+                審核通過後用這組 email 從 /merchant/login 登入後台
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="password" className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+                  密碼
+                </Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  minLength={8}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  placeholder="至少 8 字"
+                  style={{
+                    borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+                    borderRadius: 'var(--brand-radius)',
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="passwordConfirm" className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+                  再輸入一次密碼
+                </Label>
+                <Input
+                  id="passwordConfirm"
+                  name="passwordConfirm"
+                  type="password"
+                  required
+                  minLength={8}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  placeholder="確認密碼"
+                  style={{
+                    borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+                    borderRadius: 'var(--brand-radius)',
+                  }}
+                />
+              </div>
+            </div>
+
             {state.error && (
               <div
                 className="border p-3 text-sm"

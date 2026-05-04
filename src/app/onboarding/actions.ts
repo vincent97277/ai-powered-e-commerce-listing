@@ -20,6 +20,7 @@
 
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
+import { hash as bcryptHash } from 'bcryptjs';
 import { dbAdmin } from '@/db/admin-only';
 import { merchants } from '@/db/schema';
 import { isReservedSlug } from '@/lib/onboarding/reserved-slugs';
@@ -30,6 +31,11 @@ import {
 } from '@/lib/onboarding/rate-limit';
 
 const SLUG_REGEX = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/; // lowercase letters/digits/dash, 3-32 chars
+// V2 task 104 — basic email shape (RFC 5322 properly is huge, this is the pragmatic check
+// matching the same pattern used elsewhere; DB unique index is the source of truth on dups).
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 128;
 
 export type CreateMerchantState = {
   error?: string;
@@ -69,6 +75,11 @@ export async function createMerchantAction(
   const name = String(formData.get('name') ?? '').trim();
   const brandVoice = String(formData.get('brandVoice') ?? '').trim();
   const honeypot = String(formData.get('hp_url') ?? '').trim();
+  // V2 task 104 — login credentials. Lowercase email before hash check & persist (DB
+  // partial unique index is on lower(email)).
+  const email = String(formData.get('email') ?? '').trim().toLowerCase();
+  const password = String(formData.get('password') ?? '');
+  const passwordConfirm = String(formData.get('passwordConfirm') ?? '');
 
   const h = await headers();
   const ip = extractIp(h);
@@ -105,7 +116,25 @@ export async function createMerchantAction(
     return { error: `slug 「${slug}」是平台保留字, 換一個試試` };
   }
 
+  // ─── 4b. V2 task 104 — Email + password validation ───
+  // (放 reserved 後, slug 認過才檢查; 失敗都 log 'invalid_slug' 是 schema 限制 — 這個 enum
+  //  V1.7 D1 沒留 'invalid_credentials', 不為了這個 migrate enum, 借用 invalid_slug log.)
+  if (!EMAIL_REGEX.test(email) || email.length > 254) {
+    await logAttempt({ ip, slug, result: 'invalid_slug' });
+    return { error: 'Email 格式不正確' };
+  }
+  if (password.length < PASSWORD_MIN || password.length > PASSWORD_MAX) {
+    await logAttempt({ ip, slug, result: 'invalid_slug' });
+    return { error: `密碼必須 ${PASSWORD_MIN}-${PASSWORD_MAX} 字` };
+  }
+  if (password !== passwordConfirm) {
+    await logAttempt({ ip, slug, result: 'invalid_slug' });
+    return { error: '兩次輸入的密碼不一致' };
+  }
+
   // ─── 5. Insert merchant — approved_at = NULL (pending admin) ───
+  // bcrypt cost=10 (mirror loginMerchant 的 fake-hash cost). hash 在 try 外避免 try block 太大.
+  const passwordHash = await bcryptHash(password, 10);
   const theme = THEME_PICKS[Math.floor(Math.random() * THEME_PICKS.length)];
 
   try {
@@ -114,13 +143,24 @@ export async function createMerchantAction(
       .values({
         slug,
         name,
+        email,
+        passwordHash,
         brandVoice: brandVoice.slice(0, 200),
         themeVars: theme,
         // approvedAt 預設 null = pending; 留空不寫.
       })
       .returning({ id: merchants.id, slug: merchants.slug });
   } catch (err) {
-    if (err instanceof Error && err.message.toLowerCase().includes('duplicate')) {
+    // pg unique violation: SQLSTATE 23505. drizzle 把 message 漏出來時通常含
+    // "duplicate key value violates unique constraint <name>". 我們用 constraint 名稱
+    // 區分 slug vs email duplicate (不同訊息, 給使用者明確 hint).
+    const msg = err instanceof Error ? err.message.toLowerCase() : '';
+    if (msg.includes('duplicate') || msg.includes('unique')) {
+      // email constraint 名稱 = merchants_email_unique_idx (schema 0008)
+      if (msg.includes('email')) {
+        await logAttempt({ ip, slug, result: 'duplicate_slug' });
+        return { error: '此 email 已註冊, 換一個試試' };
+      }
       await logAttempt({ ip, slug, result: 'duplicate_slug' });
       return { error: `slug 「${slug}」已被使用, 換一個試試` };
     }
@@ -129,7 +169,8 @@ export async function createMerchantAction(
   }
 
   // ─── 6. Success: log + redirect to pending ───
-  // 注意: 不 set cookie. Admin 必須先 approve, 商家才能進後台.
+  // 注意: 不 set cookie / 不 auto-login. Admin 必須先 approve (V1.7 flow), 通過後商家
+  // 才能用 email + password 從 /merchant/login 進後台 (V2 task 104 flow).
   await logAttempt({ ip, slug, result: 'success' });
 
   // redirect 必須在 try 外面 (Next.js redirect 用 throw 機制)

@@ -19,7 +19,6 @@
  *
  * NOT 擋 suspended merchant — in-flight 訂單必須能完成流程
  */
-import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { orders, orderStatusHistory } from '@/db/schema';
@@ -40,8 +39,7 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
 const REFUND_RATE_LIMIT = 5; // 5 件 / 小時 / merchant
 
 async function getTenantId(): Promise<string> {
-  const c = await cookies();
-  const m = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
+  const m = await resolveMerchantFromCookie();
   return m.tenantId;
 }
 

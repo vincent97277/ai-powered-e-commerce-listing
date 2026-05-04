@@ -3,7 +3,6 @@
  * KPI 概覽 + 近 7 天訂單趨勢 + 商品上架轉換率 + 最近訂單 + 銷量 Top 3
  */
 import Link from 'next/link';
-import { cookies } from 'next/headers';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { products, orders, orderItems } from '@/db/schema';
@@ -17,8 +16,7 @@ import { EmptyState } from '@/components/feedback/EmptyState';
 export const dynamic = 'force-dynamic';
 
 export default async function MerchantDashboard() {
-  const c = await cookies();
-  const merchant = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
+  const merchant = await resolveMerchantFromCookie();
 
   // KPI 統計
   const [productStats] = await withTenantTx(merchant.tenantId, async (tx) => {

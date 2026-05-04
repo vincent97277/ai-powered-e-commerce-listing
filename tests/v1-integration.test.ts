@@ -37,6 +37,12 @@ import {
 import { and, count, eq, gt, sql } from 'drizzle-orm';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { createAdminSession, ADMIN_SESSION_COOKIE } from '@/lib/admin-session';
+import {
+  signSessionCookie as signMerchantSessionCookie,
+  MERCHANT_SESSION_COOKIE,
+} from '@/lib/merchant-session';
+import { merchantSessions } from '@/db/schema';
+import { randomUUID } from 'node:crypto';
 import { getHealthIssues } from '@/lib/merchant/health-checks';
 import { getInboxItems } from '@/lib/merchant/inbox';
 
@@ -126,6 +132,8 @@ afterAll(async () => {
   await dbAdmin.delete(orders).where(eq(orders.tenantId, T1));
   await dbAdmin.delete(products).where(eq(products.tenantId, T1));
   await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, T1));
+  // merchant_sessions FK ON DELETE CASCADE — 跟 merchants delete 一起清, 但保險刪 ip='integ-test'
+  await dbAdmin.delete(merchantSessions).where(sql`ip = 'integ-test'`);
   await dbAdmin.delete(merchants).where(eq(merchants.id, T1));
   await dbAdmin.delete(merchants).where(eq(merchants.id, T2));
   await dbAdmin.delete(adminSessions).where(sql`ip = 'integ-test'`);
@@ -401,13 +409,34 @@ describe('Admin actions: suspend / activate / rename_slug', () => {
 
 // ─────────────── HTTP integration ───────────────
 describe('HTTP routes integration', () => {
-  // Skip 整段如果 dev server 沒跑
+  // V2 task 105: /merchant/* 被 middleware 擋, 必須帶 merchant-session cookie.
+  // legacy demo-merchant-id cookie 已完全廢除 — 所有 (merchant) 測試都得用 minted session.
+  // beforeAll 建 T1 merchant_sessions row + 簽 cookie. 不依賴 login flow (T1 fixture 沒 password).
+  let t1MerchantCookie = '';
   beforeAll(async () => {
     try {
       await fetch(`${BASE}/`);
     } catch {
       console.warn('dev server 沒跑, HTTP integration 跳');
     }
+
+    if (!process.env.MERCHANT_SESSION_SECRET || process.env.MERCHANT_SESSION_SECRET.length < 32) {
+      console.warn(
+        'MERCHANT_SESSION_SECRET 未設定 (≥ 32 chars) — V2 (merchant)/* HTTP smoke 將全 redirect 到 /merchant/login',
+      );
+      return;
+    }
+    const sid = randomUUID();
+    await dbAdmin
+      .insert(merchantSessions)
+      .values({
+        id: sid,
+        merchantId: T1,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hr
+        ip: 'integ-test',
+      })
+      .onConflictDoNothing();
+    t1MerchantCookie = `${MERCHANT_SESSION_COOKIE}=${signMerchantSessionCookie(sid)}`;
   });
 
   async function tryFetch(path: string, init?: RequestInit) {
@@ -418,8 +447,7 @@ describe('HTTP routes integration', () => {
     }
   }
 
-  it('Route 200 (cookie set)', async () => {
-    const cookie = `demo-merchant-id=${T1}`;
+  it('Route 200 (公開頁面, 無需 auth cookie)', async () => {
     const paths = [
       '/',
       '/admin/login',
@@ -430,7 +458,7 @@ describe('HTTP routes integration', () => {
       '/onboarding',
     ];
     for (const p of paths) {
-      const r = await tryFetch(p, { headers: { cookie } });
+      const r = await tryFetch(p);
       if (r) expect(r.status, `${p}`).toBe(200);
     }
   });
@@ -491,11 +519,12 @@ describe('HTTP routes integration', () => {
   });
 
   it('SSRF: POST /api/products/import with evil URL → 400', async () => {
+    if (!t1MerchantCookie) return;
     const r = await tryFetch('/api/products/import', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        cookie: `demo-merchant-id=${T1}`,
+        cookie: t1MerchantCookie,
       },
       body: JSON.stringify({ url: 'https://evil.com/x', type: 'ig' }),
     });
@@ -506,11 +535,12 @@ describe('HTTP routes integration', () => {
   });
 
   it('SSRF: localhost → 400', async () => {
+    if (!t1MerchantCookie) return;
     const r = await tryFetch('/api/products/import', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        cookie: `demo-merchant-id=${T1}`,
+        cookie: t1MerchantCookie,
       },
       body: JSON.stringify({ url: 'https://localhost/x', type: 'ig' }),
     });
@@ -519,11 +549,12 @@ describe('HTTP routes integration', () => {
   });
 
   it('Type mismatch: IG type with shopee URL → 400', async () => {
+    if (!t1MerchantCookie) return;
     const r = await tryFetch('/api/products/import', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        cookie: `demo-merchant-id=${T1}`,
+        cookie: t1MerchantCookie,
       },
       body: JSON.stringify({ url: 'https://shopee.tw/x', type: 'ig' }),
     });
@@ -534,13 +565,14 @@ describe('HTTP routes integration', () => {
   });
 
   it('Suspended merchant: POST /api/products/generate → 403', async () => {
+    if (!t1MerchantCookie) return;
     await dbAdmin.update(merchants).set({ suspendedAt: new Date() }).where(eq(merchants.id, T1));
 
     const r = await tryFetch('/api/products/generate', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        cookie: `demo-merchant-id=${T1}`,
+        cookie: t1MerchantCookie,
       },
       body: JSON.stringify({ storageKey: `${T1}/x.jpg` }),
     });
@@ -599,8 +631,9 @@ describe('HTTP routes integration', () => {
   });
 
   it('Print CSS @media print 在訂單 detail page', async () => {
+    if (!t1MerchantCookie) return;
     const r = await tryFetch(`/merchant/orders/${ORDER_PENDING}`, {
-      headers: { cookie: `demo-merchant-id=${T1}` },
+      headers: { cookie: t1MerchantCookie },
     });
     if (!r) return;
     expect(r.status).toBe(200);
@@ -612,8 +645,9 @@ describe('HTTP routes integration', () => {
   });
 
   it('Pending callout 在 dashboard with chip 連結', async () => {
+    if (!t1MerchantCookie) return;
     const r = await tryFetch('/merchant', {
-      headers: { cookie: `demo-merchant-id=${T1}` },
+      headers: { cookie: t1MerchantCookie },
     });
     if (!r) return;
     expect(r.status).toBe(200);
@@ -624,8 +658,9 @@ describe('HTTP routes integration', () => {
   });
 
   it('商品列表 sort dropdown + low-stock filter', async () => {
+    if (!t1MerchantCookie) return;
     const r1 = await tryFetch('/merchant/products?filter=low-stock', {
-      headers: { cookie: `demo-merchant-id=${T1}` },
+      headers: { cookie: t1MerchantCookie },
     });
     if (!r1) return;
     expect(r1.status).toBe(200);
@@ -634,15 +669,16 @@ describe('HTTP routes integration', () => {
     expect(html1).not.toContain('Integ product 2'); // stock=50
 
     const r2 = await tryFetch('/merchant/products?sort=stock', {
-      headers: { cookie: `demo-merchant-id=${T1}` },
+      headers: { cookie: t1MerchantCookie },
     });
     if (!r2) return;
     expect(r2.status).toBe(200);
   });
 
   it('Settings page 顯示 lowStockThreshold + dailyAiCostCentsCap', async () => {
+    if (!t1MerchantCookie) return;
     const r = await tryFetch('/merchant/settings', {
-      headers: { cookie: `demo-merchant-id=${T1}` },
+      headers: { cookie: t1MerchantCookie },
     });
     if (!r) return;
     expect(r.status).toBe(200);
@@ -652,8 +688,9 @@ describe('HTTP routes integration', () => {
   });
 
   it('Order list filter chips 全部存在', async () => {
+    if (!t1MerchantCookie) return;
     const r = await tryFetch('/merchant/orders', {
-      headers: { cookie: `demo-merchant-id=${T1}` },
+      headers: { cookie: t1MerchantCookie },
     });
     if (!r) return;
     const html = await r.text();
@@ -666,8 +703,9 @@ describe('HTTP routes integration', () => {
   });
 
   it('Order detail 渲染 audit timeline', async () => {
+    if (!t1MerchantCookie) return;
     const r = await tryFetch(`/merchant/orders/${ORDER_PENDING}`, {
-      headers: { cookie: `demo-merchant-id=${T1}` },
+      headers: { cookie: t1MerchantCookie },
     });
     if (!r) return;
     const html = await r.text();
@@ -690,9 +728,12 @@ describe('HTTP routes integration', () => {
   });
 
   it('Hackathon 字樣 0 in serve HTML', async () => {
+    // /merchant 需 auth cookie; 其他公開頁不用. 沒 session 時 /merchant 會 redirect 到 login.
+    // 只要 final HTML (不論 page) 不含 hackathon 即可 — login page 也 count.
+    const cookie = t1MerchantCookie || '';
     const paths = ['/', '/merchant', '/admin/login', '/about'];
     for (const p of paths) {
-      const r = await tryFetch(p, { headers: { cookie: `demo-merchant-id=${T1}` } });
+      const r = await tryFetch(p, cookie ? { headers: { cookie } } : undefined);
       if (!r) continue;
       const html = await r.text();
       expect(html, `${p} contains hackathon`).not.toMatch(/Hackathon|hackathon/);
@@ -711,9 +752,10 @@ describe('HTTP routes integration', () => {
   });
 
   it('GET /api/products/import/[invalid-id] → 404 (RLS 過濾為 null)', async () => {
+    if (!t1MerchantCookie) return;
     const r = await tryFetch(
       '/api/products/import/00000000-0000-0000-0000-000000000000',
-      { headers: { cookie: `demo-merchant-id=${T1}` } },
+      { headers: { cookie: t1MerchantCookie } },
     );
     if (!r) return;
     expect(r.status).toBe(404);

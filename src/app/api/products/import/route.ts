@@ -29,7 +29,7 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    const merchant = await resolveMerchantFromCookie(req.cookies.get('demo-merchant-id')?.value);
+    const merchant = await resolveMerchantFromCookie();
 
     // 停權商家擋
     try {

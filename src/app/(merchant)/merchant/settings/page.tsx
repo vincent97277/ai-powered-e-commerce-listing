@@ -1,7 +1,6 @@
 /**
  * 商家設定頁 — 改店名、slug、品牌語氣、主題顏色
  */
-import { cookies } from 'next/headers';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { dbAdmin } from '@/db/admin-only';
 import { merchants } from '@/db/schema';
@@ -13,8 +12,7 @@ import { DailyCostChip } from './DailyCostChip';
 export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
-  const c = await cookies();
-  const current = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
+  const current = await resolveMerchantFromCookie();
 
   // 撈完整 merchant (含 themeVars)
   const [m] = await dbAdmin
