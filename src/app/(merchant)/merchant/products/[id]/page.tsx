@@ -3,7 +3,6 @@
  * 透過 RLS 確保只看得到自己的商品
  */
 import { notFound } from 'next/navigation';
-import { cookies } from 'next/headers';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { products, merchants } from '@/db/schema';
 import { eq } from 'drizzle-orm';
@@ -27,8 +26,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const c = await cookies();
-  const tenant = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
+  const tenant = await resolveMerchantFromCookie();
 
   // 不是 UUID 直接 404
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();

@@ -1,15 +1,27 @@
 /**
- * 商家後台 layout — 從 DB 撈所有 merchants 給 switcher，cookie 解析當前 merchant
+ * 商家後台 layout (V2 task 105)
+ *
+ * Per-merchant auth: 一次只進一家店. 從 merchant-session cookie 解出當前 merchant,
+ * ThemeProvider 只收這一家的 themeVars (不再撈 top 10, 沒有 switcher 概念).
+ *
+ * Auth flow:
+ *   1. middleware 已驗 HMAC (Edge runtime)
+ *   2. 這裡 validateMerchantSession() 做 DB row liveness + revoked + expires (E11 defense-in-depth)
+ *   3. session 失效 → redirect /merchant/login (跟 resolveMerchantFromCookie 同步進)
+ *   4. row 撈到 → render header + banner (suspended / pending approval)
+ *
+ * 注意: 不能直接呼叫 resolveMerchantFromCookie() 因為這裡需要 themeVars + suspended/pending
+ *      狀態, 所以重複一次 query (cheap, 同 DB row, 一次 round trip).
  */
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { eq } from 'drizzle-orm';
 import { dbAdmin } from '@/db/admin-only';
 import { merchants as merchantsTable } from '@/db/schema';
 import { ThemeProvider, type MerchantInfo } from '@/components/theme/ThemeProvider';
-import { MerchantSwitcher } from '@/components/theme/MerchantSwitcher';
 import { DemoModeToggle } from '@/components/demo/DemoModeToggle';
 import { RainbowLogo } from '@/components/demo/RainbowLogo';
-import { DEMO_MERCHANTS, DEMO_MERCHANT_COOKIE } from '@/lib/storage/demo-merchants';
-import { count, desc, eq, isNotNull } from 'drizzle-orm';
+import { MERCHANT_SESSION_COOKIE, validateMerchantSession } from '@/lib/merchant-session';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,12 +37,15 @@ const EMOJI_MAP: Record<string, string> = {
 
 export default async function MerchantLayout({ children }: { children: React.ReactNode }) {
   const c = await cookies();
-  const cookieValue = c.get(DEMO_MERCHANT_COOKIE)?.value;
+  const cookieValue = c.get(MERCHANT_SESSION_COOKIE)?.value;
 
-  // V1.7 D2: 不再 SELECT all (>50 商家會炸 DOM). 改撈 top 10 most recently active
-  // approved merchants 給 dropdown, 加 totalCount 給「查看全部」link 判斷.
-  // Current merchant 若不在 top 10 必須單獨補撈 (theme/suspended/pending banner 需要).
-  const topRows = await dbAdmin
+  const session = await validateMerchantSession(cookieValue);
+  if (!session) {
+    redirect('/merchant/login?next=/merchant');
+  }
+
+  // 撈當前 merchant 完整 row (theme + banner state). 一次 query 夠.
+  const [currentRow] = await dbAdmin
     .select({
       id: merchantsTable.id,
       slug: merchantsTable.slug,
@@ -41,83 +56,32 @@ export default async function MerchantLayout({ children }: { children: React.Rea
       approvedAt: merchantsTable.approvedAt,
     })
     .from(merchantsTable)
-    .where(isNotNull(merchantsTable.approvedAt))
-    .orderBy(desc(merchantsTable.updatedAt))
-    .limit(10);
+    .where(eq(merchantsTable.id, session.merchantId))
+    .limit(1);
 
-  const [totalCountRow] = await dbAdmin
-    .select({ n: count(merchantsTable.id) })
-    .from(merchantsTable)
-    .where(isNotNull(merchantsTable.approvedAt));
-  const totalCount = totalCountRow?.n ?? 0;
-
-  // 解析當前 merchant id (cookie 可能是 'akami'/'afen' slug 或 UUID)
-  let resolvedId = '';
-  if (cookieValue) {
-    if (cookieValue === 'akami' || cookieValue === 'afen') {
-      resolvedId = DEMO_MERCHANTS[cookieValue].tenantId;
-    } else if (/^[0-9a-f-]{36}$/i.test(cookieValue)) {
-      resolvedId = cookieValue;
-    }
+  // Row 被刪 (admin 操作 / 資料漂移) → force re-login.
+  if (!currentRow) {
+    redirect('/merchant/login?next=/merchant');
   }
 
-  // 若 current 不在 top 10 (e.g. 久未活動的商家), 額外撈一次以取得 themeVars + banner state
-  let currentRow = resolvedId ? topRows.find((r) => r.id === resolvedId) : undefined;
-  if (resolvedId && !currentRow) {
-    const [extra] = await dbAdmin
-      .select({
-        id: merchantsTable.id,
-        slug: merchantsTable.slug,
-        name: merchantsTable.name,
-        themeVars: merchantsTable.themeVars,
-        suspendedAt: merchantsTable.suspendedAt,
-        suspendedReason: merchantsTable.suspendedReason,
-        approvedAt: merchantsTable.approvedAt,
-      })
-      .from(merchantsTable)
-      .where(eq(merchantsTable.id, resolvedId))
-      .limit(1);
-    if (extra) currentRow = extra;
-  }
-  // Fallback: cookie 失效或商家被刪 → 用 top[0]
-  if (!currentRow && topRows[0]) {
-    currentRow = topRows[0];
-  }
-  const currentId = currentRow?.id ?? '';
+  const currentMerchant: MerchantInfo = {
+    id: currentRow.id,
+    slug: currentRow.slug,
+    name: currentRow.name,
+    emoji: EMOJI_MAP[currentRow.slug],
+    tagline: TAGLINE_MAP[currentRow.slug],
+    themeVars: (currentRow.themeVars ?? {}) as Record<string, string>,
+  };
 
-  // ThemeProvider 需要 current merchant 的 themeVars; 把 current row union 進去 (de-dup by id)
-  const allRows = currentRow && !topRows.find((r) => r.id === currentRow!.id)
-    ? [...topRows, currentRow]
-    : topRows;
-
-  const merchants: MerchantInfo[] = allRows.map((r) => ({
-    id: r.id,
-    slug: r.slug,
-    name: r.name,
-    emoji: EMOJI_MAP[r.slug],
-    tagline: TAGLINE_MAP[r.slug],
-    themeVars: (r.themeVars ?? {}) as Record<string, string>,
-  }));
-
-  const topMerchants = topRows.map((r) => ({
-    id: r.id,
-    slug: r.slug,
-    name: r.name,
-  }));
-
-  const isSuspended = currentRow?.suspendedAt != null;
-  const suspendedReason = currentRow?.suspendedReason ?? null;
-  // V1.7 D1: 是否還在等 admin approve? approved_at IS NULL → pending.
-  // suspended 比 pending 嚴重, 兩個 banner 都顯示不衝突 (不同 message).
-  // 注意: top 10 query 已 filter approved_at IS NOT NULL, 所以只有 fallback 撈到的 currentRow
-  // 才可能 pending — 表示使用者剛 onboarding 完還在等 admin 核可.
-  const isPendingApproval = currentRow != null && currentRow.approvedAt == null;
-  const currentForSwitcher = currentRow
-    ? { id: currentRow.id, slug: currentRow.slug, name: currentRow.name }
-    : { id: '', slug: 'unknown', name: '未知商家' };
+  const isSuspended = currentRow.suspendedAt != null;
+  const suspendedReason = currentRow.suspendedReason ?? null;
+  // approved_at IS NULL → 還在等 admin 核可. 注意 resolveMerchantFromCookie 會 redirect 掉
+  // pending merchant; 但 layout 比 resolveMerchantFromCookie 早跑, banner 可能短暫顯示 — 無傷.
+  const isPendingApproval = currentRow.approvedAt == null;
+  const currentName = currentRow.name;
 
   return (
-    <ThemeProvider merchants={merchants} initialMerchantId={currentId}>
+    <ThemeProvider merchants={[currentMerchant]} initialMerchantId={currentRow.id}>
       {isPendingApproval && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:px-8 lg:px-12">
           <strong>您的帳號正在等待 admin 審核</strong>
@@ -150,11 +114,35 @@ export default async function MerchantLayout({ children }: { children: React.Rea
             Catalogify
           </div>
         </RainbowLogo>
-        <MerchantSwitcher
-          current={currentForSwitcher}
-          topMerchants={topMerchants}
-          totalCount={totalCount}
-        />
+        {/*
+          V2 task 105 — 沒有 MerchantSwitcher. Per-merchant auth = 一次只進一家店.
+          header 只顯示當前商家名 + 登出按鈕. form POST → /merchant/logout 純 server-rendered.
+        */}
+        <div className="flex items-center gap-3">
+          <span
+            className="text-sm font-semibold"
+            style={{
+              fontFamily: 'var(--brand-font-heading)',
+              color: 'var(--brand-text)',
+            }}
+          >
+            {currentName}
+          </span>
+          <form action="/merchant/logout" method="POST">
+            <button
+              type="submit"
+              className="rounded border px-3 py-1.5 text-xs font-medium transition hover:opacity-80"
+              style={{
+                borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+                color: 'var(--brand-primary)',
+                backgroundColor: 'color-mix(in srgb, var(--brand-primary) 4%, transparent)',
+                borderRadius: 'var(--brand-radius)',
+              }}
+            >
+              登出
+            </button>
+          </form>
+        </div>
       </header>
       {children}
       <DemoModeToggle />

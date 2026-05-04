@@ -23,8 +23,7 @@ export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
-    const cookieValue = req.cookies.get('demo-merchant-id')?.value;
-    const merchant = await resolveMerchantFromCookie(cookieValue);
+    const merchant = await resolveMerchantFromCookie();
 
     // V1 #53: 停權商家不可上架
     try {

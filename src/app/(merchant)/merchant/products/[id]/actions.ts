@@ -3,7 +3,6 @@
 /**
  * 商家商品 CRUD server actions
  */
-import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { withTenantTx } from '@/lib/db/with-tenant';
@@ -13,8 +12,7 @@ import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { assertNotSuspended } from '@/lib/merchant/suspend-guard';
 
 async function resolveTenantIdFromCookie(): Promise<string> {
-  const c = await cookies();
-  const m = await resolveMerchantFromCookie(c.get('demo-merchant-id')?.value);
+  const m = await resolveMerchantFromCookie();
   return m.tenantId;
 }
 
