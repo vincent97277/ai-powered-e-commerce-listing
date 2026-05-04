@@ -1,6 +1,6 @@
 /**
  * Drizzle schema — V1 schema (7 張表) (繁中註解)
- * RLS 由 0001_init_rls.sql 負責，本檔只定義結構。
+ * RLS 由 0001a_init_rls.sql 負責，本檔只定義結構。
  * tenant_id 欄位 = pool model 多租戶 key，所有 tenant-scoped 表必備。
  */
 import {

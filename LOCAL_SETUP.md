@@ -88,7 +88,7 @@ pnpm db:migrate
 
 `db:migrate` runs the custom SQL migration runner at `scripts/db/migrate.ts`. It reads every `drizzle/migrations/*.sql` (excluding `.rollback.sql`), tracks applied filenames in a `__migrations__` table, and runs each unapplied file in its own transaction.
 
-V2.2.0 reason for the custom runner: drizzle-kit's `migrate` only walks its own `_journal.json`, which only tracked 0000-0002. Hand-written RLS / feature migrations (0001_init_rls, 0003-0008) were never journaled and were applied historically via manual `psql` or `db:push`. This runner fixes that — `pnpm db:migrate` now applies everything in lexical order, idempotent.
+V2.2.0 reason for the custom runner: drizzle-kit's `migrate` only walks its own `_journal.json`, which only tracked 0000-0002. Hand-written RLS / feature migrations (`0001a_init_rls`, `0003-0008`) were never journaled and were applied historically via manual `psql` or `db:push`. This runner fixes that — `pnpm db:migrate` now applies everything in lexical order, idempotent. (V2.2.10 renamed `0001_init_rls.sql` → `0001a_init_rls.sql` to disambiguate from drizzle-generated `0001_confused_stone_men.sql`.)
 
 ```bash
 pnpm db:migrate:status           # show which migrations are applied / pending

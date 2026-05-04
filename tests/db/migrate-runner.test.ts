@@ -75,7 +75,7 @@ describe('migration runner', () => {
       expect(rows.map((r) => r.filename)).toEqual([
         '0000_moaning_mimic.sql',
         '0001_confused_stone_men.sql',
-        '0001_init_rls.sql',
+        '0001a_init_rls.sql',
         '0002_low_wonder_man.sql',
         '0003_v1_rls.sql',
         '0004_v15_provider_col.sql',

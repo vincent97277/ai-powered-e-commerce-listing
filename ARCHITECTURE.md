@@ -112,7 +112,7 @@ Migration history (`drizzle/migrations/`):
 | Migration | What | Version |
 |---|---|---|
 | `0000_moaning_mimic` | Initial Drizzle-generated schema | V1 P1 |
-| `0001_init_rls` | `web_anon` / `web_admin` roles + base RLS | V1 P1 |
+| `0001a_init_rls` | `web_anon` / `web_admin` roles + base RLS (renamed from `0001_init_rls` in V2.2.10 to disambiguate from drizzle-generated `0001_*`) | V1 P1 |
 | `0002_low_wonder_man` | V1 column expansion (16 columns) | V1 P1 |
 | `0003_v1_rls` | Tenant policies + `WITH CHECK` everywhere | V1 P1 |
 | `0004_v15_provider_col` | `import_sessions.provider` (Gemini era) | V1.5 |
@@ -329,7 +329,13 @@ UI code that wants to read tenant data must use `dbUser` + `withTenantTx`. CI fa
 
 The /autoplan eng review flagged that earlier docs claimed "RLS mitigates container compromise." That claim was overstated and is corrected here.
 
-**Reality:** `DATABASE_URL_ADMIN` (which uses the `web_admin` role with `BYPASSRLS`) is mounted as an environment variable in every server runtime — Vercel function, Cloud Run container, local Node process. Any code path executing inside that runtime has access to a connection that bypasses RLS.
+**Reality:** `DATABASE_URL_ADMIN` (which uses the `web_admin` role with `BYPASSRLS`) is mounted as an environment variable in every server runtime — Vercel function, Cloud Run container, local Node process, AND the Inngest worker runtime. Any code path executing inside any of those runtimes has access to a connection that bypasses RLS.
+
+The Inngest worker (`src/inngest/functions/product-ingest.ts`) is its own attack surface beyond the Vercel functions. Two compromise paths to keep in mind:
+- **Inngest signing key leak** → attacker can publish arbitrary `product.ingest` events with arbitrary `tenantId`. Worker treats event payload as trusted, so this means writes against any merchant's data, OpenAI cost burn against any merchant's daily cap, etc.
+- **Worker runtime compromise** → same `dbAdmin` exposure as a Vercel function compromise.
+
+Treat `INNGEST_SIGNING_KEY` with the same care as `*_SESSION_SECRET`: rotate it on any Inngest dashboard access change, never log it, never paste in screen-shares.
 
 **What this means:**
 - An RCE in any server route, server action, or Inngest worker = full read/write access to all tenants' data, regardless of RLS.

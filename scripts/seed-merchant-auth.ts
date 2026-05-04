@@ -57,6 +57,44 @@ function pickMode(): Mode {
 }
 
 /**
+ * V2.2.10 / autoplan v2 F19 guard — refuse dev-mode seed against an external DB.
+ *
+ * Failure mode it prevents: operator runs `pnpm tsx scripts/seed-merchant-auth.ts`
+ * with DATABASE_URL_ADMIN pointed at Neon (or any non-local host) but forgets to
+ * set NODE_ENV=production / --mode=prod. Defaults to dev mode → seeds shared
+ * `demo1234` password to all merchants → public backdoor.
+ *
+ * Heuristic: if the admin URL host is NOT localhost / 127.0.0.1 / docker host,
+ * treat it as external and require explicit `--mode=` (prod or dev — both fine
+ * once explicit, this guards against the silent default).
+ */
+function assertSafeForMode(mode: Mode): void {
+  const adminUrl = process.env.DATABASE_URL_ADMIN;
+  if (!adminUrl) return; // env zod will catch this elsewhere
+  const hostMatch = adminUrl.match(/@([^:/]+)/);
+  const host = hostMatch?.[1]?.toLowerCase() ?? '';
+  const isLocal =
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '::1' ||
+    host === 'host.docker.internal' ||
+    host.endsWith('.local');
+  if (isLocal) return;
+
+  const explicitFlag = process.argv.some((a) => a.startsWith('--mode='));
+  if (mode === 'dev' && !explicitFlag) {
+    throw new Error(
+      `Refusing dev-mode seed against non-local DB host (${host}).\n` +
+        `Dev mode would set every merchant's password to "demo1234" — a public backdoor.\n` +
+        `Either:\n` +
+        `  - Set NODE_ENV=production (auto-selects prod mode), or\n` +
+        `  - Pass --mode=prod (random per-merchant passwords + suspended), or\n` +
+        `  - Pass --mode=dev EXPLICITLY if you really want demo1234 against ${host}.`,
+    );
+  }
+}
+
+/**
  * Generate a 16-char URL-safe random password (~96 bits of entropy via base64url).
  * Strong enough that brute-force is infeasible; short enough to copy-paste.
  */
@@ -66,6 +104,7 @@ function generateRandomPassword(): string {
 
 async function main() {
   const mode = pickMode();
+  assertSafeForMode(mode);
   const { dbAdmin } = await import('../src/db/admin-only');
   const { merchants } = await import('../src/db/schema');
 

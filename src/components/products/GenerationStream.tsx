@@ -109,17 +109,28 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
             );
           }
 
-          // Poll for worker completion. 30s total budget at 1.5s interval = 20 attempts.
+          // Poll for worker completion. 45s budget at 1.5s interval = 30 attempts.
+          // V2.2.10 / autoplan v2 F10: budget bumped from 30s to 45s because Neon
+          // autosuspend cold (~2s) + Vercel fn cold (~1s) + Inngest dispatch
+          // (~1s) + vision (5-15s) can compound past 30s on first request of the
+          // day. Past 20s elapsed we update the reassurance copy so the user
+          // knows we're still working, not stuck.
           const POLL_INTERVAL_MS = 1500;
-          const POLL_BUDGET_MS = 30_000;
+          const POLL_BUDGET_MS = 45_000;
+          const SLOW_HINT_AT_MS = 20_000;
           const start_ts = Date.now();
           let result:
             | { status: 'success'; productId: string; data: ProductOutput }
             | { status: 'failed'; productId?: string; error: string }
             | null = null;
+          let slowHintShown = false;
 
           while (Date.now() - start_ts < POLL_BUDGET_MS) {
             await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+            if (!slowHintShown && Date.now() - start_ts > SLOW_HINT_AT_MS) {
+              slowHintShown = true;
+              toast.info('處理時間較長，再稍候一下...', { duration: 4000 });
+            }
             const statusRes = await fetch(
               `/api/products/generate/status?storageKey=${encodeURIComponent(uploadJson.key)}`,
             );
@@ -133,7 +144,7 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           setVisionLoading(false);
 
           if (!result) {
-            throw new Error('AI 處理超時 (30 秒) — Inngest dev CLI 是否在跑?');
+            throw new Error('AI 處理超時 (45 秒) — Inngest worker 是否在跑?');
           }
           if (result.status === 'failed') {
             throw new Error(result.error);

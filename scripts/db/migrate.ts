@@ -2,7 +2,7 @@
  * Custom SQL migration runner.
  *
  * V2.2.0 reason: drizzle-kit's journal only tracks 0000-0002 (drizzle-generated),
- * but we have hand-written RLS / feature migrations 0001_init_rls + 0003-0008
+ * but we have hand-written RLS / feature migrations 0001a_init_rls + 0003-0008
  * that drizzle-kit migrate refuses to run. Local dev historically used `db:push`
  * (schema push, not migrations) plus manual psql for RLS — fragile, won't work
  * on Neon prod.
@@ -30,10 +30,28 @@ dotenv.config({ path: '.env.local' });
 
 const MIGRATIONS_DIR = join(process.cwd(), 'drizzle', 'migrations');
 
+/**
+ * Filename contract: 4 digits, then optional letter suffix, then '_', then desc.
+ * Examples that pass: 0000_init.sql, 0001a_init_rls.sql, 0008_v2_merchant_auth.sql
+ * Examples that fail: 8_init.sql, 0008.5_hotfix.sql, init_0001.sql
+ *
+ * Letter suffix (a/b/c) lets you slot a hand-written migration between two
+ * drizzle-generated ones without renaming everything downstream.
+ */
+const FILENAME_RE = /^\d{4}[a-z]?_[a-z0-9_-]+\.sql$/i;
+
 function listMigrationFiles(): string[] {
-  return readdirSync(MIGRATIONS_DIR)
+  const files = readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith('.sql') && !f.endsWith('.rollback.sql'))
     .sort();
+
+  const malformed = files.filter((f) => !FILENAME_RE.test(f));
+  if (malformed.length > 0) {
+    throw new Error(
+      `Malformed migration filenames (must match /^\\d{4}[a-z]?_.+\\.sql$/):\n  ${malformed.join('\n  ')}`,
+    );
+  }
+  return files;
 }
 
 async function ensureMigrationsTable(client: Client): Promise<void> {
