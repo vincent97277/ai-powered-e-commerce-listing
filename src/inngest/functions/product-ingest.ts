@@ -20,11 +20,7 @@ import { inngest } from '../client';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { dbAdmin } from '@/db/admin-only';
 import { importSessions, merchants, products, type ProductAiMetadata } from '@/db/schema';
-import {
-  readFileLocal,
-  writeProcessedLocal,
-  getPublicUrl,
-} from '@/lib/storage/local-fs';
+import { readFile, writeProcessed, getPublicUrl } from '@/lib/storage';
 
 export const productIngestFn = inngest.createFunction(
   {
@@ -40,7 +36,7 @@ export const productIngestFn = inngest.createFunction(
 
     // Step 1: 從本地讀原始照片
     const originalBuffer = await step.run('read-from-fs', async () => {
-      const buf = await readFileLocal(r2Key);
+      const buf = await readFile(r2Key);
       return buf.toString('base64');
     });
 
@@ -58,7 +54,7 @@ export const productIngestFn = inngest.createFunction(
     // Step 3: 寫處理過的版本到本地
     const processedKey = await step.run('write-processed', async () => {
       const buf = Buffer.from(processed.base64, 'base64');
-      const { key } = await writeProcessedLocal(tenantId, buf);
+      const { key } = await writeProcessed(tenantId, buf);
       return key;
     });
 

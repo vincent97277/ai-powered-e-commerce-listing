@@ -8,7 +8,7 @@
  * Response: { success: true, data: ProductOutput, productId } | { success: false, error: string }
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { readFileLocal } from '@/lib/storage/local-fs';
+import { readFile } from '@/lib/storage';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { assertNotSuspended, MerchantSuspendedError } from '@/lib/merchant/suspend-guard';
 import { withTenantTx } from '@/lib/db/with-tenant';
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 讀檔 + 縮圖
-    const original = await readFileLocal(storageKey);
+    const original = await readFile(storageKey);
     const processed = await sharp(original)
       .rotate()
       .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })

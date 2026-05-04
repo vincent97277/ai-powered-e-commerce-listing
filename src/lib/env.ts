@@ -40,6 +40,15 @@ function assertTlsInProd(value: string | undefined, varName: string): void {
 
 function buildSchema() {
   const isProd = process.env.NODE_ENV === 'production';
+  const usingR2 = process.env.STORAGE_BACKEND === 'r2';
+  // Storage env: when STORAGE_BACKEND=r2 these are required. Always validated
+  // as strings if present so a typo in dev surfaces during startup.
+  const r2Endpoint = usingR2 && isProd ? z.string().url() : z.string().url().optional();
+  const r2KeyId = usingR2 && isProd ? z.string().min(8) : z.string().optional();
+  const r2Secret = usingR2 && isProd ? z.string().min(8) : z.string().optional();
+  const r2Bucket = usingR2 && isProd ? z.string().min(1) : z.string().optional();
+  const r2PublicUrl = usingR2 && isProd ? z.string().url() : z.string().url().optional();
+
   return z.object({
     DATABASE_URL: z.string().url().optional(),
     DATABASE_URL_USER: z.string().url(),
@@ -53,6 +62,12 @@ function buildSchema() {
     ADMIN_PASSWORD: z.string().min(1),
     ADMIN_SESSION_SECRET: z.string().min(32),
     MERCHANT_SESSION_SECRET: z.string().min(32),
+    STORAGE_BACKEND: z.enum(['local', 'r2']).default('local'),
+    R2_ENDPOINT: r2Endpoint,
+    R2_ACCESS_KEY_ID: r2KeyId,
+    R2_SECRET_ACCESS_KEY: r2Secret,
+    R2_BUCKET: r2Bucket,
+    R2_PUBLIC_URL: r2PublicUrl,
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   });
 }

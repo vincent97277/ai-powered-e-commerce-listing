@@ -9,7 +9,7 @@
  * - 限制 10MB / 圖片類型
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFileLocal } from '@/lib/storage/local-fs';
+import { writeFile } from '@/lib/storage';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 
 export const runtime = 'nodejs';
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { key, publicUrl } = await writeFileLocal(
+    const { key, publicUrl } = await writeFile(
       merchant.tenantId,
       buffer,
       file.type,
