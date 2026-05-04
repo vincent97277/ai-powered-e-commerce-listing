@@ -79,11 +79,13 @@ jobs:
       - name: Bootstrap RLS roles in CI postgres
         # Uses the same prod-roles.template.sql shipped in V2.2.3, with throwaway
         # CI passwords. Verifies the template + the role split pattern at the same
-        # time as setting up the test fixtures.
+        # time as setting up the test fixtures. --set ON_ERROR_STOP=on so any
+        # template error fails the step (psql defaults to continuing past errors).
         env:
           PGPASSWORD: ci_owner_pass
         run: |
           psql -h localhost -U ci_owner -d demo_sass_2_ci \
+            --set ON_ERROR_STOP=on \
             -v "web_anon_password=ci_anon_pw" \
             -v "web_admin_password=ci_admin_pw" \
             -f db/init/prod-roles.template.sql
