@@ -21,6 +21,7 @@ Version-by-version progression for `demo-sass-2`. This replaces the older `V1_ST
 | V1.9.1 | 2026-05-04 | Stock edit + input/textarea brand-radius bugfixes | 160 → 164 | — | `4c762de` |
 | V2.0 | 2026-05-04 | Per-merchant authentication (email + password + DB sessions) | 164 → 195 | 0008 | `f96e02e` (PR #1) |
 | V2.1 | 2026-05-04 | 18 theme presets + brand-voice auto-match + radius save fix | 195 → 211 | — | `6da0489` |
+| V2.1.2 | 2026-05-04 | Preset dropdown 持久顯示 + theme FOUC 消除 (server-render `<style>`) | 211 | — | `1897aac` |
 
 Bottom line: **211 vitest tests, 25-step manual smoke, 9 forward + 9 rollback migrations.**
 
@@ -363,6 +364,27 @@ Previous state: `THEME_PICKS` array in onboarding had 3 themes, picked randomly.
 **Process notes**:
 - Sub-agent pushed directly to `main` (skipped feature branch + PR workflow we set up in V2.0). Future sprints should use feature branch + PR per the established convention.
 - Dev server HMR cache went stale after the major edits (themes lib + ThemeProvider) — required restart before integration tests passed. Recurring pattern; consider documenting as a known dev-time gotcha.
+
+---
+
+## V2.1.2 — Preset dropdown 持久 + theme FOUC 消除 (`1897aac`)
+
+**Why this version**: Two follow-up issues from V2.1 walk-through.
+
+**Issue 1 — 套用預設主題後 dropdown 還顯示「自訂(不套用)」**:
+- Old: `<select defaultValue="">` (uncontrolled) + onChange 套完手動 `e.target.value = ''` 重設.
+- User read this as "didn't apply" because copy literally said "不套用".
+
+**Fix**: Track `appliedPresetId` in state. Dropdown becomes controlled `<select value={appliedPresetId}>`. Initial state detects if current themeVars match a preset (existing demo merchants 5/5 match, so dropdown shows their preset on first load). Manually editing any of 5 fields (color/radius/font) → `setAppliedPresetId('')` reverts to "自訂". Copy updated: removed misleading "(不套用)" qualifier.
+
+**Issue 2 — Theme FOUC on page nav / refresh**:
+- Old: `ThemeProvider` applied themeVars in client `useEffect` → first paint used default light theme → 1-frame flicker.
+
+**Fix**: Server-render an inline `<style>:root { --brand-* }</style>` in `(merchant)/layout.tsx` and `(storefront)/store/[slug]/ThemeForStore.tsx`. `ThemeForStore.tsx` rewritten as a server component (dropped `'use client'` + `useEffect`) — it now just emits the inline style. Browser parses CSS before JS runs, so first paint is correct. `ThemeProvider`'s `useEffect` still runs as fallback for client-side state changes (preset dropdown).
+
+**Tests**: unchanged (211).
+
+**Note**: HMR cache went stale after `ThemeForStore.tsx` switched from client → server component; required a dev server restart. Recurring pattern; documenting as a known dev-time gotcha.
 
 ---
 

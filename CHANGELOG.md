@@ -6,6 +6,19 @@ Format: every entry is one Git commit with SHA + date + subject + bullet expansi
 
 ---
 
+## V2.1.2 — 2026-05-04 (`1897aac`)
+
+**fix(v2.1.x): preset dropdown持久顯示 + theme FOUC 消除**
+
+Two follow-up issues from V2.1 walk-through.
+
+- **Issue 1 — preset dropdown 自動 reset 違背直覺**: old `<select defaultValue="">` + onChange 重設 → user 讀「自訂(不套用)」字面意思以為沒套用. Fix: controlled `<select value={appliedPresetId}>`, picked preset stays visible; manually editing any of 5 fields reverts to "自訂". Initial state detects if existing themeVars match a preset (so demo merchants show their preset on first load). Copy updated.
+- **Issue 2 — theme FOUC on page nav / refresh**: old client `useEffect` injected themeVars → first paint used default light theme → 1-frame flicker. Fix: server-render inline `<style>:root { --brand-* }</style>` in `(merchant)/layout.tsx` + `ThemeForStore.tsx`. `ThemeForStore.tsx` rewritten as server component (no `'use client'`). `ThemeProvider`'s `useEffect` stays as fallback for client-side state churn (preset dropdown apply).
+
+Tests: unchanged (211). tsc + lint clean.
+
+---
+
 ## V2.1 — 2026-05-04 (`6da0489`)
 
 **feat(v2.1): 18 theme presets + brand-voice auto-match + settings preset dropdown**
