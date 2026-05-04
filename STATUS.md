@@ -16,8 +16,12 @@ Version-by-version progression for `demo-sass-2`. This replaces the older `V1_ST
 | V1.5 Path D | 2026-04-30 | Export truncation signal + 蝦皮 SKU sanitization + walkthrough cleanup | 101 → 102 | — | `e31937d` |
 | V1.6 | 2026-05-01 | Admin scale tools + state primitives + dashboard IA | 102 → 141 | — | `4211bef` |
 | V1.7 | 2026-05-01 | Onboarding security + switcher scale + dead code | 141 → 154 | 0007 | `0a108c7` |
+| V1.8 | 2026-05-01 | Portfolio docs (README + ARCHITECTURE + STATUS + CHANGELOG) | 154 | — | `cc7c3c9` |
+| V1.9 | 2026-05-01 | UI overhaul — token foundation + brand identity + polish + whimsy | 154 → 160 | — | `39a8640` |
+| V1.9.1 | 2026-05-04 | Stock edit + input/textarea brand-radius bugfixes | 160 → 164 | — | `4c762de` |
+| V2.0 | 2026-05-04 | Per-merchant authentication (email + password + DB sessions) | 164 → 195 | 0008 | `f96e02e` (PR #1) |
 
-Bottom line: **154 vitest tests, 25-step manual smoke, 8 forward + 8 rollback migrations.**
+Bottom line: **195 vitest tests, 25-step manual smoke, 9 forward + 9 rollback migrations.**
 
 ---
 
@@ -178,6 +182,153 @@ Without adding email or captcha (user constraint — portfolio project, can't in
 - Email verification (Resend)
 - Per-merchant rate limit (V1.7 is per-IP global)
 - `assertNotApproved` guard on `/api/products/import` (defense-in-depth follow-up)
+
+---
+
+## V1.8 — Portfolio docs (`cc7c3c9`)
+
+**Why this version**: After 4 sprints of internal hardening, the repo had 141 tests and zero discoverable narrative. Recruiters / engineers landing on the repo couldn't see scope or quality in 30 seconds. Pure docs sprint.
+
+**Shipped**:
+
+- `README.md` (882 words, 1 Mermaid) — entry point. Stack badges, 7 feature bullets, system overview diagram, quickstart, "Why this is interesting" with 6 concrete engineering callouts.
+- `ARCHITECTURE.md` (2356 words, 4 Mermaid) — engineer-depth: ER diagram, multi-tenant RLS, AI pipeline sequence, admin observability flow, security layers, frontend patterns.
+- `STATUS.md` — this file. Replaces older `V1_STATUS.md`.
+- `CHANGELOG.md` (1931 words) — git log distilled, 3-7 bullets per major commit.
+- `LOCAL_SETUP.md` rewrite (was stale: pnpm/Homebrew/R2-references; now Docker + bun + V1.7-aware).
+
+**Notable decisions**:
+
+- README is recruiter-first, engineer-second (first 30s skim then deeper).
+- ARCHITECTURE.md doesn't water down — assumes engineer audience.
+- STATUS.md narrative + numbers, not just numbers ("Why this version" + "Notable decisions" + "Process" per entry).
+- Code claims grounded in source (file paths, line numbers, actual test counts). No fabricated APIs.
+- TW Chinese reserved for direct UI quotes only (「商家行動清單」, 「暫停營業中」).
+
+**Process**: Single Technical Writer agent dispatch. Verified every claim against source files before writing.
+
+**Tests**: unchanged (154).
+
+---
+
+## V1.9 — UI overhaul (`39a8640`)
+
+**Why this version**: User asked "UI 還是不夠漂亮". Dispatched 4-agent design audit (UI Designer + UX Architect + Brand Guardian + Whimsy Injector) → synthesized into 3-tier ranked action list → executed across 3 sequential implementation agents.
+
+**Audit findings**:
+
+- UI Designer: 6.5/10, "competent SaaS demo" not "TW indie marketplace"
+- UX Architect: token system bypassed in admin (`bg-zinc-*` leak)
+- Brand Guardian: Linear clone, no wordmark, generic palette
+- Whimsy Injector: AI 7s wait was anxiety not "watch the magic"
+
+**Shipped (Tier 1 Foundation, UX Architect)**:
+
+- 18 semantic tokens in `:root`: `--brand-tint-{3,8,14}`, `--brand-edge-{12,18,28}`, `--bg-card`, `--ink-muted`, `--status-{success,error,warning,info}-{soft,edge}`.
+- shadcn alias bridge: `--background`, `--primary`, `--card`, `--border` all alias to `var(--brand-*)` — no more parallel theme universe.
+- ESLint rule: blocks `bg-zinc-*` / `bg-amber-50` / hardcoded oklch in `src/app/(admin|merchant|storefront)/**`. Caught 150 violations across 13 files first run, all fixed.
+- `<StatusChip>` primitive in `src/components/ui/StatusChip.tsx` replaces 5 forked chip implementations.
+- `/admin/page.tsx` + `/admin/queue/page.tsx` + `/admin/cost/page.tsx` migrated to semantic tokens.
+
+**Shipped (Tier 2 Brand identity, Brand Guardian)**:
+
+- Wordmark "Catalogify" Inter 700 + stacked-rectangle glyph in 柿色 `#D97757` (`src/components/platform/Wordmark.tsx`).
+- `src/app/icon.tsx` for favicon (Next 15 ImageResponse).
+- `.platform` palette warm-shifted: `#18181B` → `#1A1614` (warm-black), `#FAFAFA` → `#FAF8F3` (paper-warm), introduced `--platform-accent` 柿色.
+- `MerchantCard`: 4px brand color stripe at top from `m.themeVars` + hover-lift + GMV typography fix.
+- Storefront: 32px platform footer wrapped in `.platform` forces Linear-tone — customers see "由 Catalogify 提供" trust signal.
+- Tagline rewrite: `「拍一張照, 60 秒上架; 不切後台, 不開 Excel — 把時間還給做產品的人。」` (TW全形標點).
+- Homepage hero: stat strip 變大 (2xl tabular-nums merchants/products/60s) + 5-emoji merchant peek.
+
+**Shipped (Tier 3 Polish + whimsy, UI Designer + Whimsy Injector)**:
+
+- Storefront product grid: removed `boxShadow` inline (was killing `.hover-lift`), bumped radius 1×→2× brand-radius, top-corners radiused image wrapper, group-hover scale 1.04, price uses brand serif.
+- EmptyState migration to `feedback/EmptyState` (5 sites): storefront / merchant products / orders / dashboard top products + recent orders.
+- Icon stroke audit: 5 widths → 3 canonical (1.8 / 2.0 / 2.2) + hero 1.5. Final tally: 65× 2.2, 17× 2.0, 5× 1.5, 3× 1.8 across ~25 files.
+- Whimsy quick wins: empty arrow-dance on `/merchant/products` + 3-title rotation; customer order confirmation merchant-voiced thank-you (`src/lib/brand-voice/thank-you.ts` heuristic 4-voice tone mapper); AI 7-second scan-line + rotating reassurance copy ("正在看你的照片..." → "判斷材質中..." → "想商品名稱中..." → "寫品牌語氣文案中..." every 2.5s).
+
+**Notable decisions**:
+
+- ESLint rule is the keystone — without enforcement, the next contributor adds another `bg-zinc-100`. Carrot (tokens) + stick (lint) shipped together.
+- Kept shadcn (didn't migrate everything custom) — bridged via `:root` alias, so future shadcn additions inherit brand vars.
+- `tone="brand" | "neutral"` prop pattern from B4 was acknowledged half-done by UX Architect; commit was made to NOT spread further (would entrench wrong abstraction).
+- 17 existing whimsy keyframes; only 3 needed activation (most were already wired). Restraint over additions.
+
+**Tests**: 154 → 160 (+6 brand-voice unit tests).
+
+---
+
+## V1.9.1 — Stock edit + input radius bugfixes (`4c762de`)
+
+**Why this version**: Two user-reported bugs after V1.9 ship.
+
+**Bug 1 — 商品沒辦法改庫存**:
+- `updateProductAction` only accepted `title/description/priceCents` (no `stockQuantity`).
+- `EditableProductFields` had no stock input.
+
+**Fix**: Extended action patch type with `stockQuantity?: number` + integer validation (0-99999, reject `.5` / negative / overflow). Added stock input alongside price (2-col grid sm+, stacked mobile). Added "目前庫存" `<StatusChip>` on detail page (error/warning/neutral based on `lowStockThreshold`). 4 new tests in `tests/products/stock-edit.test.ts`.
+
+**Bug 2 — 圓角 input 內含元素超出擠壓外框**:
+- shadcn `Input` + `Textarea` hardcoded `rounded-lg` (8px), but `--brand-radius` is 2px (akami serif) / 4px (platform). Visual mismatch + focus ring/3 box-shadow rendered at 8px radius escaping the actual visual border.
+
+**Fix**: `rounded-lg` → `rounded-[var(--brand-radius)]`. Now follows merchant brand identity, focus ring stays inside.
+
+**Tests**: 160 → 164 (+4 stock-edit).
+
+**Note**: Cleaned 1 stale `photo_upload` event from `stylish-man` tenant left over from V1.5 cost-tracking smoke testing — was polluting platform-wide cost aggregation tests.
+
+---
+
+## V2.0 — Per-merchant authentication (`f96e02e`, PR #1)
+
+**Why this version**: V1.7 review side-find: 「商家後台應該每個商家有自己的認證, 而不是共用 demo-merchant-id cookie」. The `demo-merchant-id` cookie pattern was fine for hackathon-era 5 demo merchants but breaks the moment real merchants sign up — anyone with that cookie could access any merchant. Fixing this is a structural prerequisite for V2 cloud deploy + payments. **First sprint shipped via PR-based workflow** (per V1.9.1 git workflow upgrade).
+
+**Shipped (5 sequential agency-agent tasks on `v2-merchant-auth` branch)**:
+
+**Task 102 — Schema (Backend Architect)**:
+- Migration 0008: `merchants.email` + `password_hash` + `merchant_sessions` table with `revoked_at` column.
+- Functional unique index on `lower(email)`.
+- RLS deny-all to `web_anon`, `web_admin` SELECT/INSERT/UPDATE only.
+- `bcryptjs@3.0.3` added.
+- `scripts/seed-merchant-auth.ts` backfills 7 demo merchants (email = `{slug}@demo.local`, password = `demo1234`).
+
+**Task 103 — Auth core lib (Security Engineer)**:
+- `src/lib/merchant-session.ts` (Node runtime, DB-coupled): `signSessionCookie` / `verifyCookieSignature` (timing-safe HMAC), `validateMerchantSession` (DB row + `revoked_at` + `expires_at` check), `loginMerchant` (bcrypt + username-enumeration defense via fake-hash constant-time fallback; status checks revealed only AFTER password match), `revokeMerchantSession` (UPDATE `revoked_at`, preserves audit trail).
+- `src/lib/merchant-session-edge.ts` (Edge runtime, Web Crypto): pure-crypto verifier for middleware.
+- `middleware.ts`: gates `/merchant/*` (skips `/login` + `/signup` + `/logout`), 503 if `MERCHANT_SESSION_SECRET` missing.
+- `MERCHANT_SESSION_SECRET` added to `.env.local` (64 hex chars).
+
+**Task 104 — Login + signup + onboarding (Frontend Developer)**:
+- `/merchant/login` page + `LoginForm` + `actions` (mirror `/admin/login`).
+- `/merchant/logout` route handler (POST-only, revokes DB session, clears cookies, idempotent on stale).
+- `/onboarding` extended: email + password + confirm fields, bcrypt hash on save, email lowercase + unique-violation handling.
+- V1.7 D1 honeypot + reserved-slug + IP rate-limit fully preserved.
+- Layout: simple "merchant name + 登出 button" header (V1.7 D2 `MerchantSwitcher` concept obsolete).
+
+**Task 105 — Migrate consumers + remove switcher (Backend Architect)**:
+- `resolveMerchantFromCookie()` rewritten — no args, reads `merchant-session`, validates, redirects to `/merchant/login` on failure.
+- 17 caller sites migrated (pages + API routes + server actions).
+- `(merchant)/layout.tsx` adds DB session validation (E11 pattern).
+- DELETED: `src/components/theme/MerchantSwitcher.tsx`, `src/app/(merchant)/merchant-switcher/{page,SearchInput,SwitchRow}.tsx`, `src/lib/storage/demo-merchants.ts` (V1 hardcoded `DEMO_MERCHANTS` dict), `tests/merchant-switcher.test.ts`.
+- Legacy `demo-merchant-id` cookie reads removed everywhere. Transitional cookie set during task 104 also removed.
+
+**Notable decisions**:
+
+- Username enumeration defense via constant-time bcrypt against fake hash — even non-existent emails take same time to fail.
+- Suspended/pending status revealed only AFTER password match — prevents probing arbitrary emails to learn account states.
+- `revoked_at` column (not present in `admin_sessions`) — enables logout-via-UPDATE instead of DELETE, preserves audit trail. V2.1 can add "logout all devices" via `UPDATE … SET revoked_at = now()`.
+- Email functionally lowercase-unique via partial unique index. Auth lib `.toLowerCase()` on lookup.
+- `MerchantSwitcher` (V1.7 D2) deleted entirely — concept obsolete with per-merchant auth (商家只看自己的, 不切).
+
+**Tests**: 164 → 195 (+31 net: +26 merchant-auth + 9 login flow + 4 stock-edit minus 4 switcher).
+
+**Process**: First sprint on **feature branch with PR + squash-merge** (per V1.9.1 user request to upgrade git workflow). PR #1 opened, self-reviewed, squash-merged with `--delete-branch`, then tagged `v2.0`.
+
+**Out of scope (V2.1 candidates)**:
+- Password reset flow (needs Resend / email infra)
+- "Remember me" longer session
+- Multi-user-per-merchant (V2 = 1 user per merchant)
+- OAuth / 2FA
 
 ---
 
