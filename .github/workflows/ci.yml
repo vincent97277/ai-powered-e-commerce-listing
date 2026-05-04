@@ -57,7 +57,12 @@ jobs:
       DEMO_MERCHANT_AFEN_ID: 22222222-2222-2222-2222-222222222222
       # local-fs in CI; R2 path is exercised via mocked AWS SDK in facade.test.ts
       STORAGE_BACKEND: local
-      # OPENAI_API_KEY unset — vision tests mock the SDK; integration tests check error envelopes only
+      # Fake-but-valid keys for prod-mode env validation (instrumentation.ts).
+      # Tests don't actually hit OpenAI or Inngest Cloud — vision SDK is mocked
+      # in facade.test.ts; generate-async tests already accept 503 INNGEST_UNAVAILABLE.
+      OPENAI_API_KEY: sk-ci-fake-key-for-env-validation-only-not-real-12345
+      INNGEST_EVENT_KEY: ci-fake-event-key
+      INNGEST_SIGNING_KEY: ci-fake-signing-key
 
     steps:
       - uses: actions/checkout@v4
@@ -107,11 +112,14 @@ jobs:
 
       - name: Start dev server (background — for HTTP integration tests)
         # generate-async / generate-cap / api-health / v1-integration / merchant-auth.e2e
-        # all hit http://localhost:3000. Use `pnpm start` (the prod build from
-        # the previous step) instead of `pnpm dev` to keep CI fast.
+        # all hit http://localhost:3000. Use `pnpm dev` (NODE_ENV=development) NOT
+        # `pnpm start` (NODE_ENV=production) — env.ts asserts sslmode=require on DB
+        # URLs in prod, which localhost postgres doesn't speak. Dev mode keeps the
+        # validation lenient so CI can run against plain TCP.
+        # Turbopack compiles routes on-demand, so first hit needs a longer wait.
         run: |
-          pnpm start > /tmp/server.log 2>&1 &
-          for i in 1 2 3 4 5 6 7 8 9 10; do
+          pnpm dev > /tmp/server.log 2>&1 &
+          for i in $(seq 1 30); do
             if curl -sf -o /dev/null http://localhost:3000/; then
               echo "Server ready after ${i} attempts"
               exit 0
