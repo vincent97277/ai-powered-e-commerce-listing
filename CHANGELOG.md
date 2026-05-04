@@ -6,6 +6,41 @@ Format: every entry is one Git commit with SHA + date + subject + bullet expansi
 
 ---
 
+## V2.1 — 2026-05-04 (`6da0489`)
+
+**feat(v2.1): 18 theme presets + brand-voice auto-match + settings preset dropdown**
+
+Two user reports addressed in one commit.
+
+**Bug — /merchant/settings 圓角風格 save 後無效**:
+- `useTransition` saved OK but ThemeProvider's `useEffect` keyed off `current` object reference. Even when themeVars changed, dep didn't fire reliably.
+- Fix: ThemeProvider deps now `[JSON.stringify(current.themeVars)]` — any value change in 5 brand vars triggers re-application.
+
+**Feature — 18 theme presets + brand-voice auto-match**:
+- `src/lib/themes/presets.ts` — 18 `ThemePreset` entries (id / label / hint / emoji / 3-7 中文 keywords + 5 themeVars). Vibes: 質感日系 / 夜市熱炒 / 文青咖啡 / 街頭潮男 / 手搖飲品 / 簡約現代 / 韓系少女 / 暖陽小農 / 海島度假 / 手工飾品 / 童書文具 / 個性復古 / 科技電商 / 清新花藝 / 健身保健 / 甜點烘焙 / 書店書房 / 戶外運動.
+- `src/lib/themes/match.ts` — `pickThemeForVoice(brandVoice)` keyword-substring scoring + stable tiebreak + fallback `modern-minimal`. `getThemeById(id)` lookup.
+- `/onboarding` no longer random-picks 3 themes — calls `pickThemeForVoice(brandVoice)`. V1.7 D1 honeypot/reserved-slug/rate-limit preserved.
+- Settings: 「套用預設主題」 dropdown above color/radius/font grid. Picking overwrites all 5 fields; dropdown self-resets.
+
+**Tests**: 195 → 211 (+16 in `tests/themes/match.test.ts`).
+
+**Note**: sub-agent pushed directly to `main` instead of using feature branch + PR (skipping the workflow established in V2.0). Logged as process drift; future sprints should re-confirm the PR flow.
+
+---
+
+## V1.9.2 — 2026-05-04 (`9c5dbab`)
+
+**fix(v1.9.2): color swatch overflow on /merchant/settings 視覺主題**
+
+User-reported: 主色/底色/文字色 顏色方塊被 Input border 遮擋.
+
+Root cause: native `<input type="color">` in Chrome/Safari/Firefox renders the color swatch via `::-webkit-color-swatch-wrapper` (or `::-moz-color-swatch`) with default ~4px inset padding + 1px border. The ColorField wrapper has `overflow-hidden` + `var(--brand-radius)`, so the inset padding gets clipped at the rounded corners, exposing the body background between swatch and border.
+
+- Fix: 4-line CSS reset in `globals.css` to fill the entire input area (`::-webkit-color-swatch-wrapper { padding: 0; border: none }`, `::-webkit-color-swatch { border: none; border-radius: 0 }`, `::-moz-color-swatch { border: none }`).
+- CSS-only, zero JS impact.
+
+---
+
 ## V2.0 — 2026-05-04 (`f96e02e`, PR #1 squash-merged)
 
 **feat(v2): per-merchant authentication (email + password + DB sessions)**

@@ -20,8 +20,9 @@ Version-by-version progression for `demo-sass-2`. This replaces the older `V1_ST
 | V1.9 | 2026-05-01 | UI overhaul — token foundation + brand identity + polish + whimsy | 154 → 160 | — | `39a8640` |
 | V1.9.1 | 2026-05-04 | Stock edit + input/textarea brand-radius bugfixes | 160 → 164 | — | `4c762de` |
 | V2.0 | 2026-05-04 | Per-merchant authentication (email + password + DB sessions) | 164 → 195 | 0008 | `f96e02e` (PR #1) |
+| V2.1 | 2026-05-04 | 18 theme presets + brand-voice auto-match + radius save fix | 195 → 211 | — | `6da0489` |
 
-Bottom line: **195 vitest tests, 25-step manual smoke, 9 forward + 9 rollback migrations.**
+Bottom line: **211 vitest tests, 25-step manual smoke, 9 forward + 9 rollback migrations.**
 
 ---
 
@@ -329,6 +330,39 @@ Without adding email or captcha (user constraint — portfolio project, can't in
 - "Remember me" longer session
 - Multi-user-per-merchant (V2 = 1 user per merchant)
 - OAuth / 2FA
+
+---
+
+## V2.1 — Theme presets + radius save fix (`6da0489`)
+
+**Why this version**: Two user reports after V2.0 ship.
+
+**Bug — /merchant/settings 圓角風格 save 後無效**:
+- `SettingsForm` `useTransition` saved successfully but client didn't re-apply CSS vars. ThemeProvider's `useEffect` keyed off `current` object reference — even when themeVars changed, the dep didn't fire.
+- **Fix**: switched ThemeProvider deps to `JSON.stringify(current.themeVars)` so any value change in the 5 brand vars triggers re-application. `router.refresh()` was already in handleSubmit success path (committed earlier in `69ef3447`); the residual issue was the deps key.
+
+**Feature — 18 theme presets + brand-voice auto-match**:
+
+Previous state: `THEME_PICKS` array in onboarding had 3 themes, picked randomly. User asked for ≥16 themes + auto-assigned by brand voice.
+
+**Shipped**:
+
+- `src/lib/themes/presets.ts` — 18 `ThemePreset` entries: `quiet-japanese / night-market / literary-cafe / streetwear / tea-shop / modern-minimal / pink-sweet / earth-farmer / island-resort / handcraft / kawaii-stationery / vintage-retro / tech-ecom / florist / fitness / dessert-bakery / bookstore / outdoor-sport`. Each has 5 themeVars + 3-7 中文 keywords for matching.
+- `src/lib/themes/match.ts` — `pickThemeForVoice(brandVoice)` keyword-substring scoring + stable tiebreak + fallback `modern-minimal`. `getThemeById(id)` lookup.
+- `src/app/onboarding/actions.ts` — replaced random `THEME_PICKS` pick with `pickThemeForVoice(brandVoice)`. V1.7 D1 honeypot/reserved/rate-limit fully preserved.
+- `src/app/(merchant)/merchant/settings/SettingsForm.tsx` — added 「套用預設主題」 dropdown above the color/radius/font fields. Picking a preset overwrites all 5 form state fields at once; dropdown self-resets to `""` so it acts as an apply trigger.
+
+**Notable decisions**:
+
+- Keyword matching (not Gemini call) — AI-cost-conscious, deterministic, fast. Brand voice is free text per V1 schema, so no enum dependency.
+- 18 presets > 16 minimum (extras provide better coverage of TW indie shop archetypes: 文青/夜市/手作/潮男/小農/手搖飲品/etc).
+- ThemeProvider deps fix is defensive — protects against future preset-dropdown-driven multi-field state churn, not just this exact bug.
+
+**Tests**: 195 → 211 (+16: keyword matcher coverage, preset structure validation, brand voice → theme assignment for 8 distinct vibe inputs).
+
+**Process notes**:
+- Sub-agent pushed directly to `main` (skipped feature branch + PR workflow we set up in V2.0). Future sprints should use feature branch + PR per the established convention.
+- Dev server HMR cache went stale after the major edits (themes lib + ThemeProvider) — required restart before integration tests passed. Recurring pattern; consider documenting as a known dev-time gotcha.
 
 ---
 
