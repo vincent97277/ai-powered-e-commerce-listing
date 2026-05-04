@@ -14,16 +14,19 @@ export function EditableProductFields({
   initialTitle,
   initialDescription,
   initialPriceCents,
+  initialStockQuantity,
 }: {
   productId: string;
   initialTitle: string;
   initialDescription: string;
   initialPriceCents: number;
+  initialStockQuantity: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
   const [priceTwd, setPriceTwd] = useState((initialPriceCents / 100).toString());
+  const [stock, setStock] = useState(String(initialStockQuantity));
   const [pending, start] = useTransition();
 
   const handleSave = () => {
@@ -33,11 +36,18 @@ export function EditableProductFields({
       return;
     }
 
+    const stockQty = parseInt(stock, 10);
+    if (Number.isNaN(stockQty) || stockQty < 0 || stockQty > 99999) {
+      toast.error('庫存必須是 0-99999 的整數');
+      return;
+    }
+
     start(async () => {
       const r = await updateProductAction(productId, {
         title,
         description,
         priceCents: cents,
+        stockQuantity: stockQty,
       });
       if (r.success) {
         toast.success('已儲存');
@@ -52,6 +62,7 @@ export function EditableProductFields({
     setTitle(initialTitle);
     setDescription(initialDescription);
     setPriceTwd((initialPriceCents / 100).toString());
+    setStock(String(initialStockQuantity));
     setEditing(false);
   };
 
@@ -116,21 +127,40 @@ export function EditableProductFields({
         <p className="t-caption opacity-50 tabular-nums">{description.length} / 800</p>
       </div>
 
-      <div className="space-y-2">
-        <label className="t-small font-medium opacity-70">售價 (NT$)</label>
-        <Input
-          type="number"
-          min={0}
-          max={100000}
-          value={priceTwd}
-          onChange={(e) => setPriceTwd(e.target.value)}
-          className="font-mono"
-          style={{
-            borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
-            borderRadius: 'var(--brand-radius)',
-            maxWidth: '200px',
-          }}
-        />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <label className="t-small font-medium opacity-70">售價 (NT$)</label>
+          <Input
+            type="number"
+            min={0}
+            max={100000}
+            step={1}
+            value={priceTwd}
+            onChange={(e) => setPriceTwd(e.target.value)}
+            className="font-mono"
+            style={{
+              borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+              borderRadius: 'var(--brand-radius)',
+            }}
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="t-small font-medium opacity-70">庫存</label>
+          <Input
+            type="number"
+            min={0}
+            max={99999}
+            step={1}
+            value={stock}
+            onChange={(e) => setStock(e.target.value)}
+            className="font-mono"
+            placeholder="0"
+            style={{
+              borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+              borderRadius: 'var(--brand-radius)',
+            }}
+          />
+        </div>
       </div>
 
       <div className="flex justify-end gap-2 pt-2">

@@ -44,7 +44,7 @@ export async function togglePublishAction(productId: string, publish: boolean): 
 /** 編輯商品 (商家手動微調 AI 結果) */
 export async function updateProductAction(
   productId: string,
-  patch: { title?: string; description?: string; priceCents?: number },
+  patch: { title?: string; description?: string; priceCents?: number; stockQuantity?: number },
 ): Promise<{ success: boolean; error?: string }> {
   try {
     if (patch.title !== undefined && (patch.title.length < 1 || patch.title.length > 60)) {
@@ -56,6 +56,12 @@ export async function updateProductAction(
     if (patch.priceCents !== undefined && (patch.priceCents < 0 || patch.priceCents > 100_000_00)) {
       return { success: false, error: '價格必須 0-100,000 元之間' };
     }
+    if (
+      patch.stockQuantity !== undefined &&
+      (!Number.isInteger(patch.stockQuantity) || patch.stockQuantity < 0 || patch.stockQuantity > 99999)
+    ) {
+      return { success: false, error: '庫存必須是 0-99999 的整數' };
+    }
 
     const tenantId = await resolveTenantAndCheckSuspend();
     await withTenantTx(tenantId, async (tx) => {
@@ -63,6 +69,7 @@ export async function updateProductAction(
       if (patch.title !== undefined) update.title = patch.title;
       if (patch.description !== undefined) update.description = patch.description;
       if (patch.priceCents !== undefined) update.priceCents = patch.priceCents;
+      if (patch.stockQuantity !== undefined) update.stockQuantity = patch.stockQuantity;
       await tx.update(products).set(update).where(eq(products.id, productId));
     });
 

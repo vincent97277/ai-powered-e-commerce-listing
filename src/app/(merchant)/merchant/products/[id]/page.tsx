@@ -5,7 +5,7 @@
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { withTenantTx } from '@/lib/db/with-tenant';
-import { products } from '@/db/schema';
+import { products, merchants } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import Link from 'next/link';
@@ -19,6 +19,7 @@ import { ShopeeExportTab } from '@/components/products/ShopeeExportTab';
 import { PublishToggle } from '@/components/products/PublishToggle';
 import { EditableProductFields } from '@/components/products/EditableProductFields';
 import { DeleteProductButton } from '@/components/products/DeleteProductButton';
+import { StatusChip } from '@/components/ui/StatusChip';
 import { aiOutputToUi } from '@/lib/ai/flatten';
 import type { ProductOutput as UiProductOutput } from '@/lib/types';
 
@@ -54,6 +55,16 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     );
   }
 
+  // 撈 merchant 的 lowStockThreshold for stock indicator
+  const [merchantRow] = await withTenantTx(tenant.tenantId, async (tx) => {
+    return await tx
+      .select({ lowStockThreshold: merchants.lowStockThreshold })
+      .from(merchants)
+      .where(eq(merchants.id, tenant.tenantId))
+      .limit(1);
+  });
+  const lowStockThreshold = merchantRow?.lowStockThreshold ?? 5;
+
   const uiProduct = aiOutputToUi(row.aiMetadata);
   // 用 DB 真實 title/description/price (商家可能編輯過)
   uiProduct.title = row.title;
@@ -68,6 +79,8 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       productId={id}
       isPublished={row.isPublished}
       priceCents={row.priceCents}
+      stockQuantity={row.stockQuantity}
+      lowStockThreshold={lowStockThreshold}
       slug={tenant.slug}
       ownedByCurrentTenant
     />
@@ -79,6 +92,8 @@ function ProductDetailLayout({
   productId,
   isPublished,
   priceCents,
+  stockQuantity,
+  lowStockThreshold,
   slug,
   ownedByCurrentTenant,
   notice,
@@ -87,10 +102,20 @@ function ProductDetailLayout({
   productId: string;
   isPublished: boolean;
   priceCents?: number;
+  stockQuantity?: number;
+  lowStockThreshold?: number;
   slug: string;
   ownedByCurrentTenant: boolean;
   notice?: string;
 }) {
+  const stockChip =
+    ownedByCurrentTenant && stockQuantity !== undefined
+      ? stockQuantity === 0
+        ? { tone: 'error' as const, label: '缺貨' }
+        : stockQuantity <= (lowStockThreshold ?? 5)
+          ? { tone: 'warning' as const, label: `低庫存 ${stockQuantity}` }
+          : { tone: 'neutral' as const, label: `庫存 ${stockQuantity}` }
+      : null;
   return (
     <main className="min-h-screen px-12 py-8" style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}>
       <div className="mx-auto max-w-6xl space-y-8">
@@ -157,6 +182,7 @@ function ProductDetailLayout({
                 initialTitle={product.title}
                 initialDescription={product.description}
                 initialPriceCents={priceCents}
+                initialStockQuantity={stockQuantity ?? 0}
               />
             )}
             <ProductDescription text={product.description} />
@@ -164,8 +190,21 @@ function ProductDetailLayout({
             <VariantsTable variants={product.variants} />
             <ShopeeExportTab product={product} />
           </div>
-          <aside>
+          <aside className="space-y-4">
             <PriceCard min={product.price_twd.min} max={product.price_twd.max} confidence={product.confidence} />
+            {stockChip && (
+              <div className="flex items-center justify-between gap-3 border p-4"
+                   style={{
+                     borderColor: 'color-mix(in srgb, var(--brand-primary) 18%, transparent)',
+                     backgroundColor: 'color-mix(in srgb, var(--brand-primary) 4%, transparent)',
+                     borderRadius: 'var(--brand-radius)',
+                   }}>
+                <p className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+                  目前庫存
+                </p>
+                <StatusChip tone={stockChip.tone} label={stockChip.label} size="md" />
+              </div>
+            )}
           </aside>
         </div>
 
