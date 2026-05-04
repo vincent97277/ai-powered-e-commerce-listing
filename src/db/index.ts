@@ -8,6 +8,21 @@
  * - max=1 in production (serverless cold containers each create their own
  *   pool; high `max` × many warm lambdas = Neon connection storm)
  *
+ * V2.2.6 pgBouncer-transaction-mode compat:
+ * - Production DATABASE_URL_USER / _ADMIN should point at the Neon POOLED
+ *   endpoint (host suffix `-pooler`), which runs pgBouncer in transaction
+ *   mode. RLS via withTenantTx (src/lib/db/with-tenant.ts) uses
+ *   `set_config(..., is_local=true)` inside a BEGIN/COMMIT — that is
+ *   transaction-scoped state, which pgBouncer transaction-mode preserves
+ *   correctly.
+ * - node-postgres (pg) sends parameterized queries via the extended
+ *   protocol with empty statement names (unprepared), so the pgBouncer
+ *   prepared-statement-leak class of bugs does not apply here.
+ * - To verify against your prod Neon URL before launch:
+ *     DATABASE_URL_USER=<pooled> DATABASE_URL_ADMIN=<pooled> \
+ *     pnpm tsx scripts/db/verify-pgbouncer.ts
+ *   100 alternating tenant transactions; any RLS leak fails the script.
+ *
  * v2 升級到 Neon: 換成 drizzle-orm/neon-serverless + WebSocket driver — TODO
  *
  * Lazy init — build time 沒 .env 不會炸，runtime 第一次 query 才 throw
