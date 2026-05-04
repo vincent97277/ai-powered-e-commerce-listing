@@ -263,6 +263,21 @@ button, a, input, textarea, select, [role="button"] {
   border-radius: var(--brand-radius);
 }
 
+/* V1.9.2: native <input type="color"> swatch fill — Chrome/Safari/Firefox 預設 swatch
+   有 ~4px inset padding + border, 配 outer wrapper 的 overflow-hidden + border-radius
+   會被裁掉露出底色. 重設 swatch 填滿整個 input 框, 視覺乾淨 */
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border: none;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 0;
+}
+input[type="color"]::-moz-color-swatch {
+  border: none;
+}
+
 /* Brand-aware skeleton (覆蓋 shadcn 預設) */
 [data-slot="skeleton"] {
   background: linear-gradient(
