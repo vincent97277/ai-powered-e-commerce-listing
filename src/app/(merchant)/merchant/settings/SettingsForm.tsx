@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { THEME_PRESETS } from '@/lib/themes/presets';
 import { updateMerchantAction } from './actions';
 
 const FONT_OPTIONS = [
@@ -169,6 +170,44 @@ export function SettingsForm({
 
       {/* 視覺主題 */}
       <Section title="視覺主題">
+        {/* V2.1 預設主題選單 — 套用後可微調下方 5 個欄位; 不寫 preset id 進 DB. */}
+        <div className="space-y-2">
+          <Label className="t-caption" style={{ color: 'var(--brand-primary)' }}>
+            套用預設主題
+          </Label>
+          <select
+            // 不存 selected preset id (form state minimal). value="" = 自訂模式.
+            defaultValue=""
+            onChange={(e) => {
+              const t = THEME_PRESETS.find((p) => p.id === e.target.value);
+              if (!t) return;
+              setPrimary(t.themeVars['--brand-primary']);
+              setBg(t.themeVars['--brand-bg']);
+              setText(t.themeVars['--brand-text']);
+              setRadius(t.themeVars['--brand-radius']);
+              setFont(t.themeVars['--brand-font-heading']);
+              // 套用後 reset 回 "" — 鼓勵使用者把套用當「重置」操作, 不當持久狀態
+              e.target.value = '';
+            }}
+            className="w-full border bg-transparent px-3 py-2 text-sm"
+            style={{
+              borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
+              borderRadius: 'var(--brand-radius)',
+              color: 'var(--brand-text)',
+            }}
+          >
+            <option value="">— 自訂 (不套用) —</option>
+            {THEME_PRESETS.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.emoji} {t.label} — {t.hint}
+              </option>
+            ))}
+          </select>
+          <p className="t-caption opacity-50">
+            套用後會覆蓋下方 5 個欄位 (主色 / 底色 / 文字色 / 圓角 / 字型), 你還可以微調再儲存
+          </p>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-3">
           <ColorField label="主色 (primary)" value={primary} onChange={setPrimary} />
           <ColorField label="底色 (bg)" value={bg} onChange={setBg} />

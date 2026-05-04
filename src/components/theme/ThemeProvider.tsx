@@ -62,11 +62,18 @@ export function ThemeProvider({
   const current =
     merchants.find((m) => m.id === initialMerchantId) ?? merchants[0] ?? FALLBACK_MERCHANT;
 
+  // V2.1 — depend on serialized themeVars values, not the `current` object reference.
+  // 為什麼: settings save → router.refresh() 走完 layout 拿到新 themeVars 後, `current`
+  // 是新 object ref (find() 在新 array 上跑) — 但 V2.1 加 preset dropdown 後 form
+  // 一次改 5 個欄位, 多次 re-render 之間 ref 一直變. 用 JSON 序列化 deps 確保只在
+  // 真實 value 變動時才呼叫 setProperty, 避免 thrash + 確保 save → refresh 後立刻套用.
+  const themeKey = JSON.stringify(current.themeVars ?? FALLBACK_THEME);
   useEffect(() => {
     const theme = current.themeVars ?? FALLBACK_THEME;
     const root = document.documentElement;
     Object.entries(theme).forEach(([k, v]) => root.style.setProperty(k, v));
-  }, [current]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- themeKey 已經 capture themeVars 全部欄位
+  }, [themeKey]);
 
   return (
     <ThemeCtx.Provider value={{ currentId: initialMerchantId, merchants, current }}>

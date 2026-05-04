@@ -29,6 +29,7 @@ import {
   extractIp,
   logAttempt,
 } from '@/lib/onboarding/rate-limit';
+import { pickThemeForVoice } from '@/lib/themes/match';
 
 const SLUG_REGEX = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/; // lowercase letters/digits/dash, 3-32 chars
 // V2 task 104 — basic email shape (RFC 5322 properly is huge, this is the pragmatic check
@@ -43,29 +44,9 @@ export type CreateMerchantState = {
   pendingFake?: boolean;
 };
 
-const THEME_PICKS = [
-  {
-    '--brand-primary': '#8B7355',
-    '--brand-bg': '#FAF8F5',
-    '--brand-text': '#2C2416',
-    '--brand-radius': '2px',
-    '--brand-font-heading': "'Noto Serif TC', serif",
-  },
-  {
-    '--brand-primary': '#E63946',
-    '--brand-bg': '#FFF8E7',
-    '--brand-text': '#1D3557',
-    '--brand-radius': '12px',
-    '--brand-font-heading': "'Noto Sans TC', sans-serif",
-  },
-  {
-    '--brand-primary': '#2A9D8F',
-    '--brand-bg': '#F4F9F7',
-    '--brand-text': '#1B2D2A',
-    '--brand-radius': '6px',
-    '--brand-font-heading': "'Noto Sans TC', sans-serif",
-  },
-];
+// V2.1 — 主題改由 brand voice keyword 比對決定 (見 src/lib/themes/presets.ts +
+// src/lib/themes/match.ts). 無命中 fallback modern-minimal. 取代了原本 3 個 hardcode +
+// random 的 THEME_PICKS array (V1 onboarding bootstrap 用).
 
 export async function createMerchantAction(
   _prev: CreateMerchantState,
@@ -135,7 +116,8 @@ export async function createMerchantAction(
   // ─── 5. Insert merchant — approved_at = NULL (pending admin) ───
   // bcrypt cost=10 (mirror loginMerchant 的 fake-hash cost). hash 在 try 外避免 try block 太大.
   const passwordHash = await bcryptHash(password, 10);
-  const theme = THEME_PICKS[Math.floor(Math.random() * THEME_PICKS.length)];
+  // V2.1: brand voice → theme keyword match. fallback = modern-minimal (中性, 任何商品都不違和).
+  const matchedTheme = pickThemeForVoice(brandVoice);
 
   try {
     await dbAdmin
@@ -146,7 +128,7 @@ export async function createMerchantAction(
         email,
         passwordHash,
         brandVoice: brandVoice.slice(0, 200),
-        themeVars: theme,
+        themeVars: matchedTheme.themeVars,
         // approvedAt 預設 null = pending; 留空不寫.
       })
       .returning({ id: merchants.id, slug: merchants.slug });
