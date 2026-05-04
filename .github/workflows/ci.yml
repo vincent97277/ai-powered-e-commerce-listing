@@ -1,0 +1,130 @@
+name: CI
+
+# V2.2 Cloud Hardening Phase A.
+# Runs on every PR and on push to main. Required for PR merge once branch
+# protection is enabled (manual GH UI step — see plan §A.2).
+#
+# What's tested here that Vercel's build doesn't catch:
+#   - lint (next lint with V1.9 raw-color ban + V1.6 dbAdmin allowlist)
+#   - typecheck (tsc --noEmit)
+#   - 256 vitest tests, including:
+#       - tests/rls.e2e.test.ts (8) — needs real postgres + 3 RLS roles
+#       - tests/db/migrate-runner.test.ts (6) — needs writable postgres
+#       - tests/env/env-validation.test.ts (11) — pure unit
+#       - tests/storage/facade.test.ts (13) — local + R2 (mocked)
+#       - tests/products/generate-async.test.ts (9) — needs dev server
+#       - tests/products/generate-cap.test.ts (2) — needs dev server
+#       - tests/health/api-health.test.ts (4) — needs dev server
+#   - pnpm db:migrate runs all 10 SQL files via V2.2.0 custom runner
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci_owner
+          POSTGRES_PASSWORD: ci_owner_pass
+          POSTGRES_DB: demo_sass_2_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_owner -d demo_sass_2_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Use the prod-shape role split so RLS tests exercise the real pattern.
+      # All passwords are throwaway and ONLY used inside this job.
+      DATABASE_URL: postgres://ci_owner:ci_owner_pass@localhost:5432/demo_sass_2_ci
+      DATABASE_URL_USER: postgres://web_anon:ci_anon_pw@localhost:5432/demo_sass_2_ci
+      DATABASE_URL_ADMIN: postgres://web_admin:ci_admin_pw@localhost:5432/demo_sass_2_ci
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      ADMIN_PASSWORD: ci-admin
+      # 32+ chars each (env.ts requires)
+      ADMIN_SESSION_SECRET: ci-admin-session-secret-32-chars-min-padding-here
+      MERCHANT_SESSION_SECRET: ci-merchant-session-secret-32-chars-min-padding-here
+      DEMO_MERCHANT_AKAMI_ID: 11111111-1111-1111-1111-111111111111
+      DEMO_MERCHANT_AFEN_ID: 22222222-2222-2222-2222-222222222222
+      # local-fs in CI; R2 path is exercised via mocked AWS SDK in facade.test.ts
+      STORAGE_BACKEND: local
+      # OPENAI_API_KEY unset — vision tests mock the SDK; integration tests check error envelopes only
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install psql client (for role bootstrap)
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Bootstrap RLS roles in CI postgres
+        # Uses the same prod-roles.template.sql shipped in V2.2.3, with throwaway
+        # CI passwords. Verifies the template + the role split pattern at the same
+        # time as setting up the test fixtures.
+        env:
+          PGPASSWORD: ci_owner_pass
+        run: |
+          psql -h localhost -U ci_owner -d demo_sass_2_ci \
+            -v "web_anon_password=ci_anon_pw" \
+            -v "web_admin_password=ci_admin_pw" \
+            -f db/init/prod-roles.template.sql
+
+      - name: Apply migrations
+        run: pnpm db:migrate
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        # Build before vitest so build-time failures surface clearly.
+        # Build needs env vars to validate; instrumentation.ts won't run during
+        # build, but src/db/index.ts module load is fine because it's lazy.
+        run: pnpm build
+
+      - name: Start dev server (background — for HTTP integration tests)
+        # generate-async / generate-cap / api-health / v1-integration / merchant-auth.e2e
+        # all hit http://localhost:3000. Use `pnpm start` (the prod build from
+        # the previous step) instead of `pnpm dev` to keep CI fast.
+        run: |
+          pnpm start > /tmp/server.log 2>&1 &
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -sf -o /dev/null http://localhost:3000/; then
+              echo "Server ready after ${i} attempts"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Server failed to start. Logs:"
+          cat /tmp/server.log
+          exit 1
+
+      - name: Run tests
+        run: pnpm vitest run
+
+      - name: Server logs (on failure)
+        if: failure()
+        run: |
+          echo "--- Server logs ---"
+          cat /tmp/server.log || true
