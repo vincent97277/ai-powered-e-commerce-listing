@@ -47,6 +47,23 @@ export function SettingsForm({
   const [bg, setBg] = useState(initialThemeVars['--brand-bg'] ?? '#FAF8F5');
   const [text, setText] = useState(initialThemeVars['--brand-text'] ?? '#2C2416');
   const [radius, setRadius] = useState(initialThemeVars['--brand-radius'] ?? '6px');
+  /**
+   * V2.1.x: track which preset was last applied so dropdown 顯示對應 preset name
+   * 而非 reset 成「自訂」(舊版直觀問題). 手動改任何顏色/圓角/字 → setAppliedPresetId(null).
+   * 初始: 若 initialThemeVars 跟某 preset 完全 match → 顯示該 preset, 否則「自訂」.
+   */
+  const matchInitialPreset = (() => {
+    const vars = initialThemeVars;
+    return THEME_PRESETS.find(
+      (p) =>
+        p.themeVars['--brand-primary'].toLowerCase() === (vars['--brand-primary'] ?? '').toLowerCase() &&
+        p.themeVars['--brand-bg'].toLowerCase() === (vars['--brand-bg'] ?? '').toLowerCase() &&
+        p.themeVars['--brand-text'].toLowerCase() === (vars['--brand-text'] ?? '').toLowerCase() &&
+        p.themeVars['--brand-radius'] === vars['--brand-radius'] &&
+        p.themeVars['--brand-font-heading'] === vars['--brand-font-heading'],
+    )?.id ?? '';
+  })();
+  const [appliedPresetId, setAppliedPresetId] = useState(matchInitialPreset);
   const [font, setFont] = useState(
     initialThemeVars['--brand-font-heading'] ?? "'Noto Sans TC', sans-serif",
   );
@@ -176,18 +193,22 @@ export function SettingsForm({
             套用預設主題
           </Label>
           <select
-            // 不存 selected preset id (form state minimal). value="" = 自訂模式.
-            defaultValue=""
+            value={appliedPresetId}
             onChange={(e) => {
-              const t = THEME_PRESETS.find((p) => p.id === e.target.value);
+              const id = e.target.value;
+              if (!id) {
+                // 用戶選「自訂」 — 不改任何東西, dropdown 跳回 ""
+                setAppliedPresetId('');
+                return;
+              }
+              const t = THEME_PRESETS.find((p) => p.id === id);
               if (!t) return;
               setPrimary(t.themeVars['--brand-primary']);
               setBg(t.themeVars['--brand-bg']);
               setText(t.themeVars['--brand-text']);
               setRadius(t.themeVars['--brand-radius']);
               setFont(t.themeVars['--brand-font-heading']);
-              // 套用後 reset 回 "" — 鼓勵使用者把套用當「重置」操作, 不當持久狀態
-              e.target.value = '';
+              setAppliedPresetId(id);  // 留住 preset 顯示在 dropdown
             }}
             className="w-full border bg-transparent px-3 py-2 text-sm"
             style={{
@@ -196,7 +217,7 @@ export function SettingsForm({
               color: 'var(--brand-text)',
             }}
           >
-            <option value="">— 自訂 (不套用) —</option>
+            <option value="">— 自訂 —</option>
             {THEME_PRESETS.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.emoji} {t.label} — {t.hint}
@@ -204,14 +225,26 @@ export function SettingsForm({
             ))}
           </select>
           <p className="t-caption opacity-50">
-            套用後會覆蓋下方 5 個欄位 (主色 / 底色 / 文字色 / 圓角 / 字型), 你還可以微調再儲存
+            套用後會覆蓋下方 5 個欄位 (主色 / 底色 / 文字色 / 圓角 / 字型). 手動改任一欄會回到「自訂」.
           </p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <ColorField label="主色 (primary)" value={primary} onChange={setPrimary} />
-          <ColorField label="底色 (bg)" value={bg} onChange={setBg} />
-          <ColorField label="文字色" value={text} onChange={setText} />
+          <ColorField
+            label="主色 (primary)"
+            value={primary}
+            onChange={(v) => { setPrimary(v); setAppliedPresetId(''); }}
+          />
+          <ColorField
+            label="底色 (bg)"
+            value={bg}
+            onChange={(v) => { setBg(v); setAppliedPresetId(''); }}
+          />
+          <ColorField
+            label="文字色"
+            value={text}
+            onChange={(v) => { setText(v); setAppliedPresetId(''); }}
+          />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -221,7 +254,7 @@ export function SettingsForm({
             </Label>
             <select
               value={radius}
-              onChange={(e) => setRadius(e.target.value)}
+              onChange={(e) => { setRadius(e.target.value); setAppliedPresetId(''); }}
               className="w-full border bg-transparent px-3 py-2 text-sm"
               style={{
                 borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',
@@ -241,7 +274,7 @@ export function SettingsForm({
             </Label>
             <select
               value={font}
-              onChange={(e) => setFont(e.target.value)}
+              onChange={(e) => { setFont(e.target.value); setAppliedPresetId(''); }}
               className="w-full border bg-transparent px-3 py-2 text-sm"
               style={{
                 borderColor: 'color-mix(in srgb, var(--brand-primary) 28%, transparent)',

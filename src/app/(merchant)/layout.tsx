@@ -80,8 +80,18 @@ export default async function MerchantLayout({ children }: { children: React.Rea
   const isPendingApproval = currentRow.approvedAt == null;
   const currentName = currentRow.name;
 
+  /**
+   * V2.1.x FOUC fix: server-render an inline <style> with merchant themeVars
+   * so first paint already has correct colors. ThemeProvider's useEffect still
+   * runs as fallback for client-side state changes (preset dropdown, etc.).
+   */
+  const themeCssText = Object.entries(currentMerchant.themeVars)
+    .map(([k, v]) => `${k}: ${v};`)
+    .join(' ');
+
   return (
     <ThemeProvider merchants={[currentMerchant]} initialMerchantId={currentRow.id}>
+      <style dangerouslySetInnerHTML={{ __html: `:root { ${themeCssText} }` }} />
       {isPendingApproval && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:px-8 lg:px-12">
           <strong>您的帳號正在等待 admin 審核</strong>
