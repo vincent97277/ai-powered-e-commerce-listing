@@ -167,7 +167,7 @@ export function ImportProgressStream({
               fontFamily: 'var(--brand-font-heading)',
             }}
           >
-            <Package className="h-4 w-4" strokeWidth={2.4} />
+            <Package className="h-4 w-4" strokeWidth={2} />
             看商品列表
           </Link>
           <Link

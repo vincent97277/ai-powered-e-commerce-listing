@@ -100,7 +100,7 @@ function ProductDetailLayout({
           className="inline-flex items-center gap-1 text-sm hover:opacity-80"
           style={{ color: 'var(--brand-primary)' }}
         >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.4} />
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.2} />
           回商品列表
         </Link>
 

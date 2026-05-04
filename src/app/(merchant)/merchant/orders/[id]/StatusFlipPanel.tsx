@@ -109,7 +109,7 @@ export function StatusFlipPanel({
             borderRadius: 'var(--brand-radius)',
           }}
         >
-          <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.4} />
+          <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.2} />
           標為已付款
         </button>
       )}
@@ -126,7 +126,7 @@ export function StatusFlipPanel({
             borderRadius: 'var(--brand-radius)',
           }}
         >
-          <Truck className="h-3.5 w-3.5" strokeWidth={2.4} />
+          <Truck className="h-3.5 w-3.5" strokeWidth={2.2} />
           標為已出貨
         </button>
       )}
@@ -143,7 +143,7 @@ export function StatusFlipPanel({
             borderRadius: 'var(--brand-radius)',
           }}
         >
-          <Package className="h-3.5 w-3.5" strokeWidth={2.4} />
+          <Package className="h-3.5 w-3.5" strokeWidth={2.2} />
           標為已完成
         </button>
       )}

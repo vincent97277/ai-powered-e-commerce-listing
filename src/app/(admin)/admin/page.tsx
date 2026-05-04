@@ -29,6 +29,8 @@ import {
 import { AdminToolbar, type AdminSortKey, type AdminStatusFilter } from './AdminToolbar';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
+import { KpiCard } from '@/components/dashboard/KpiCard';
+import { StatusChip } from '@/components/ui/StatusChip';
 
 export const dynamic = 'force-dynamic';
 
@@ -224,32 +226,32 @@ export default async function AdminOverviewPage({
         {/* Header */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div className="space-y-2">
-            <p className="font-mono text-xs uppercase tracking-wider text-zinc-500">
+            <p className="font-mono text-xs uppercase tracking-wider text-ink-muted">
               Catalogify · 平台管理
             </p>
             <h1 className="text-3xl font-semibold tracking-tight">商家排行</h1>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-ink-muted">
               {merchantStats?.total ?? 0} 家商家 · 平台累計 GMV NT$ {((orderTotals?.gmvCents ?? 0) / 100).toLocaleString()}
             </p>
           </div>
           <nav className="flex items-center gap-3 text-sm" aria-label="平台管理導覽">
             <Link
               href="/admin/queue"
-              className="text-zinc-600 underline-offset-4 hover:underline"
+              className="text-ink-muted underline-offset-4 hover:underline"
             >
               客服佇列
             </Link>
-            <span className="text-zinc-300" aria-hidden="true">·</span>
+            <span className="text-ink-faint" aria-hidden="true">·</span>
             <Link
               href="/admin/cost"
-              className="text-zinc-600 underline-offset-4 hover:underline"
+              className="text-ink-muted underline-offset-4 hover:underline"
             >
               AI 成本
             </Link>
-            <span className="text-zinc-300" aria-hidden="true">·</span>
+            <span className="text-ink-faint" aria-hidden="true">·</span>
             <Link
               href="/"
-              className="inline-flex items-center gap-1 text-zinc-600 underline-offset-4 hover:underline"
+              className="inline-flex items-center gap-1 text-ink-muted underline-offset-4 hover:underline"
             >
               前台首頁
               <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.2} />
@@ -257,12 +259,37 @@ export default async function AdminOverviewPage({
           </nav>
         </header>
 
-        {/* KPI cards */}
+        {/* KPI cards — uses shared KpiCard primitive (V1 #47).
+         * needsAttention warning state shown via tonal border, not amber leak. */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiBlock icon={Building2} label="商家總數" value={merchantStats?.total ?? 0} sub={`${merchantStats?.newSeven ?? 0} 家近 7 天新進駐`} />
-          <KpiBlock icon={Sparkles} label="7 天新進駐" value={merchantStats?.newSeven ?? 0} sub="suspended_at IS NULL" />
-          <KpiBlock icon={ShoppingCart} label="平台訂單" value={orderTotals?.total ?? 0} sub={`累計 GMV NT$ ${((orderTotals?.gmvCents ?? 0) / 100).toLocaleString()}`} />
-          <KpiBlock icon={AlertCircle} label="需關注商家" value={needsAttentionCount} sub="註冊≥7天且近7天無訂單" warning={needsAttentionCount > 0} />
+          <KpiCard
+            href="/admin?sort=gmv"
+            icon={Building2}
+            label="商家總數"
+            value={merchantStats?.total ?? 0}
+            sub={`${merchantStats?.newSeven ?? 0} 家近 7 天新進駐`}
+          />
+          <KpiCard
+            href="/admin?sort=created"
+            icon={Sparkles}
+            label="7 天新進駐"
+            value={merchantStats?.newSeven ?? 0}
+            sub="suspended_at IS NULL"
+          />
+          <KpiCard
+            href="/admin?sort=orders"
+            icon={ShoppingCart}
+            label="平台訂單"
+            value={orderTotals?.total ?? 0}
+            sub={`累計 GMV NT$ ${((orderTotals?.gmvCents ?? 0) / 100).toLocaleString()}`}
+          />
+          <KpiCard
+            href="/admin?attn=1"
+            icon={AlertCircle}
+            label="需關注商家"
+            value={needsAttentionCount}
+            sub="註冊≥7天且近7天無訂單"
+          />
         </div>
 
         {/* AdminToolbar — search + filter + sort + needs-attention chip */}
@@ -270,11 +297,15 @@ export default async function AdminOverviewPage({
 
         {/* Rankings table / Empty / Error */}
         {queryError ? (
-          <div className="rounded border border-zinc-200 bg-white">
+          <div
+            className="rounded border surface-card border-card-soft"
+          >
             <ErrorState error={queryError} retryHref="/admin" scope="table" />
           </div>
         ) : rankings.length === 0 ? (
-          <div className="rounded border border-zinc-200 bg-white">
+          <div
+            className="rounded border surface-card border-card-soft"
+          >
             {hasFilters ? (
               <EmptyState
                 icon={SearchX}
@@ -295,11 +326,11 @@ export default async function AdminOverviewPage({
           </div>
         ) : (
           <>
-            <div className="overflow-hidden rounded border border-zinc-200 bg-white">
+            <div className="overflow-hidden rounded border surface-card border-card-soft">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-zinc-50 text-left">
-                    <tr className="text-xs uppercase tracking-wider text-zinc-500">
+                  <thead className="surface-card-tinted text-left">
+                    <tr className="text-xs uppercase tracking-wider text-ink-muted">
                       <th className="px-4 py-3 font-medium">slug</th>
                       <th className="px-4 py-3 font-medium">名稱</th>
                       <th className="px-4 py-3 font-medium">狀態</th>
@@ -313,7 +344,13 @@ export default async function AdminOverviewPage({
                     {rankings.map((r, i) => (
                       <tr
                         key={r.id}
-                        className={`hover:bg-zinc-50 ${i < rankings.length - 1 ? 'border-b border-zinc-100' : ''}`}
+                        className="transition-colors hover:bg-brand-soft"
+                        style={{
+                          borderBottom:
+                            i < rankings.length - 1
+                              ? '1px solid var(--border-hairline)'
+                              : undefined,
+                        }}
                       >
                         <td className="px-4 py-3 font-mono text-xs">
                           <Link href={`/admin/merchants/${r.id}`} className="hover:underline">
@@ -323,13 +360,9 @@ export default async function AdminOverviewPage({
                         <td className="px-4 py-3">{r.name}</td>
                         <td className="px-4 py-3">
                           {r.suspended_at ? (
-                            <span className="inline-flex rounded bg-red-50 px-2 py-0.5 text-xs text-red-700">
-                              已停權
-                            </span>
+                            <StatusChip tone="error" label="已停權" dot={false} />
                           ) : (
-                            <span className="inline-flex rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
-                              營運中
-                            </span>
+                            <StatusChip tone="success" label="營運中" dot={false} />
                           )}
                         </td>
                         <td className="px-4 py-3 tabular-nums">{r.product_count}</td>
@@ -337,7 +370,7 @@ export default async function AdminOverviewPage({
                         <td className="px-4 py-3 tabular-nums font-medium">
                           NT$ {(r.gmvCents / 100).toLocaleString()}
                         </td>
-                        <td className="px-4 py-3 text-xs text-zinc-500">
+                        <td className="px-4 py-3 text-xs text-ink-muted">
                           {r.last_activity ? formatRelative(r.last_activity) : '—'}
                         </td>
                       </tr>
@@ -402,7 +435,7 @@ function Pagination({
 }) {
   if (totalPages <= 1) {
     return (
-      <p className="text-center text-xs text-zinc-500">
+      <p className="text-center text-xs text-ink-muted">
         共 {total} 家商家
       </p>
     );
@@ -411,19 +444,32 @@ function Pagination({
   const prevDisabled = currentPage <= 1;
   const nextDisabled = currentPage >= totalPages;
 
+  // Disabled / enabled pagination button styles share token-driven surfaces
+  const disabledStyle = {
+    backgroundColor: 'var(--bg-card-tinted)',
+    borderColor: 'var(--border-hairline)',
+    color: 'var(--ink-faint)',
+  } as const;
+  const enabledStyle = {
+    backgroundColor: 'var(--brand-bg)',
+    borderColor: 'var(--border-card)',
+    color: 'var(--brand-text)',
+  } as const;
+
   return (
     <nav
       className="flex flex-col items-center justify-between gap-3 text-sm sm:flex-row"
       aria-label="商家列表分頁"
     >
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-ink-muted">
         共 {total} 家 · 第 {currentPage} / {totalPages} 頁
       </p>
       <div className="flex items-center gap-2">
         {prevDisabled ? (
           <span
             aria-disabled="true"
-            className="inline-flex cursor-not-allowed items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-zinc-400"
+            className="inline-flex cursor-not-allowed items-center gap-1 rounded border px-3 py-1.5"
+            style={disabledStyle}
           >
             <ChevronLeft className="h-4 w-4" strokeWidth={2.2} />
             上一頁
@@ -431,20 +477,22 @@ function Pagination({
         ) : (
           <Link
             href={buildPageHref(currentPage - 1, params)}
-            className="inline-flex items-center gap-1 rounded border border-zinc-300 bg-white px-3 py-1.5 text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50"
+            className="inline-flex items-center gap-1 rounded border px-3 py-1.5 hover:bg-brand-soft"
+            style={enabledStyle}
             rel="prev"
           >
             <ChevronLeft className="h-4 w-4" strokeWidth={2.2} />
             上一頁
           </Link>
         )}
-        <span className="font-mono text-xs text-zinc-500">
+        <span className="font-mono text-xs text-ink-muted">
           {currentPage} / {totalPages}
         </span>
         {nextDisabled ? (
           <span
             aria-disabled="true"
-            className="inline-flex cursor-not-allowed items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-zinc-400"
+            className="inline-flex cursor-not-allowed items-center gap-1 rounded border px-3 py-1.5"
+            style={disabledStyle}
           >
             下一頁
             <ChevronRight className="h-4 w-4" strokeWidth={2.2} />
@@ -452,7 +500,8 @@ function Pagination({
         ) : (
           <Link
             href={buildPageHref(currentPage + 1, params)}
-            className="inline-flex items-center gap-1 rounded border border-zinc-300 bg-white px-3 py-1.5 text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50"
+            className="inline-flex items-center gap-1 rounded border px-3 py-1.5 hover:bg-brand-soft"
+            style={enabledStyle}
             rel="next"
           >
             下一頁
@@ -461,37 +510,6 @@ function Pagination({
         )}
       </div>
     </nav>
-  );
-}
-
-function KpiBlock({
-  icon: Icon,
-  label,
-  value,
-  sub,
-  warning = false,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string | number;
-  sub: string;
-  warning?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded border bg-white p-5 ${warning && Number(value) > 0 ? 'border-amber-300 bg-amber-50' : 'border-zinc-200'}`}
-    >
-      <div className="mb-3 flex items-center gap-2">
-        <Icon className="h-4 w-4 text-zinc-500" strokeWidth={2.2} />
-        <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-          {label}
-        </span>
-      </div>
-      <p className="text-3xl font-semibold leading-none tabular-nums text-zinc-900">
-        {value}
-      </p>
-      <p className="mt-2 text-xs text-zinc-500">{sub}</p>
-    </div>
   );
 }
 

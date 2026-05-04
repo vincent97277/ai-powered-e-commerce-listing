@@ -85,7 +85,7 @@ export function PriceCard({ min, max, confidence }: { min: number; max: number; 
               borderRadius: 'var(--brand-radius)',
             }}
           >
-            <TierIcon className="h-3 w-3" strokeWidth={2.4} />
+            <TierIcon className="h-3 w-3" strokeWidth={2.2} />
             {tierLabel} {(confidence * 100).toFixed(0)}%
           </span>
           <AnimatePresence>

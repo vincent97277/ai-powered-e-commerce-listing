@@ -12,6 +12,7 @@ import { Plus, Package, ShoppingCart, ExternalLink, TrendingUp, Settings } from 
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { MerchantInbox } from '@/components/merchant/MerchantInbox';
 import { getInboxItems } from '@/lib/merchant/inbox';
+import { EmptyState } from '@/components/feedback/EmptyState';
 
 export const dynamic = 'force-dynamic';
 
@@ -138,7 +139,7 @@ export default async function MerchantDashboard() {
                 style={{ color: 'var(--brand-primary)' }}
               >
                 /store/{merchant.slug}
-                <ExternalLink className="h-3 w-3" strokeWidth={2.4} />
+                <ExternalLink className="h-3 w-3" strokeWidth={2.2} />
               </Link>
             </p>
           </div>
@@ -165,7 +166,7 @@ export default async function MerchantDashboard() {
                 fontFamily: 'var(--brand-font-heading)',
               }}
             >
-              <Plus className="h-4 w-4" strokeWidth={2.4} />
+              <Plus className="h-4 w-4" strokeWidth={2} />
               上架新商品
             </Link>
           </div>
@@ -287,7 +288,13 @@ export default async function MerchantDashboard() {
               熱銷 Top 3
             </p>
             {topProducts.length === 0 ? (
-              <p className="t-small opacity-50 py-8 text-center">尚無銷售資料</p>
+              <EmptyState
+                icon={TrendingUp}
+                title="尚無銷售資料"
+                body="第一筆訂單就會在這裡顯示"
+                scope="table"
+                tone="brand"
+              />
             ) : (
               <div className="space-y-3">
                 {topProducts.map((p, i) => (
@@ -344,9 +351,13 @@ export default async function MerchantDashboard() {
             </Link>
           </div>
           {recentOrders.length === 0 ? (
-            <p className="t-small opacity-50 py-8 text-center">
-              還沒有訂單。先把商品上架, 顧客才下得了單。
-            </p>
+            <EmptyState
+              icon={ShoppingCart}
+              title="等待第一筆訂單"
+              body="商品上架後, 訂單會即時顯示"
+              scope="table"
+              tone="brand"
+            />
           ) : (
             <div className="space-y-2">
               {recentOrders.map((o) => (

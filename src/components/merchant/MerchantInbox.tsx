@@ -26,6 +26,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { InboxItem, InboxSeverity, InboxSignalType } from '@/lib/merchant/inbox';
+import { StatusChip, type StatusChipTone } from '@/components/ui/StatusChip';
 
 const SIGNAL_ICON: Record<InboxSignalType, LucideIcon> = {
   paid_unshipped: Truck,
@@ -37,15 +38,17 @@ const SIGNAL_ICON: Record<InboxSignalType, LucideIcon> = {
   pending_unpaid: Clock,
 };
 
-/** Per-chip CSS color var (no escalate-all-to-red rule) */
-const SIGNAL_COLOR: Record<InboxSignalType, string> = {
-  paid_unshipped: 'var(--error)',
-  zero_stock: 'var(--error)',
-  zero_price: 'var(--error)',
-  low_stock: 'var(--warning)',
-  no_photo: 'var(--warning)',
-  short_title: 'var(--brand-primary)',
-  pending_unpaid: 'var(--brand-primary)',
+/** Per-chip semantic tone (no escalate-all-to-red rule).
+ * 'short_title' / 'pending_unpaid' tone='neutral' so the chip uses brand-tint
+ * surfaces instead of trying to bend a status color into a brand-primary hue. */
+const SIGNAL_TONE: Record<InboxSignalType, StatusChipTone> = {
+  paid_unshipped: 'error',
+  zero_stock: 'error',
+  zero_price: 'error',
+  low_stock: 'warning',
+  no_photo: 'warning',
+  short_title: 'neutral',
+  pending_unpaid: 'neutral',
 };
 
 const GROUP_LABEL: Record<InboxSeverity, string> = {
@@ -80,19 +83,15 @@ export function MerchantInbox({ items }: { items: InboxItem[] }) {
     <section
       role="region"
       aria-labelledby="inbox-heading"
-      className="rounded p-4 sm:p-5"
-      style={{
-        backgroundColor: 'color-mix(in srgb, var(--brand-primary) 4%, var(--brand-bg))',
-        border: '1px solid color-mix(in srgb, var(--brand-primary) 18%, transparent)',
-        borderRadius: 'var(--brand-radius)',
-      }}
+      className="surface-card-tinted rounded border border-card-soft p-4 sm:p-5"
+      style={{ borderRadius: 'var(--brand-radius)' }}
     >
       {/* Header */}
       <header className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 sm:mb-4">
         <ClipboardList
           className="h-4 w-4 shrink-0 self-center"
           style={{ color: 'var(--brand-primary)' }}
-          strokeWidth={2.4}
+          strokeWidth={2}
         />
         <h2
           id="inbox-heading"
@@ -152,22 +151,16 @@ export function MerchantInbox({ items }: { items: InboxItem[] }) {
 }
 
 function InboxChip({ item }: { item: InboxItem }) {
-  const Icon = SIGNAL_ICON[item.type];
-  const color = SIGNAL_COLOR[item.type];
-
+  // StatusChip with mobileTouchTarget=true preserves the V1.6 B5 44px touch
+  // target rule while letting the chip inherit semantic tone tokens.
   return (
-    <Link
+    <StatusChip
+      tone={SIGNAL_TONE[item.type]}
+      label={item.label}
+      icon={SIGNAL_ICON[item.type]}
       href={item.filterUrl}
-      className="hover-lift inline-flex min-h-[44px] items-center gap-1.5 px-3 py-2 text-xs font-medium tabular-nums"
-      style={{
-        backgroundColor: 'var(--brand-bg)',
-        color,
-        border: `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
-        borderRadius: 'var(--brand-radius)',
-      }}
-    >
-      <Icon className="h-3.5 w-3.5" strokeWidth={2.4} />
-      {item.label}
-    </Link>
+      mobileTouchTarget
+      className="hover-lift tabular-nums"
+    />
   );
 }

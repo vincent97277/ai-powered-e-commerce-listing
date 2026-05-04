@@ -29,6 +29,8 @@ type Props = {
   secondaryCTA?: CTA;
   scope?: StateSurfaceScope;
   tone?: StateSurfaceTone;
+  /** V1.9 T3 O1: optional whimsy/extra slot rendered after CTAs (e.g. animated arrow) */
+  extra?: React.ReactNode;
 };
 
 export function EmptyState({
@@ -39,6 +41,7 @@ export function EmptyState({
   secondaryCTA,
   scope = 'section',
   tone = 'neutral',
+  extra,
 }: Props) {
   return (
     <StateSurface scope={scope} tone={tone}>
@@ -75,6 +78,7 @@ export function EmptyState({
             {body}
           </p>
         )}
+        {extra}
         {(primaryCTA || secondaryCTA) && (
           <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
             {primaryCTA && (

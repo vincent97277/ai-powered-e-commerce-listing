@@ -12,7 +12,7 @@ export function TagsChips({ tags }: { tags: string[] }) {
       <div className="flex items-center gap-2">
         <Hash
           className="h-3.5 w-3.5"
-          strokeWidth={2.4}
+          strokeWidth={2.2}
           style={{ color: 'var(--brand-primary)', opacity: 0.7 }}
         />
         <h2 className="t-caption" style={{ color: 'var(--brand-primary)' }}>

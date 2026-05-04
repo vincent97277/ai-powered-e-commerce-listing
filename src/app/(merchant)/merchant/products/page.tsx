@@ -7,10 +7,12 @@ import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { products, orderItems, merchants } from '@/db/schema';
 import { asc, desc, eq, lte, sql, type SQL } from 'drizzle-orm';
-import { Plus, Package, ImageIcon, AlertTriangle } from 'lucide-react';
+import { Plus, Package, ImageIcon, AlertTriangle, ArrowDown } from 'lucide-react';
 import { ProductRowActions } from './ProductRowActions';
 import { dbAdmin } from '@/db/admin-only';
 import { ExportDropdown } from '@/components/merchant/ExportDropdown';
+import { StatusChip } from '@/components/ui/StatusChip';
+import { EmptyState } from '@/components/feedback/EmptyState';
 
 /** V1.5 B1: 健康度 filter 種類 (對齊 src/lib/merchant/health-checks.ts). */
 const HEALTH_FILTERS = ['no_photo', 'short_title', 'zero_stock', 'zero_price'] as const;
@@ -28,6 +30,13 @@ function isHealthFilter(s: unknown): s is HealthFilter {
 }
 
 export const dynamic = 'force-dynamic';
+
+/** V1.9 T3 O1: rotating empty-state titles — keep first ever from spec, then variants. */
+const EMPTY_TITLES = [
+  '這裡空空的, 來放第一件吧',
+  '新店面, 第一件交給 AI',
+  '店面比你的桌面還乾淨',
+] as const;
 
 const SORT_OPTIONS = {
   sales: '銷量 (高 → 低)',
@@ -145,7 +154,7 @@ export default async function MerchantProductsList({
               fontFamily: 'var(--brand-font-heading)',
             }}
           >
-            <Plus className="h-4 w-4" strokeWidth={2.4} />
+            <Plus className="h-4 w-4" strokeWidth={2} />
             上架新商品
           </Link>
         </header>
@@ -216,39 +225,29 @@ export default async function MerchantProductsList({
                     }
               }
             >
-              <AlertTriangle className="h-3 w-3" strokeWidth={2.4} />
+              <AlertTriangle className="h-3 w-3" strokeWidth={2.2} />
               {lowStockOnly ? '顯示全部' : `只看低庫存 (≤${threshold})`}
             </Link>
           </div>
         </nav>
 
         {items.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center gap-4 py-24 text-center"
-            style={{
-              borderRadius: 'calc(var(--brand-radius) * 4)',
-              backgroundColor: 'color-mix(in srgb, var(--brand-primary) 4%, transparent)',
-              border: '1px dashed color-mix(in srgb, var(--brand-primary) 22%, transparent)',
-            }}
-          >
-            <Package className="h-12 w-12 opacity-50" strokeWidth={1.4} style={{ color: 'var(--brand-primary)' }} />
-            <p className="t-h3" style={{ fontFamily: 'var(--brand-font-heading)' }}>
-              還沒有商品
-            </p>
-            <p className="t-small opacity-60">拍張照片, 60 秒生出第一件商品。</p>
-            <Link
-              href="/merchant/products/new"
-              className="hover-lift mt-2 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold"
-              style={{
-                backgroundColor: 'var(--brand-primary)',
-                color: 'var(--brand-bg)',
-                borderRadius: 'var(--brand-radius)',
-              }}
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2.4} />
-              新增第一件商品
-            </Link>
-          </div>
+          <EmptyState
+            icon={Package}
+            title={EMPTY_TITLES[Math.floor(Math.random() * EMPTY_TITLES.length)]}
+            body="拍張照, 60 秒生出第一件商品"
+            primaryCTA={{ label: '新增第一件商品', href: '/merchant/products/new' }}
+            tone="brand"
+            extra={
+              <div className="flex flex-col items-center gap-2 pt-2" aria-hidden="true">
+                <ArrowDown
+                  className="whimsy-arrow-dance h-5 w-5"
+                  strokeWidth={2}
+                  style={{ color: 'var(--brand-primary)' }}
+                />
+              </div>
+            }
+          />
         ) : (
           <>
             {/* Mobile card list (<md) */}
@@ -441,27 +440,14 @@ export default async function MerchantProductsList({
                       </td>
                       <td className="t-tabular px-4 py-3 text-sm">
                         {p.stockQuantity === 0 ? (
-                          <span
-                            className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold"
-                            style={{
-                              backgroundColor: 'color-mix(in srgb, var(--brand-text) 90%, transparent)',
-                              color: 'var(--brand-bg)',
-                              borderRadius: 'var(--brand-radius)',
-                            }}
-                          >
-                            無貨
-                          </span>
+                          <StatusChip tone="error" label="無貨" dot={false} />
                         ) : p.stockQuantity <= threshold ? (
-                          <span
-                            className="inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold tabular-nums"
-                            style={{
-                              backgroundColor: 'color-mix(in srgb, var(--error) 14%, transparent)',
-                              color: 'var(--error)',
-                              borderRadius: 'var(--brand-radius)',
-                            }}
-                          >
-                            ⚠ {p.stockQuantity}
-                          </span>
+                          <StatusChip
+                            tone="warning"
+                            label={`⚠ ${p.stockQuantity}`}
+                            dot={false}
+                            ariaLabel={`低庫存 ${p.stockQuantity} 件`}
+                          />
                         ) : (
                           <span className="tabular-nums opacity-70">{p.stockQuantity}</span>
                         )}
@@ -470,34 +456,13 @@ export default async function MerchantProductsList({
                         {p.soldCount > 0 ? `${p.soldCount} 件` : '—'}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs"
-                          style={{
-                            backgroundColor: p.productStatus === 'needs_review'
-                              ? 'color-mix(in srgb, var(--warning) 14%, transparent)'
-                              : p.isPublished
-                                ? 'color-mix(in srgb, var(--success) 12%, transparent)'
-                                : 'color-mix(in srgb, var(--brand-primary) 8%, transparent)',
-                            color: p.productStatus === 'needs_review'
-                              ? 'var(--warning)'
-                              : p.isPublished
-                                ? 'var(--success)'
-                                : 'color-mix(in srgb, var(--brand-text) 60%, transparent)',
-                            borderRadius: 'var(--brand-radius)',
-                          }}
-                        >
-                          <span
-                            className="inline-block h-1.5 w-1.5 rounded-full"
-                            style={{
-                              backgroundColor: p.productStatus === 'needs_review'
-                                ? 'var(--warning)'
-                                : p.isPublished
-                                  ? 'var(--success)'
-                                  : 'var(--brand-primary)',
-                            }}
-                          />
-                          {p.productStatus === 'needs_review' ? '需審查' : p.isPublished ? '已上架' : '草稿'}
-                        </span>
+                        {p.productStatus === 'needs_review' ? (
+                          <StatusChip tone="warning" label="需審查" />
+                        ) : p.isPublished ? (
+                          <StatusChip tone="success" label="已上架" />
+                        ) : (
+                          <StatusChip tone="neutral" label="草稿" />
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <ProductRowActions

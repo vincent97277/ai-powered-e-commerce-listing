@@ -105,11 +105,11 @@ export function ExportDropdown({ kind, currentFilter }: Props) {
             : 'transparent',
         }}
       >
-        <Download className="h-3.5 w-3.5" strokeWidth={2.4} />
+        <Download className="h-3.5 w-3.5" strokeWidth={2.2} />
         匯出
         <ChevronDown
           className="h-3 w-3 transition-transform"
-          strokeWidth={2.4}
+          strokeWidth={2.2}
           style={{ transform: open ? 'rotate(180deg)' : undefined }}
         />
       </button>

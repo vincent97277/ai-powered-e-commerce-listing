@@ -9,16 +9,18 @@ import { orders, orderItems } from '@/db/schema';
 import { desc, eq, sql } from 'drizzle-orm';
 import { ShoppingCart } from 'lucide-react';
 import { ExportDropdown } from '@/components/merchant/ExportDropdown';
+import { StatusChip, type StatusChipTone } from '@/components/ui/StatusChip';
+import { EmptyState } from '@/components/feedback/EmptyState';
 
 export const dynamic = 'force-dynamic';
 
-const STATUS_LABEL: Record<string, { text: string; color: string }> = {
-  pending: { text: '待付款', color: 'var(--warning)' },
-  paid: { text: '已付款', color: 'var(--info)' },
-  shipped: { text: '已出貨', color: '#3B82F6' },
-  completed: { text: '已完成', color: 'var(--success)' },
-  failed: { text: '失敗', color: 'var(--error)' },
-  refunded: { text: '已退款', color: 'color-mix(in srgb, var(--brand-text) 50%, transparent)' },
+const STATUS_LABEL: Record<string, { text: string; tone: StatusChipTone; color: string }> = {
+  pending: { text: '待付款', tone: 'warning', color: 'var(--warning)' },
+  paid: { text: '已付款', tone: 'info', color: 'var(--info)' },
+  shipped: { text: '已出貨', tone: 'info', color: 'var(--info)' },
+  completed: { text: '已完成', tone: 'success', color: 'var(--success)' },
+  failed: { text: '失敗', tone: 'error', color: 'var(--error)' },
+  refunded: { text: '已退款', tone: 'neutral', color: 'color-mix(in srgb, var(--brand-text) 50%, transparent)' },
 };
 
 const STATUS_FILTERS = ['pending', 'paid', 'shipped', 'completed', 'refunded'] as const;
@@ -102,24 +104,13 @@ export default async function MerchantOrdersList({
         </header>
 
         {rows.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center gap-4 py-24 text-center"
-            style={{
-              borderRadius: 'calc(var(--brand-radius) * 4)',
-              backgroundColor: 'color-mix(in srgb, var(--brand-primary) 4%, transparent)',
-              border: '1px dashed color-mix(in srgb, var(--brand-primary) 22%, transparent)',
-            }}
-          >
-            <ShoppingCart className="h-12 w-12 opacity-50" strokeWidth={1.4} style={{ color: 'var(--brand-primary)' }} />
-            <p className="t-h3" style={{ fontFamily: 'var(--brand-font-heading)' }}>
-              還沒有訂單
-            </p>
-            <p className="t-small opacity-60">
-              先把商品上架, 顧客才下得了單。
-              <br />
-              預覽你的店面: <Link href={`/store/${merchant.slug}`} target="_blank" className="underline" style={{ color: 'var(--brand-primary)' }}>/store/{merchant.slug}</Link>
-            </p>
-          </div>
+          <EmptyState
+            icon={ShoppingCart}
+            title="還沒有訂單"
+            body="上架商品後, 顧客下單會出現在這"
+            primaryCTA={{ label: `預覽店面 /store/${merchant.slug}`, href: `/store/${merchant.slug}` }}
+            tone="brand"
+          />
         ) : (
           <>
             {/* Mobile card list (<md) */}
@@ -141,17 +132,7 @@ export default async function MerchantOrdersList({
                       <span className="t-tabular font-mono text-xs" style={{ color: 'var(--brand-primary)' }}>
                         #{o.id.slice(0, 8)}
                       </span>
-                      <span
-                        className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs"
-                        style={{
-                          backgroundColor: `color-mix(in srgb, ${status.color} 12%, transparent)`,
-                          color: status.color,
-                          borderRadius: 'var(--brand-radius)',
-                        }}
-                      >
-                        <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: status.color }} />
-                        {status.text}
-                      </span>
+                      <StatusChip tone={status.tone} label={status.text} />
                     </div>
                     <p className="mt-2 truncate text-sm">{o.customerEmail}</p>
                     <div className="mt-2 flex items-center justify-between gap-3">
@@ -220,17 +201,7 @@ export default async function MerchantOrdersList({
                         NT$ {(o.totalCents / 100).toLocaleString()}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs"
-                          style={{
-                            backgroundColor: `color-mix(in srgb, ${status.color} 12%, transparent)`,
-                            color: status.color,
-                            borderRadius: 'var(--brand-radius)',
-                          }}
-                        >
-                          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: status.color }} />
-                          {status.text}
-                        </span>
+                        <StatusChip tone={status.tone} label={status.text} />
                       </td>
                       <td className="t-small px-4 py-3 opacity-50 tabular-nums">
                         {formatRelative(o.createdAt)}

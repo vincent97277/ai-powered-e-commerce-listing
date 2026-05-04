@@ -74,31 +74,76 @@
   --brand-radius: 2px;
   --brand-font-heading: 'Noto Serif TC', serif;
 
-  /* shadcn fallback tokens (保留) */
-  --background:  oklch(1 0 0);
-  --foreground:  oklch(0.145 0 0);
-  --card:  oklch(1 0 0);
-  --card-foreground:  oklch(0.145 0 0);
-  --popover:  oklch(1 0 0);
-  --popover-foreground:  oklch(0.145 0 0);
-  --primary:  oklch(0.205 0 0);
-  --primary-foreground:  oklch(0.985 0 0);
+  /* ----- V1.9 T1: Semantic foundation tokens -----
+   * Promote inline color-mix() incantations to named, brand-aware tokens.
+   * Use these instead of bg-zinc-* / inline color-mix() in (admin)/(merchant)/(storefront) pages.
+   */
+  /* Brand surface tints (background fills) */
+  --brand-tint-3:  color-mix(in srgb, var(--brand-primary) 3%, transparent);
+  --brand-tint-8:  color-mix(in srgb, var(--brand-primary) 8%, transparent);
+  --brand-tint-14: color-mix(in srgb, var(--brand-primary) 14%, transparent);
+  /* Brand edge tints (borders / dividers) */
+  --brand-edge-12: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+  --brand-edge-18: color-mix(in srgb, var(--brand-primary) 18%, transparent);
+  --brand-edge-28: color-mix(in srgb, var(--brand-primary) 28%, transparent);
+  /* Composed surface / border roles */
+  --bg-card:         color-mix(in srgb, var(--brand-primary) 3%, var(--brand-bg));
+  --bg-card-tinted:  color-mix(in srgb, var(--brand-primary) 4%, var(--brand-bg));
+  --border-card:     var(--brand-edge-18);
+  --border-cta-ghost: var(--brand-edge-28);
+  /* Ink (text) tints derived from --brand-text (for muted body/captions) */
+  --ink-muted:  color-mix(in srgb, var(--brand-text) 55%, transparent);
+  --ink-faint:  color-mix(in srgb, var(--brand-text) 35%, transparent);
+  --border-hairline: color-mix(in srgb, var(--brand-text) 12%, transparent);
+
+  /* Status soft tints (chip backgrounds / borders) */
+  --status-success-soft: color-mix(in srgb, var(--success) 12%, transparent);
+  --status-success-edge: color-mix(in srgb, var(--success) 24%, transparent);
+  --status-error-soft:   color-mix(in srgb, var(--error) 12%, transparent);
+  --status-error-edge:   color-mix(in srgb, var(--error) 24%, transparent);
+  --status-warning-soft: color-mix(in srgb, var(--warning) 12%, transparent);
+  --status-warning-edge: color-mix(in srgb, var(--warning) 24%, transparent);
+  --status-info-soft:    color-mix(in srgb, var(--info) 12%, transparent);
+  --status-info-edge:    color-mix(in srgb, var(--info) 24%, transparent);
+
+  /* ----- V1.9 T2: Platform accent (柿色 — TW indie marketplace signature) -----
+   * Used SPARINGLY on platform surfaces only (wordmark glyph, hero divider,
+   * link-hover underline, storefront footer separator). NOT on merchant pages —
+   * merchant --brand-primary already does that work.
+   */
+  --platform-accent: #D97757;
+  --platform-accent-soft: color-mix(in srgb, #D97757 10%, transparent);
+  --platform-accent-edge: color-mix(in srgb, #D97757 28%, transparent);
+
+  /* ----- shadcn alias bridge (V1.9 T1) -----
+   * shadcn primitives (Button, Dialog, Input, Card, …) read these vars.
+   * Aliasing to brand vars means a merchant's --brand-primary cascades
+   * into shadcn components automatically — no double-definition drift.
+   */
+  --background:  var(--brand-bg);
+  --foreground:  var(--brand-text);
+  --card:  var(--brand-bg);
+  --card-foreground:  var(--brand-text);
+  --popover:  var(--brand-bg);
+  --popover-foreground:  var(--brand-text);
+  --primary:  var(--brand-primary);
+  --primary-foreground:  var(--brand-bg);
   --secondary:  oklch(0.97 0 0);
-  --secondary-foreground:  oklch(0.205 0 0);
+  --secondary-foreground:  var(--brand-text);
   --muted:  oklch(0.97 0 0);
-  --muted-foreground:  oklch(0.556 0 0);
+  --muted-foreground:  var(--ink-muted);
   --accent:  oklch(0.97 0 0);
-  --accent-foreground:  oklch(0.205 0 0);
-  --destructive:  oklch(0.577 0.245 27.325);
-  --border:  oklch(0.922 0 0);
-  --input:  oklch(0.922 0 0);
-  --ring:  oklch(0.708 0 0);
+  --accent-foreground:  var(--brand-text);
+  --destructive:  var(--error);
+  --border:  var(--border-hairline);
+  --input:  var(--border-hairline);
+  --ring:  var(--brand-primary);
+  --radius:  var(--brand-radius);
   --chart-1:  oklch(0.87 0 0);
   --chart-2:  oklch(0.556 0 0);
   --chart-3:  oklch(0.439 0 0);
   --chart-4:  oklch(0.371 0 0);
   --chart-5:  oklch(0.269 0 0);
-  --radius:  0.625rem;
   --sidebar:  oklch(0.985 0 0);
   --sidebar-foreground:  oklch(0.145 0 0);
   --sidebar-primary:  oklch(0.205 0 0);
@@ -123,26 +168,17 @@ html {
    merchant storefront / merchant 後台 不加 .platform → 繼續用商家 brand
    ====================================== */
 .platform {
-  /* Linear-tone palette (zinc-based, 高對比, 4px sharp radius) */
-  --brand-primary: #18181B;        /* zinc-900, primary CTA / link */
-  --brand-bg: #FAFAFA;             /* zinc-50, 接近白但有暖調 */
-  --brand-text: #18181B;           /* zinc-900, 高對比 body */
+  /* V1.9 T2: Warm-shift Linear palette (paper-warm + warm-black, 4px sharp radius)
+   * Was zinc-50/zinc-900 — too cold for an indie TW marketplace. Now reads as
+   * "牛皮紙 + 墨黑" while keeping Linear's structural feel. */
+  --brand-primary: #1A1614;        /* warm-black (was #18181B), primary CTA / link */
+  --brand-bg: #FAF8F3;             /* paper-warm (was #FAFAFA) */
+  --brand-text: #1A1614;           /* warm-black, 高對比 body */
   --brand-radius: 4px;             /* sharp Linear-style */
   --brand-font-heading: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
 
-  /* shadcn primitives 別名 — Button / Dialog / Input 跟著切 */
-  --primary: oklch(0.205 0 0);          /* zinc-900 oklch */
-  --primary-foreground: oklch(0.985 0 0);
-  --background: oklch(0.985 0 0);       /* zinc-50 */
-  --foreground: oklch(0.205 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.205 0 0);
-  --border: oklch(0.922 0 0);           /* zinc-200 */
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.439 0 0); /* zinc-600 */
-  --radius: 0.25rem;                    /* 4px aligned with --brand-radius */
+  /* shadcn aliases cascade automatically from --brand-* (V1.9 T1).
+   * Only override here if a shadcn primitive needs a different color than the brand. */
 
   background-color: var(--brand-bg);
   color: var(--brand-text);
@@ -416,6 +452,29 @@ button, a, input, textarea, select, [role="button"] {
 }
 .whimsy-404-float { animation: whimsy-404-float 3.2s ease-in-out infinite; }
 
+/* AI vision 7-second scan line — 加在 photo container 上, 配 rotating 安撫文案 */
+@keyframes whimsy-scan-line {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+.whimsy-scan-overlay { position: relative; }
+.whimsy-scan-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--brand-primary) 30%, transparent) 50%,
+    transparent 100%);
+  pointer-events: none;
+  animation: whimsy-scan-line 2.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .whimsy-scan-overlay::after { animation: none; opacity: 0; }
+}
+
 /* ======================================
    Brand-aware utilities
    ====================================== */
@@ -431,6 +490,14 @@ button, a, input, textarea, select, [role="button"] {
 .rounded-brand        { border-radius: var(--brand-radius); }
 .rounded-brand-lg     { border-radius: calc(var(--brand-radius) * 3); }
 .font-brand           { font-family: var(--brand-font-heading), system-ui, sans-serif; }
+
+/* V1.9 T1 — semantic utilities (use these instead of bg-zinc-* / inline color-mix()) */
+.surface-card         { background-color: var(--bg-card); }
+.surface-card-tinted  { background-color: var(--bg-card-tinted); }
+.border-card-soft     { border-color: var(--border-card); }
+.border-hairline      { border-color: var(--border-hairline); }
+.text-ink-muted       { color: var(--ink-muted); }
+.text-ink-faint       { color: var(--ink-faint); }
 
 /* Type scale utilities */
 .t-display {

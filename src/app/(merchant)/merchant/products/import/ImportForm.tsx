@@ -80,7 +80,7 @@ export function ImportForm() {
           fontFamily: 'var(--brand-font-heading)',
         }}
       >
-        <Sparkles className="h-4 w-4" strokeWidth={2.4} />
+        <Sparkles className="h-4 w-4" strokeWidth={2} />
         {pending ? '送出中...' : '開始 import'}
       </button>
     </form>

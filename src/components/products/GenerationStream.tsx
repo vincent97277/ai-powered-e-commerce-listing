@@ -14,6 +14,14 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export type GenerationStreamHandle = { kickoff: (file: File | null) => Promise<void> };
 
+/** V1.9 T3 O3: rotating reassurance copy during the GPT-4o vision call (~7s). */
+const REASSURANCE_COPY = [
+  '正在看你的照片...',
+  '判斷材質中...',
+  '想商品名稱中...',
+  '寫品牌語氣文案中...',
+] as const;
+
 export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl: string | null }>(
   function GenerationStream({ previewUrl }, ref) {
     const { state, start } = useStreamingPipeline();
@@ -21,6 +29,18 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
     const wrapRef = useRef<HTMLDivElement>(null);
     const celebrated = useRef(false);
     const [savedProductId, setSavedProductId] = useState<string | null>(null);
+    /** V1.9 T3 O3: scan-line + rotating reassurance copy during the 7-second vision wait. */
+    const [visionLoading, setVisionLoading] = useState(false);
+    const [reassureIdx, setReassureIdx] = useState(0);
+
+    useEffect(() => {
+      if (!visionLoading) return;
+      setReassureIdx(0);
+      const id = setInterval(() => {
+        setReassureIdx((i) => (i + 1) % REASSURANCE_COPY.length);
+      }, 2500);
+      return () => clearInterval(id);
+    }, [visionLoading]);
 
     useImperativeHandle(ref, () => ({
       async kickoff(file: File | null) {
@@ -70,8 +90,9 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           toast.success('照片上傳完成', { duration: 1500 });
 
           // Step 2: 同步呼叫 GPT-4o vision
+          // V1.9 T3 O3: scan-line + rotating reassurance copy (in-context UI) replaces the apology toast.
           console.log('[GenerationStream] calling GPT-4o vision');
-          toast.loading('GPT-4o 正在看照片...這通常 3-8 秒', { id: 'vision' });
+          setVisionLoading(true);
           const aiRes = await fetch('/api/products/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -79,7 +100,7 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           });
           const aiJson = await aiRes.json();
           console.log('[GenerationStream] AI result', aiRes.status, aiJson);
-          toast.dismiss('vision');
+          setVisionLoading(false);
 
           if (!aiRes.ok || !aiJson.success) {
             throw new Error(aiJson.error ?? `AI 生成失敗 (HTTP ${aiRes.status})`);
@@ -99,7 +120,7 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           start(aiJson.data as ProductOutput);
         } catch (err) {
           toast.dismiss('upload');
-          toast.dismiss('vision');
+          setVisionLoading(false);
           const msg = err instanceof Error ? err.message : '未知錯誤';
           console.error('[GenerationStream] error', err);
           toast.error('AI 生成失敗', {
@@ -130,14 +151,29 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
 
     return (
       <div ref={wrapRef} className="grid grid-cols-2 gap-8 p-2">
-        <Card className="aspect-square overflow-hidden" style={{ borderRadius: 'var(--brand-radius)' }}>
-          {previewUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={previewUrl} alt="商品" className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full items-center justify-center opacity-30">尚未上傳</div>
+        <div>
+          <Card
+            className={`aspect-square overflow-hidden ${visionLoading ? 'whimsy-scan-overlay' : ''}`}
+            style={{ borderRadius: 'var(--brand-radius)' }}
+          >
+            {previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={previewUrl} alt="商品" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center opacity-30">尚未上傳</div>
+            )}
+          </Card>
+          {visionLoading && (
+            <p
+              className="mt-3 text-center text-sm transition-opacity"
+              style={{ color: 'var(--ink-muted)' }}
+              aria-live="polite"
+              role="status"
+            >
+              {REASSURANCE_COPY[reassureIdx]}
+            </p>
           )}
-        </Card>
+        </div>
 
         <div className="space-y-6">
           <StreamingField label="標題" mode="text" value={state.title} loading={state.title === null} typewriter={state.titleChars} />
@@ -191,9 +227,9 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
                       fontFamily: 'var(--brand-font-heading)',
                     }}
                   >
-                    <Eye className="h-4 w-4" strokeWidth={2.4} />
+                    <Eye className="h-4 w-4" strokeWidth={2} />
                     查看商品 / 編輯 / 上架
-                    <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.4} />
+                    <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.2} />
                   </Link>
                 ) : (
                   <Link
@@ -205,9 +241,9 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
                       borderRadius: 'var(--brand-radius)',
                     }}
                   >
-                    <Eye className="h-4 w-4" strokeWidth={2.4} />
+                    <Eye className="h-4 w-4" strokeWidth={2} />
                     商品列表
-                    <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.4} />
+                    <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.2} />
                   </Link>
                 )}
 
@@ -226,7 +262,7 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
                     borderRadius: 'var(--brand-radius)',
                   }}
                 >
-                  <Plus className="h-4 w-4" strokeWidth={2.4} />
+                  <Plus className="h-4 w-4" strokeWidth={2} />
                   再上一件
                 </Link>
               </div>

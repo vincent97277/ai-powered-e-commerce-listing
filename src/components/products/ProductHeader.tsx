@@ -36,9 +36,9 @@ export function ProductHeader({ title, status, productId }: { title: string; sta
             }}
           >
             {isPublished ? (
-              <CheckCircle2 className="h-3 w-3" strokeWidth={2.6} />
+              <CheckCircle2 className="h-3 w-3" strokeWidth={2.2} />
             ) : (
-              <FileText className="h-3 w-3" strokeWidth={2.4} />
+              <FileText className="h-3 w-3" strokeWidth={2.2} />
             )}
             {isPublished ? '已上架' : '草稿'}
           </Badge>

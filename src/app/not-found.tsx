@@ -19,7 +19,7 @@ export default function NotFound() {
         animate={{ y: [0, -12, 0], rotate: [-3, 3, -3] }}
         transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
       >
-        <Compass size={64} strokeWidth={1.4} style={{ color: 'var(--brand-primary)' }} />
+        <Compass size={64} strokeWidth={1.5} style={{ color: 'var(--brand-primary)' }} />
       </motion.div>
       <h1 className="text-5xl" style={{ fontFamily: 'var(--brand-font-heading)' }}>
         404

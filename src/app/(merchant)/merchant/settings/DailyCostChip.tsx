@@ -56,7 +56,7 @@ export function DailyCostChip({
       role="status"
       aria-label={label}
     >
-      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 sm:mt-0" strokeWidth={2.4} />
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 sm:mt-0" strokeWidth={2.2} />
       <span className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-1">
         <span>{label}</span>
         <span className="hidden sm:inline">—</span>

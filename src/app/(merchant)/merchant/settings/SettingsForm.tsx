@@ -300,7 +300,7 @@ export function SettingsForm({
           className="t-small inline-flex items-center gap-1 underline"
           style={{ color: 'var(--brand-primary)' }}
         >
-          <Eye className="h-3.5 w-3.5" strokeWidth={2.4} />
+          <Eye className="h-3.5 w-3.5" strokeWidth={2.2} />
           查看 storefront
         </a>
         <Button
@@ -314,7 +314,7 @@ export function SettingsForm({
             fontFamily: 'var(--brand-font-heading)',
           }}
         >
-          <Save className="h-4 w-4" strokeWidth={2.4} />
+          <Save className="h-4 w-4" strokeWidth={2} />
           {pending ? '儲存中...' : '儲存設定'}
         </Button>
       </div>

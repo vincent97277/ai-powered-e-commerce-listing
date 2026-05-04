@@ -48,32 +48,32 @@ export default async function AdminCostPage() {
         {/* Header — sibling nav 跟 /admin overview 對齊 */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div className="space-y-2">
-            <p className="font-mono text-xs uppercase tracking-wider text-zinc-500">
+            <p className="font-mono text-xs uppercase tracking-wider text-ink-muted">
               Catalogify · 平台管理
             </p>
             <h1 className="text-3xl font-semibold tracking-tight">AI 成本儀表板</h1>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-ink-muted">
               全平台今日 AI token 用量 · 過去 14 天趨勢 · Top 10 商家排行
             </p>
           </div>
           <nav className="flex items-center gap-3 text-sm" aria-label="平台管理導覽">
             <Link
               href="/admin"
-              className="text-zinc-600 underline-offset-4 hover:underline"
+              className="text-ink-muted underline-offset-4 hover:underline"
             >
               商家排行
             </Link>
-            <span className="text-zinc-300" aria-hidden="true">·</span>
+            <span className="text-ink-faint" aria-hidden="true">·</span>
             <Link
               href="/admin/queue"
-              className="text-zinc-600 underline-offset-4 hover:underline"
+              className="text-ink-muted underline-offset-4 hover:underline"
             >
               客服佇列
             </Link>
-            <span className="text-zinc-300" aria-hidden="true">·</span>
+            <span className="text-ink-faint" aria-hidden="true">·</span>
             <Link
               href="/"
-              className="inline-flex items-center gap-1 text-zinc-600 underline-offset-4 hover:underline"
+              className="inline-flex items-center gap-1 text-ink-muted underline-offset-4 hover:underline"
             >
               前台首頁
               <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.2} />
@@ -87,7 +87,7 @@ export default async function AdminCostPage() {
             今日全平台 AI 成本摘要
           </h2>
           {anomalyErr ? (
-            <div className="rounded border border-zinc-200 bg-white">
+            <div className="rounded border surface-card border-card-soft">
               <ErrorState error={anomalyErr} retryHref="/admin/cost" scope="section" />
             </div>
           ) : anomaly ? (
@@ -140,14 +140,17 @@ export default async function AdminCostPage() {
         {/* Section 3: Top-10 tenant table */}
         <section
           aria-labelledby="cost-top-h"
-          className="overflow-hidden rounded border border-zinc-200 bg-white"
+          className="overflow-hidden rounded border surface-card border-card-soft"
         >
-          <div className="border-b border-zinc-100 px-4 py-3 sm:px-6">
-            <p id="cost-top-h" className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+          <div
+            className="px-4 py-3 sm:px-6"
+            style={{ borderBottom: '1px solid var(--border-hairline)' }}
+          >
+            <p id="cost-top-h" className="text-xs font-medium uppercase tracking-wider text-ink-muted">
               今日 Top 10 商家
             </p>
             {todayCost && (
-              <p className="mt-1 text-sm text-zinc-600">
+              <p className="mt-1 text-sm text-ink-muted">
                 全平台今日合計 NT$ {(todayCost.totalCents / 100).toLocaleString()}
               </p>
             )}
@@ -165,8 +168,8 @@ export default async function AdminCostPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-zinc-50 text-left">
-                  <tr className="text-xs uppercase tracking-wider text-zinc-500">
+                <thead className="surface-card-tinted text-left">
+                  <tr className="text-xs uppercase tracking-wider text-ink-muted">
                     <th className="px-4 py-3 font-medium">#</th>
                     <th className="px-4 py-3 font-medium">slug</th>
                     <th className="px-4 py-3 font-medium">名稱</th>
@@ -177,11 +180,15 @@ export default async function AdminCostPage() {
                   {todayCost.perTenantTopN.map((t, i) => (
                     <tr
                       key={t.tenantId}
-                      className={`hover:bg-zinc-50 ${
-                        i < todayCost.perTenantTopN.length - 1 ? 'border-b border-zinc-100' : ''
-                      }`}
+                      className="transition-colors hover:bg-brand-soft"
+                      style={{
+                        borderBottom:
+                          i < todayCost.perTenantTopN.length - 1
+                            ? '1px solid var(--border-hairline)'
+                            : undefined,
+                      }}
                     >
-                      <td className="px-4 py-3 tabular-nums text-zinc-500">{i + 1}</td>
+                      <td className="px-4 py-3 tabular-nums text-ink-muted">{i + 1}</td>
                       <td className="px-4 py-3 font-mono text-xs">
                         <Link
                           href={`/admin/merchants/${t.tenantId}`}
@@ -266,7 +273,7 @@ function PlatformCostChip({ anomaly }: { anomaly: AnomalyFlag }) {
       role={anomaly.isAnomaly ? 'alert' : 'status'}
       aria-label={label}
     >
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" strokeWidth={2.4} aria-hidden="true" />
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" strokeWidth={2} aria-hidden="true" />
       <span>{label}</span>
     </div>
   );

@@ -33,7 +33,7 @@ export function DeleteProductButton({ productId, title }: { productId: string; t
         color: confirming ? 'var(--error)' : 'color-mix(in srgb, var(--brand-text) 50%, transparent)',
       }}
     >
-      <Trash2 className="h-3.5 w-3.5" strokeWidth={2.4} />
+      <Trash2 className="h-3.5 w-3.5" strokeWidth={2.2} />
       {confirming ? `再點一次刪除「${title.slice(0, 12)}...」` : '刪除這件商品'}
     </Button>
   );

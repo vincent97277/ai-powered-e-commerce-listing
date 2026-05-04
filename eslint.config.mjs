@@ -1,6 +1,9 @@
 /**
- * ESLint flat config — Next.js 15 + dbAdmin 防護
+ * ESLint flat config — Next.js 15 + dbAdmin 防護 + V1.9 T1 raw-color guard
+ *
  * dbAdmin 只允許 (admin)/** / lib/tenant/resolver.ts / lib/db/admin-only/** 使用
+ * Raw color classes (bg-zinc-*, bg-red-50, etc.) 禁用於 (admin)/(merchant)/(storefront)
+ *   pages + src/components/* — 改用 brand vars / semantic utilities / StatusChip.
  */
 import { FlatCompat } from '@eslint/eslintrc';
 import path from 'node:path';
@@ -32,6 +35,78 @@ const dbAdminRule = {
   },
 };
 
+/**
+ * V1.9 T1 — raw color regex banlist.
+ *
+ * Catches bg-zinc-{50..900}, text-zinc-{...}, border-zinc-{...}, plus the worst
+ * offenders bg-amber-50 / bg-red-50 / bg-emerald-50 / text-emerald-700 / text-red-700
+ * that leaked into admin pages, AND the literal `'rgb(228 228 231)'` style string
+ * (zinc-200) used in /admin/queue/page.tsx.
+ *
+ * Use brand-aware tokens / semantic utilities / StatusChip instead.
+ *
+ * Implementation note: we use no-restricted-syntax with regex string-literal
+ * matching, since ESLint can't introspect Tailwind class strings semantically.
+ */
+const ZINC_SHADES = '50|100|200|300|400|500|600|700|800|900';
+const RAW_COLOR_PATTERNS = [
+  // Tailwind zinc-* utilities (any prefix)
+  `\\b(bg|text|border|ring|divide|placeholder|caret|fill|stroke|outline|from|via|to|decoration|accent|shadow)-zinc-(${ZINC_SHADES})\\b`,
+  `\\bhover:(bg|text|border)-zinc-(${ZINC_SHADES})\\b`,
+  `\\bfocus:(bg|text|border)-zinc-(${ZINC_SHADES})\\b`,
+  // Status-tinted raw classes
+  `\\b(bg|text|border)-(red|emerald|amber|green|yellow)-(50|100|200|300|400|500|600|700|800|900)\\b`,
+  `\\bhover:(bg|text|border)-(red|emerald|amber|green|yellow)-(50|100|200|300|400|500|600|700|800|900)\\b`,
+];
+const RAW_COLOR_REGEX = `/(${RAW_COLOR_PATTERNS.join('|')})/`;
+// zinc-200 literal as inline style: 'rgb(228 228 231)' (any spacing)
+const ZINC_200_RGB_REGEX = `/rgb\\(\\s*228\\s+228\\s+231\\s*\\)/`;
+
+const rawColorBanRules = {
+  'no-restricted-syntax': [
+    'error',
+    {
+      selector: `Literal[value=${RAW_COLOR_REGEX}]`,
+      message:
+        'V1.9 T1: raw color class banned (bg-zinc-*, text-zinc-*, bg-red-50, etc.). Use brand vars / semantic utilities (text-ink-muted, surface-card, border-card-soft) / <StatusChip>.',
+    },
+    {
+      selector: `TemplateElement[value.raw=${RAW_COLOR_REGEX}]`,
+      message:
+        'V1.9 T1: raw color class banned in template literal. Use brand vars / semantic utilities / <StatusChip>.',
+    },
+    {
+      selector: `Literal[value=${ZINC_200_RGB_REGEX}]`,
+      message:
+        'V1.9 T1: literal rgb(228 228 231) /* zinc-200 */ banned. Use var(--border-hairline) / var(--border-card) / var(--brand-edge-18).',
+    },
+  ],
+};
+
+/**
+ * V1.9 T1 scope — files actively migrated in Tier 1.
+ * Lint rule is `error` here. Tier 2/3 will widen the glob as more files
+ * are migrated; legacy admin/merchant files outside this list still pass
+ * lint (so we don't gate the whole repo on full migration).
+ */
+const rawColorBan = {
+  files: [
+    // Tier 1 admin migrations
+    'src/app/(admin)/admin/page.tsx',
+    'src/app/(admin)/admin/queue/page.tsx',
+    'src/app/(admin)/admin/cost/page.tsx',
+    // StatusChip migration sites (per V1.9 T1 plan)
+    'src/app/(merchant)/merchant/orders/page.tsx',
+    'src/app/(merchant)/merchant/products/page.tsx',
+    'src/components/merchant/MerchantInbox.tsx',
+    // Foundation primitives — must stay clean
+    'src/components/ui/StatusChip.tsx',
+  ],
+  // Escape hatch — StateSurface intentionally renders neutral fallback
+  ignores: ['src/components/feedback/StateSurface.tsx'],
+  rules: rawColorBanRules,
+};
+
 export default [
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
   dbAdminRule,
@@ -57,4 +132,5 @@ export default [
     ],
     rules: { 'no-restricted-imports': 'off' },
   },
+  rawColorBan,
 ];

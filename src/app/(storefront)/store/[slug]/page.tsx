@@ -8,6 +8,7 @@ import { products } from '@/db/schema';
 import { notFound, redirect } from 'next/navigation';
 import { eq, desc } from 'drizzle-orm';
 import { Pause, ShoppingBag } from 'lucide-react';
+import { EmptyState } from '@/components/feedback/EmptyState';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,7 @@ export default async function StorefrontPage({ params }: { params: Promise<{ slu
         <div className="max-w-md text-center">
           <Pause
             className="mx-auto mb-4 h-12 w-12 opacity-40"
-            strokeWidth={1.4}
+            strokeWidth={1.5}
             style={{ color: 'var(--brand-primary)' }}
           />
           <h1
@@ -70,22 +71,12 @@ export default async function StorefrontPage({ params }: { params: Promise<{ slu
     >
       <div className="mx-auto max-w-6xl">
         {items.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center gap-4 px-4 py-20 text-center sm:py-32"
-            style={{
-              borderRadius: 'calc(var(--brand-radius) * 4)',
-              backgroundColor: 'color-mix(in srgb, var(--brand-primary) 4%, transparent)',
-              border: '1px dashed color-mix(in srgb, var(--brand-primary) 22%, transparent)',
-            }}
-          >
-            <ShoppingBag className="h-12 w-12 opacity-50" strokeWidth={1.4} style={{ color: 'var(--brand-primary)' }} />
-            <div className="space-y-1">
-              <p className="t-h3" style={{ fontFamily: 'var(--brand-font-heading)' }}>
-                老闆在後台手忙腳亂
-              </p>
-              <p className="t-small opacity-60">等等再來逛, 馬上就有商品上架。</p>
-            </div>
-          </div>
+          <EmptyState
+            icon={ShoppingBag}
+            title="老闆在後台手忙腳亂"
+            body="等等再來逛, 馬上就有商品上架"
+            tone="brand"
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
             {items.map((p) => {
@@ -94,45 +85,68 @@ export default async function StorefrontPage({ params }: { params: Promise<{ slu
                 <Link
                   key={p.id}
                   href={`/store/${slug}/products/${p.id}`}
-                  className="hover-lift block overflow-hidden border"
+                  className="hover-lift group block overflow-hidden border"
                   style={{
-                    borderColor: 'color-mix(in srgb, var(--brand-primary) 16%, transparent)',
-                    borderRadius: 'var(--brand-radius)',
-                    backgroundColor: 'color-mix(in srgb, var(--brand-primary) 2%, var(--brand-bg))',
-                    boxShadow: 'var(--elev-1)',
+                    borderColor: 'var(--brand-edge-18)',
+                    borderRadius: 'calc(var(--brand-radius) * 2)',
+                    backgroundColor: 'var(--brand-bg)',
                   }}
                 >
-                  {hasImg ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={`/uploads/${p.r2Key}`}
-                      alt={p.title}
-                      className="aspect-square w-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className="flex aspect-square items-center justify-center"
-                      style={{ backgroundColor: 'color-mix(in srgb, var(--brand-primary) 8%, transparent)' }}
-                    >
-                      <ShoppingBag className="h-12 w-12 opacity-30" style={{ color: 'var(--brand-primary)' }} />
-                    </div>
-                  )}
-                  <div className="space-y-2 p-5">
-                    <h2
-                      className="t-h3 line-clamp-2"
-                      style={{ fontFamily: 'var(--brand-font-heading)' }}
+                  <div
+                    className="overflow-hidden"
+                    style={{
+                      borderRadius: 'calc(var(--brand-radius) * 2) calc(var(--brand-radius) * 2) 0 0',
+                    }}
+                  >
+                    {hasImg ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`/uploads/${p.r2Key}`}
+                        alt={p.title}
+                        className="aspect-square w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                      />
+                    ) : (
+                      <div
+                        className="flex aspect-square items-center justify-center transition-transform duration-500 group-hover:scale-[1.04]"
+                        style={{ backgroundColor: 'color-mix(in srgb, var(--brand-primary) 8%, transparent)' }}
+                      >
+                        <ShoppingBag
+                          className="h-12 w-12 opacity-30"
+                          strokeWidth={1.5}
+                          style={{ color: 'var(--brand-primary)' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1.5 p-4">
+                    <h3
+                      className="line-clamp-2 text-sm font-semibold leading-snug"
+                      style={{ color: 'var(--brand-text)', fontFamily: 'var(--brand-font-heading)' }}
                     >
                       {p.title}
-                    </h2>
-                    <p
-                      className="t-small line-clamp-2"
-                      style={{ color: 'color-mix(in srgb, var(--brand-text) 65%, transparent)' }}
+                    </h3>
+                    {p.description && (
+                      <p
+                        className="line-clamp-2 text-xs leading-relaxed"
+                        style={{ color: 'var(--ink-muted)' }}
+                      >
+                        {p.description}
+                      </p>
+                    )}
+                    <div
+                      className="flex items-baseline justify-between gap-2 pt-2 border-t"
+                      style={{ borderColor: 'color-mix(in srgb, var(--brand-primary) 10%, transparent)' }}
                     >
-                      {p.description}
-                    </p>
-                    <p className="t-tabular text-lg font-semibold" style={{ color: 'var(--brand-primary)' }}>
-                      NT$ {(p.priceCents / 100).toLocaleString()}
-                    </p>
+                      <p
+                        className="t-tabular text-xl font-semibold"
+                        style={{ color: 'var(--brand-primary)', fontFamily: 'var(--brand-font-heading)' }}
+                      >
+                        NT$ {(p.priceCents / 100).toLocaleString()}
+                      </p>
+                      <span className="text-xs" style={{ color: 'var(--ink-faint)' }}>
+                        查看 →
+                      </span>
+                    </div>
                   </div>
                 </Link>
               );

@@ -132,7 +132,7 @@ export function CustomerProductView({
                 onClick={() => setQty((q) => Math.max(1, q - 1))}
                 aria-label="減少"
               >
-                <Minus className="h-4 w-4" strokeWidth={2.4} />
+                <Minus className="h-4 w-4" strokeWidth={2} />
               </button>
               <span className="min-w-10 text-center font-semibold tabular-nums">{qty}</span>
               <button
@@ -141,7 +141,7 @@ export function CustomerProductView({
                 onClick={() => setQty((q) => Math.min(99, q + 1))}
                 aria-label="增加"
               >
-                <Plus className="h-4 w-4" strokeWidth={2.4} />
+                <Plus className="h-4 w-4" strokeWidth={2} />
               </button>
             </div>
           </div>
@@ -164,7 +164,7 @@ export function CustomerProductView({
                 transition={{ duration: 0.4 }}
                 className="inline-block"
               >
-                {added ? <Check className="h-4 w-4" strokeWidth={2.6} /> : <ShoppingCart className="h-4 w-4" strokeWidth={2.4} />}
+                {added ? <Check className="h-4 w-4" strokeWidth={2.2} /> : <ShoppingCart className="h-4 w-4" strokeWidth={2} />}
               </motion.span>
               {added ? '已加入購物車' : '加入購物車'}
             </Button>

@@ -37,7 +37,7 @@ export function LoadingState({
       >
         <Loader2
           className="h-4 w-4 animate-spin"
-          strokeWidth={2.4}
+          strokeWidth={2}
           style={{ color: 'var(--brand-primary)' }}
           aria-hidden="true"
         />

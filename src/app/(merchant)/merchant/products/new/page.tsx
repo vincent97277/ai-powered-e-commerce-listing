@@ -87,7 +87,7 @@ export default function NewProductPage() {
               }}
             >
               開始上架，60 秒後見
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" strokeWidth={2.4} />
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" strokeWidth={2} />
             </Button>
             <p className="t-caption" style={{ color: 'color-mix(in srgb, var(--brand-text) 50%, transparent)' }}>
               · 預覽模式啟用時, 走範例資料不消耗 AI 額度 (右下角切換)

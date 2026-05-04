@@ -83,32 +83,32 @@ export default async function AdminQueuePage() {
         {/* Header — sibling nav 跟 /admin overview 對齊 */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div className="space-y-2">
-            <p className="font-mono text-xs uppercase tracking-wider text-zinc-500">
+            <p className="font-mono text-xs uppercase tracking-wider text-ink-muted">
               Catalogify · 平台管理
             </p>
             <h1 className="text-3xl font-semibold tracking-tight">客服佇列</h1>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-ink-muted">
               商家行動清單 · P1 優先 · 依嚴重度排序
             </p>
           </div>
           <nav className="flex items-center gap-3 text-sm" aria-label="平台管理導覽">
             <Link
               href="/admin"
-              className="text-zinc-600 underline-offset-4 hover:underline"
+              className="text-ink-muted underline-offset-4 hover:underline"
             >
               商家排行
             </Link>
-            <span className="text-zinc-300" aria-hidden="true">·</span>
+            <span className="text-ink-faint" aria-hidden="true">·</span>
             <Link
               href="/admin/cost"
-              className="text-zinc-600 underline-offset-4 hover:underline"
+              className="text-ink-muted underline-offset-4 hover:underline"
             >
               AI 成本
             </Link>
-            <span className="text-zinc-300" aria-hidden="true">·</span>
+            <span className="text-ink-faint" aria-hidden="true">·</span>
             <Link
               href="/"
-              className="inline-flex items-center gap-1 text-zinc-600 underline-offset-4 hover:underline"
+              className="inline-flex items-center gap-1 text-ink-muted underline-offset-4 hover:underline"
             >
               前台首頁
               <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.2} />
@@ -118,11 +118,11 @@ export default async function AdminQueuePage() {
 
         {/* Queue body */}
         {queryError ? (
-          <div className="rounded border border-zinc-200 bg-white">
+          <div className="rounded border surface-card border-card-soft">
             <ErrorState error={queryError} retryHref="/admin/queue" scope="section" />
           </div>
         ) : !queue || queue.length === 0 ? (
-          <div className="rounded border border-zinc-200 bg-white">
+          <div className="rounded border surface-card border-card-soft">
             <EmptyState
               icon={CheckCircle2}
               title="全部商家狀態良好"
@@ -135,7 +135,7 @@ export default async function AdminQueuePage() {
           </div>
         ) : (
           <>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-ink-muted">
               共 {queue.length} 件待處理 · 由上而下優先級遞減
             </p>
             <ul className="space-y-3" aria-label="客服佇列">
@@ -160,11 +160,11 @@ function QueueCard({ item }: { item: QueueItem }) {
 
   return (
     <li
-      className="flex items-start justify-between gap-4 rounded border bg-white p-4 transition-shadow hover:shadow-sm sm:items-center"
-      style={{ borderColor: 'rgb(228 228 231)' /* zinc-200 */ }}
+      className="flex items-start justify-between gap-4 rounded border p-4 transition-shadow hover:shadow-sm sm:items-center surface-card"
+      style={{ borderColor: 'var(--border-card)' }}
     >
       <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
-        {/* Severity chip */}
+        {/* Severity chip — keeps custom 32px min-width per A8 spec, otherwise mirrors StatusChip semantics */}
         <span
           className="inline-flex shrink-0 items-center justify-center rounded px-2 py-0.5 text-xs font-semibold tabular-nums"
           style={{
@@ -181,23 +181,31 @@ function QueueCard({ item }: { item: QueueItem }) {
 
         {/* Merchant + reason */}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-zinc-900">
-            <span className="font-mono text-xs text-zinc-500">{item.slug}</span>
-            <span className="mx-1.5 text-zinc-300" aria-hidden="true">·</span>
+          <p
+            className="truncate text-sm font-medium"
+            style={{ color: 'var(--brand-text)' }}
+          >
+            <span className="font-mono text-xs text-ink-muted">{item.slug}</span>
+            <span className="mx-1.5 text-ink-faint" aria-hidden="true">·</span>
             <span>{item.name}</span>
           </p>
-          <p className="mt-0.5 text-xs text-zinc-600">{item.reason}</p>
+          <p className="mt-0.5 text-xs text-ink-muted">{item.reason}</p>
         </div>
       </div>
 
       {/* View action */}
       <Link
         href={item.actionHref}
-        className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50"
+        className="inline-flex shrink-0 items-center gap-1 rounded border px-3 py-1.5 text-xs font-medium hover:bg-brand-soft"
+        style={{
+          backgroundColor: 'var(--brand-bg)',
+          borderColor: 'var(--border-card)',
+          color: 'var(--brand-text)',
+        }}
         aria-label={`查看 ${item.name} 的 ${item.reason}`}
       >
         查看
-        <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.4} />
+        <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.2} />
       </Link>
     </li>
   );

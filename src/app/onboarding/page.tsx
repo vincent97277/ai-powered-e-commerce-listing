@@ -47,7 +47,7 @@ export default function OnboardingPage() {
                 color: 'var(--brand-primary)',
               }}
             >
-              <Sparkles className="h-3 w-3" strokeWidth={2.4} />
+              <Sparkles className="h-3 w-3" strokeWidth={2.2} />
               開新店面
             </span>
             <h1 className="t-h1" style={{ fontFamily: 'var(--brand-font-heading)' }}>
@@ -203,7 +203,7 @@ export default function OnboardingPage() {
             >
               {pending ? '建立中...' : '開店, 進後台'}
               {!pending && (
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" strokeWidth={2.4} />
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" strokeWidth={2} />
               )}
             </Button>
           </form>

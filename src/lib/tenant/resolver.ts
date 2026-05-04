@@ -33,12 +33,14 @@ export const resolveTenantBySlug = (slug: string) =>
   )();
 
 /** 同時拿 tenant_id + 公開資料 (商家名 + 停權 + 審核狀態), 給 storefront 用.
- *  V1.7 D1: 加 approvedAt — null 表示等待 admin 核可, storefront 視為「暫停營業中」 */
+ *  V1.7 D1: 加 approvedAt — null 表示等待 admin 核可, storefront 視為「暫停營業中」
+ *  V1.9 T3 O2: 加 brandVoice — order confirmation page 用來生 merchant-voiced thank-you. */
 export const resolveStorefrontMeta = (slug: string) =>
   unstable_cache(
     async (): Promise<{
       tenantId: string;
       name: string;
+      brandVoice: string | null;
       suspendedAt: Date | null;
       suspendedReason: string | null;
       approvedAt: Date | null;
@@ -47,6 +49,7 @@ export const resolveStorefrontMeta = (slug: string) =>
         .select({
           id: merchants.id,
           name: merchants.name,
+          brandVoice: merchants.brandVoice,
           suspendedAt: merchants.suspendedAt,
           suspendedReason: merchants.suspendedReason,
           approvedAt: merchants.approvedAt,
@@ -58,6 +61,7 @@ export const resolveStorefrontMeta = (slug: string) =>
       return {
         tenantId: rows[0].id,
         name: rows[0].name,
+        brandVoice: rows[0].brandVoice,
         suspendedAt: rows[0].suspendedAt,
         suspendedReason: rows[0].suspendedReason,
         approvedAt: rows[0].approvedAt,

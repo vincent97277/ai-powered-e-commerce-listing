@@ -65,7 +65,7 @@ export function EditableProductFields({
           className="inline-flex items-center gap-2"
           style={{ color: 'var(--brand-primary)' }}
         >
-          <Edit3 className="h-3.5 w-3.5" strokeWidth={2.4} />
+          <Edit3 className="h-3.5 w-3.5" strokeWidth={2.2} />
           編輯文案 / 價格
         </Button>
       </div>
@@ -140,7 +140,7 @@ export function EditableProductFields({
           disabled={pending}
           className="inline-flex items-center gap-1"
         >
-          <X className="h-3.5 w-3.5" strokeWidth={2.4} />
+          <X className="h-3.5 w-3.5" strokeWidth={2.2} />
           取消
         </Button>
         <Button
@@ -153,7 +153,7 @@ export function EditableProductFields({
             borderRadius: 'var(--brand-radius)',
           }}
         >
-          <Save className="h-3.5 w-3.5" strokeWidth={2.4} />
+          <Save className="h-3.5 w-3.5" strokeWidth={2.2} />
           {pending ? '儲存中...' : '儲存'}
         </Button>
       </div>

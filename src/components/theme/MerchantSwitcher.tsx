@@ -361,7 +361,7 @@ export function MerchantSwitcher({ current, topMerchants, totalCount }: Props) {
                 }}
                 onClick={() => setOpen(false)}
               >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2.4} />
+                <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
                 開新店面
               </Link>
             </div>

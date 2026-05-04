@@ -125,7 +125,7 @@ export function UploadDropzone({
               >
                 <ImagePlus
                   className="h-9 w-9"
-                  strokeWidth={1.6}
+                  strokeWidth={1.8}
                   style={{ color: 'var(--brand-primary)' }}
                 />
                 <span
@@ -137,7 +137,7 @@ export function UploadDropzone({
                     boxShadow: 'var(--elev-2)',
                   }}
                 >
-                  <Upload className="h-3.5 w-3.5" strokeWidth={2.4} />
+                  <Upload className="h-3.5 w-3.5" strokeWidth={2.2} />
                 </span>
               </motion.div>
 

@@ -58,7 +58,7 @@ export function PublishToggle({
         transition={{ duration: 0.4, repeat: pending ? Infinity : 0 }}
         className="inline-block"
       >
-        {published ? <Globe className="h-4 w-4" strokeWidth={2.4} /> : <Lock className="h-4 w-4" strokeWidth={2.4} />}
+        {published ? <Globe className="h-4 w-4" strokeWidth={2} /> : <Lock className="h-4 w-4" strokeWidth={2} />}
       </motion.span>
       {pending ? '處理中...' : published ? '已上架, 點此下架' : '上架到 storefront'}
     </Button>

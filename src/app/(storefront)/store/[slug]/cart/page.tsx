@@ -66,7 +66,7 @@ export default function CartPage({ params }: { params: Promise<{ slug: string }>
               border: '1px dashed color-mix(in srgb, var(--brand-primary) 22%, transparent)',
             }}
           >
-            <ShoppingBag className="h-12 w-12 opacity-50" strokeWidth={1.4} style={{ color: 'var(--brand-primary)' }} />
+            <ShoppingBag className="h-12 w-12 opacity-50" strokeWidth={1.5} style={{ color: 'var(--brand-primary)' }} />
             <p className="t-h3" style={{ fontFamily: 'var(--brand-font-heading)' }}>
               購物車是空的
             </p>
@@ -121,7 +121,7 @@ export default function CartPage({ params }: { params: Promise<{ slug: string }>
                       className="px-2.5 py-1.5 hover:bg-brand-soft"
                       onClick={() => cart.setQuantity(it.productId, it.quantity - 1)}
                     >
-                      <Minus className="h-3.5 w-3.5" strokeWidth={2.4} />
+                      <Minus className="h-3.5 w-3.5" strokeWidth={2.2} />
                     </button>
                     <span className="min-w-8 text-center text-sm font-semibold tabular-nums">{it.quantity}</span>
                     <button
@@ -129,7 +129,7 @@ export default function CartPage({ params }: { params: Promise<{ slug: string }>
                       className="px-2.5 py-1.5 hover:bg-brand-soft"
                       onClick={() => cart.setQuantity(it.productId, it.quantity + 1)}
                     >
-                      <Plus className="h-3.5 w-3.5" strokeWidth={2.4} />
+                      <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
                     </button>
                   </div>
 

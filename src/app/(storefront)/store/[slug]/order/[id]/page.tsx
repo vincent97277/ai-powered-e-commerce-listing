@@ -5,6 +5,7 @@ import { resolveStorefrontMeta } from '@/lib/tenant/resolver';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { orders, orderItems, products } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { getThankYouMessage } from '@/lib/brand-voice/thank-you';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +38,8 @@ export default async function OrderConfirmationPage({
 
   if (!data) notFound();
 
+  const thankYou = getThankYouMessage(meta.brandVoice);
+
   return (
     <main
       className="min-h-screen px-6 py-12 md:px-12"
@@ -54,10 +57,13 @@ export default async function OrderConfirmationPage({
             <CheckCircle2 className="h-10 w-10" strokeWidth={2.2} style={{ color: 'var(--success)' }} />
           </div>
           <h1 className="t-h1" style={{ fontFamily: 'var(--brand-font-heading)' }}>
-            訂單成立
+            {thankYou}
           </h1>
+          <p className="text-sm mt-2" style={{ color: 'var(--ink-muted)' }}>
+            — {meta.name} 老闆
+          </p>
           <p
-            className="t-body mt-2"
+            className="t-body mt-4"
             style={{ color: 'color-mix(in srgb, var(--brand-text) 65%, transparent)' }}
           >
             訂單編號 <span className="font-mono text-sm">#{data.order.id.slice(0, 8)}</span>
