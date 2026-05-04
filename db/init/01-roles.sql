@@ -1,7 +1,17 @@
 -- ============================================================
--- 01-roles.sql — local Postgres setup (idempotent)
--- 簡化版: 不用 inherited NOLOGIN base role，直接 web_anon + web_admin
--- 重要: BYPASSRLS 必須直接 set 在 LOGIN role 上，inherit 沒用
+-- 01-roles.sql — LOCAL DEV ONLY (mounted by docker-compose into
+-- /docker-entrypoint-initdb.d, runs once on fresh pg volume init).
+--
+-- ⚠️  DO NOT run this file against a managed Postgres (Neon /
+--     Cloud SQL / Supabase / RDS). The passwords below are docker-
+--     compose-only defaults. For prod role bootstrap, use
+--     db/init/prod-roles.template.sql with values from a vault
+--     and execute via psql / migration runner — never via
+--     docker-entrypoint-initdb.d (managed Postgres has no such
+--     concept anyway).
+--
+-- BYPASSRLS must be set on the LOGIN role directly — Postgres role
+-- inheritance does not propagate this attribute.
 -- ============================================================
 
 DO $$ BEGIN
