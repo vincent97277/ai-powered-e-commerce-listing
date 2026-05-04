@@ -119,7 +119,8 @@ export default [
       'src/db/index.ts',
       'src/inngest/**',         // background job 走 dbAdmin (worker context，非 user-facing)
       'src/lib/storage/**',     // R2 / 系統內部，非 RLS 範圍
-      'src/app/api/products/generate/**',  // sync vision endpoint 需查 brand_voice (system query)
+      'src/app/api/products/generate/**',  // V2.2.5 enqueue + status: cap check + status query
+      'src/app/api/health/**',             // V2.2.1 platform health probe: pings dbUser + dbAdmin
       'src/app/onboarding/**',             // signup 需建 merchant (寫入 BYPASSRLS)
       'src/app/(merchant)/**',             // 商家後台需 BYPASSRLS 解析 cookie 對應的 merchant
       'src/app/(storefront)/**',           // storefront 需 BYPASSRLS 拿商家 theme/name

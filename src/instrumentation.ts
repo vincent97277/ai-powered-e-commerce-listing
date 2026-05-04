@@ -13,10 +13,8 @@ export async function register() {
     const { getEnv } = await import('./lib/env');
     try {
       getEnv();
-      // eslint-disable-next-line no-console
       console.log('[env] validated successfully');
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('[env] validation FAILED:\n', err instanceof Error ? err.message : err);
       // In production, fail-fast. In dev, surface the warning but keep going so
       // dev workflows that intentionally omit OPENAI_API_KEY etc. still boot.

@@ -325,6 +325,39 @@ UI code that wants to read tenant data must use `dbUser` + `withTenantTx`. CI fa
 
 ---
 
+### 4.4 Honest threat model for `web_admin` (V2.2.8)
+
+The /autoplan eng review flagged that earlier docs claimed "RLS mitigates container compromise." That claim was overstated and is corrected here.
+
+**Reality:** `DATABASE_URL_ADMIN` (which uses the `web_admin` role with `BYPASSRLS`) is mounted as an environment variable in every server runtime — Vercel function, Cloud Run container, local Node process. Any code path executing inside that runtime has access to a connection that bypasses RLS.
+
+**What this means:**
+- An RCE in any server route, server action, or Inngest worker = full read/write access to all tenants' data, regardless of RLS.
+- A leaked `dbAdmin` connection (e.g., a logged connection string) = same blast radius.
+- RLS DOES still protect against application-logic bugs (a route that does `dbUser.select(...)` will not see other tenants' rows even if the query is mistyped). It does NOT protect against compromise.
+
+**What we DO have, in order of strength:**
+1. **ESLint `no-restricted-imports` allowlist** — prevents accidental `dbAdmin` use in routes that don't need it. Allowlist is in `eslint.config.mjs`. Auditing it is a one-grep job.
+2. **Code review discipline** — every entry in the allowlist has a one-line justification comment naming the operation that requires BYPASSRLS (resolve merchant from cookie, fetch theme for storefront, etc.).
+3. **Per-route audit during reviews** — when a route adds a new `dbAdmin` call site, the reviewer checks: does this read/write only data scoped to the current tenant via cookie? If not, it shouldn't be in a user-facing route.
+4. **Suspended-merchant guard** — write paths additionally call `assertNotSuspended(tenantId)` so a suspended merchant cannot ship products even if they bypass UI gates. Read-only stays available.
+5. **Rate limiting** — onboarding has DB-backed IP rate limits to make automated probing expensive.
+
+**What we'd need for stronger protection:**
+- Split admin operations to a separate runtime that doesn't accept user traffic (e.g., a separate Cloud Run service with its own IAM-bound `DATABASE_URL_ADMIN`, only reachable from internal jobs / scheduled functions).
+- Alternatively, narrow `web_admin` to specific stored procedures rather than full DB access — still doesn't fix RCE-as-DB-access, but reduces query surface.
+- Either approach is out of scope for portfolio; documenting the gap is the V2.2.8 deliverable.
+
+**Auditing dbAdmin call sites today:**
+```bash
+# Every file that imports from @/db/admin-only or imports { dbAdmin } from @/db
+grep -rn "from '@/db/admin-only'\|import.*dbAdmin" --include='*.ts' --include='*.tsx' src/
+```
+
+If a new file shows up here, the reviewer's job is to confirm it belongs in the eslint.config.mjs allowlist and to verify the queries inside are tenant-scoped or admin-context-justified.
+
+---
+
 ## 5. Security layers
 
 Defense-in-depth. Each layer has its own test file.
