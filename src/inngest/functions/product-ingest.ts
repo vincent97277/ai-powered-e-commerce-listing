@@ -19,7 +19,13 @@ import { callVisionWithRetry } from '@/lib/ai/vision';
 import { inngest } from '../client';
 import { withTenantTx } from '@/lib/db/with-tenant';
 import { dbAdmin } from '@/db/admin-only';
-import { importSessions, merchants, products, type ProductAiMetadata } from '@/db/schema';
+import {
+  aiUsageEvents,
+  importSessions,
+  merchants,
+  products,
+  type ProductAiMetadata,
+} from '@/db/schema';
 import { readFile, writeProcessed, getPublicUrl } from '@/lib/storage';
 
 export const productIngestFn = inngest.createFunction(
@@ -82,9 +88,9 @@ export const productIngestFn = inngest.createFunction(
 
     // V1.5 review C1: 把 vision 回傳的 token usage 累積進 import_sessions, 給 cost cap 讀
     // step.run idempotency: 同一 step ID retry 時 Inngest 不重跑 → 不會重複加 usage
-    // 沒 importSessionId (e.g. 同步 generate API 不會走 inngest) 就跳過
     // 失敗 case usage 會是 0/0, write 也沒副作用 — 直接跳過寫入
-    if (importSessionId && (visionResult.usage.tokensIn > 0 || visionResult.usage.tokensOut > 0)) {
+    const hasUsage = visionResult.usage.tokensIn > 0 || visionResult.usage.tokensOut > 0;
+    if (importSessionId && hasUsage) {
       await step.run('record-token-usage', async () => {
         // import_sessions 沒 tenant_id 欄位 (RLS via JOIN merchants), 但 withTenantTx 會
         // SET LOCAL app.tenant_id, RLS policy 走 JOIN 認得 merchant_id = tenantId 的 session
@@ -99,6 +105,22 @@ export const productIngestFn = inngest.createFunction(
               updatedAt: new Date(),
             })
             .where(eq(importSessions.id, importSessionId));
+        });
+      });
+    }
+
+    // V2.2.5: when this run is from a photo-upload (no importSessionId), record
+    // ai_usage_events instead so the daily cost cap still sees the spend.
+    // step.run idempotency keeps retries from double-counting.
+    if (!importSessionId && hasUsage) {
+      await step.run('record-ai-usage-photo-upload', async () => {
+        await withTenantTx(tenantId, async (tx) => {
+          await tx.insert(aiUsageEvents).values({
+            tenantId,
+            tokensIn: visionResult.usage.tokensIn,
+            tokensOut: visionResult.usage.tokensOut,
+            source: 'photo_upload',
+          });
         });
       });
     }
@@ -127,6 +149,8 @@ export const productIngestFn = inngest.createFunction(
                 price_twd: { min: 0, max: 0 },
                 confidence: 0,
                 status: 'failed',
+                source_key: r2Key,
+                error: visionResult.error,
               } satisfies ProductAiMetadata,
             })
             .returning({ id: products.id });
@@ -159,7 +183,11 @@ export const productIngestFn = inngest.createFunction(
               r2Key: processedKey,
               priceCents: aiData.price_twd.min * 100,
               productStatus: 'needs_review',
-              aiMetadata: { ...aiData, status: 'success' } satisfies ProductAiMetadata,
+              aiMetadata: {
+                ...aiData,
+                status: 'success',
+                source_key: r2Key,
+              } satisfies ProductAiMetadata,
             })
             .returning({ id: products.id });
           return inserted[0].id;
@@ -182,6 +210,7 @@ export const productIngestFn = inngest.createFunction(
             aiMetadata: {
               ...ai,
               status: 'success',
+              source_key: r2Key,
             } satisfies ProductAiMetadata,
           })
           .returning({ id: products.id });

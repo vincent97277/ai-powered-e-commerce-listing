@@ -1,31 +1,41 @@
 /**
- * 同步 GPT-4o vision endpoint — 商品資訊生成
+ * Async vision generation enqueue — V2.2.5.
  *
- * Body: { storageKey: string, productId?: string }
- *   storageKey — 來自 /api/uploads
- *   productId  — optional，若有就把生成結果寫進該 product 並回新 product id
+ * Was: synchronous GPT-4o vision call inside this route handler. Took 5-15s,
+ * blew past Vercel Hobby's 10s function timeout. Now enqueues an Inngest
+ * `product.ingest` event (same event used by import flows) and returns
+ * immediately. The Inngest worker reads the upload from R2 / local-fs,
+ * runs sharp + vision, writes the products row.
  *
- * Response: { success: true, data: ProductOutput, productId } | { success: false, error: string }
+ * Frontend pattern: GenerationStream.tsx posts here to enqueue, then polls
+ * GET /api/products/generate/status?storageKey=<key> until status='success'.
+ *
+ * What stays synchronous in this route:
+ *  - Auth (resolveMerchantFromCookie)
+ *  - Suspended-merchant guard (assertNotSuspended) — fast DB read
+ *  - Daily cost cap (assertWithinDailyCap) — fast DB read
+ *  - Storage-key tenant prefix check
+ *
+ * Body: { storageKey: string }
+ *   storageKey — opaque key returned by /api/uploads
+ *
+ * Response: { success: true, status: 'pending', storageKey } — 200
+ *           { success: false, error: ... }                    — 400/403/429
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { readFile } from '@/lib/storage';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { assertNotSuspended, MerchantSuspendedError } from '@/lib/merchant/suspend-guard';
-import { withTenantTx } from '@/lib/db/with-tenant';
-import { products, aiUsageEvents, type ProductAiMetadata } from '@/db/schema';
-import { callVisionWithRetry } from '@/lib/ai/vision';
-import { aiOutputToUi } from '@/lib/ai/flatten';
 import { assertWithinDailyCap, CapExceededError } from '@/lib/observability/ai-cost';
-import sharp from 'sharp';
+import { inngest } from '@/inngest/client';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// Enqueue is fast (DB checks + 1 Inngest publish). 5s ceiling is generous.
+export const maxDuration = 5;
 
 export async function POST(req: NextRequest) {
   try {
     const merchant = await resolveMerchantFromCookie();
 
-    // V1 #53: 停權商家不可上架
     try {
       await assertNotSuspended(merchant.tenantId);
     } catch (err) {
@@ -37,13 +47,11 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => null);
     const storageKey = body?.storageKey as string | undefined;
-    const persist = body?.persist !== false; // default true — 寫入 DB
 
     if (!storageKey || typeof storageKey !== 'string') {
       return NextResponse.json({ success: false, error: '缺少 storageKey' }, { status: 400 });
     }
 
-    // 防呆: storage key 必須以 tenantId/ 開頭
     if (!storageKey.startsWith(`${merchant.tenantId}/`)) {
       return NextResponse.json(
         { success: false, error: `storage key 不屬於當前商家 (${merchant.slug})` },
@@ -51,7 +59,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // V1.5 A2: 每日 AI 成本守門 — 超過 cap 直接 429, 不打 vision API
     try {
       await assertWithinDailyCap(merchant.tenantId);
     } catch (err) {
@@ -70,81 +77,47 @@ export async function POST(req: NextRequest) {
       throw err;
     }
 
-    // 讀檔 + 縮圖
-    const original = await readFile(storageKey);
-    const processed = await sharp(original)
-      .rotate()
-      .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 85 })
-      .toBuffer();
-
-    const dataUrl = `data:image/webp;base64,${processed.toString('base64')}`;
-
-    // 真實呼叫 GPT-4o，brand_voice 來自當前 merchant
-    const result = await callVisionWithRetry({
-      imageUrl: dataUrl,
-      brandVoice: merchant.brandVoice,
-      maxRetries: 2,
-    });
-
-    if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error, attempts: result.attempts },
-        { status: 502 },
-      );
-    }
-
-    // V1.5 smoke fix: sync vision call 也要落盤 token 用量,
-    // 不然 DailyCostChip 永遠看 import_sessions, 同步路徑顯示 NT$0
-    // 用 withTenantTx 走 RLS-safe path (set_config + WITH CHECK 雙重防呆)
-    if (result.usage.tokensIn > 0 || result.usage.tokensOut > 0) {
-      try {
-        await withTenantTx(merchant.tenantId, async (tx) => {
-          await tx.insert(aiUsageEvents).values({
-            tenantId: merchant.tenantId,
-            tokensIn: result.usage.tokensIn,
-            tokensOut: result.usage.tokensOut,
-            source: 'photo_upload',
-          });
-        });
-      } catch (logErr) {
-        // 記不到 usage 不該擋商品上架 — 商家已經付了 vision 費用, 後續 UI 用 cost cap 守
-        console.error('[/api/products/generate] ai_usage_events insert failed', logErr);
-      }
-    }
-
-    const uiData = aiOutputToUi(result.data);
-
-    // 寫進 DB (透過 RLS, 確保歸屬於當前 merchant)
-    let productId: string | undefined;
-    if (persist) {
-      productId = await withTenantTx(merchant.tenantId, async (tx) => {
-        const [inserted] = await tx
-          .insert(products)
-          .values({
-            tenantId: merchant.tenantId,
-            title: result.data.title,
-            description: result.data.description,
-            r2Key: storageKey,
-            priceCents: result.data.price_twd.min * 100,
-            isPublished: false,
-            aiMetadata: { ...result.data, status: 'success' } satisfies ProductAiMetadata,
-          })
-          .returning({ id: products.id });
-        return inserted.id;
+    try {
+      await inngest.send({
+        name: 'product.ingest',
+        data: {
+          tenantId: merchant.tenantId,
+          merchantId: merchant.tenantId,
+          r2Key: storageKey,
+        },
       });
+    } catch (sendErr) {
+      console.error(
+        '[/api/products/generate] inngest send failed',
+        sendErr instanceof Error ? sendErr.message : sendErr,
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'INNGEST_UNAVAILABLE',
+          message:
+            'Background worker offline. In dev: start `inngest-cli dev`. In prod: check Inngest Cloud connectivity.',
+        },
+        { status: 503 },
+      );
     }
 
     return NextResponse.json({
       success: true,
-      data: uiData,
-      attempts: result.attempts,
-      productId,
+      status: 'pending',
+      storageKey,
       merchantSlug: merchant.slug,
-      brandVoiceUsed: merchant.brandVoice ? merchant.brandVoice.slice(0, 60) + '...' : '(空)',
     });
   } catch (err) {
-    console.error('[/api/products/generate] error', err);
+    // Let Next.js redirect signals propagate (resolveMerchantFromCookie() calls redirect()
+    // when the cookie is missing/invalid — that should reach the framework, not be wrapped).
+    if (
+      err instanceof Error &&
+      (err.message === 'NEXT_REDIRECT' || (err as { digest?: string }).digest?.startsWith?.('NEXT_REDIRECT'))
+    ) {
+      throw err;
+    }
+    console.error('[/api/products/generate] error', err instanceof Error ? err.message : err);
     return NextResponse.json(
       { success: false, error: err instanceof Error ? err.message : '伺服器錯誤' },
       { status: 500 },

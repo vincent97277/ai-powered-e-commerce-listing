@@ -89,35 +89,61 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           toast.dismiss('upload');
           toast.success('照片上傳完成', { duration: 1500 });
 
-          // Step 2: 同步呼叫 GPT-4o vision
-          // V1.9 T3 O3: scan-line + rotating reassurance copy (in-context UI) replaces the apology toast.
-          console.log('[GenerationStream] calling GPT-4o vision');
+          // V2.2.5: enqueue async vision (replaces sync 5-15s call that blew Vercel's 10s limit).
+          // Server-side: validate merchant + cap, then send Inngest event, return immediately.
+          // Client-side: poll /api/products/generate/status until worker writes the products row.
+          console.log('[GenerationStream] enqueueing async vision');
           setVisionLoading(true);
-          const aiRes = await fetch('/api/products/generate', {
+          const enqueueRes = await fetch('/api/products/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ storageKey: uploadJson.key }),
           });
-          const aiJson = await aiRes.json();
-          console.log('[GenerationStream] AI result', aiRes.status, aiJson);
-          setVisionLoading(false);
-
-          if (!aiRes.ok || !aiJson.success) {
-            throw new Error(aiJson.error ?? `AI 生成失敗 (HTTP ${aiRes.status})`);
+          const enqueueJson = await enqueueRes.json();
+          if (!enqueueRes.ok || !enqueueJson.success) {
+            setVisionLoading(false);
+            throw new Error(
+              enqueueJson.message ??
+                enqueueJson.error ??
+                `AI 排程失敗 (HTTP ${enqueueRes.status})`,
+            );
           }
 
-          // Step 3: 拿到 ProductOutput → 進 streaming 動畫
-          toast.success(
-            `已用「${aiJson.merchantSlug ?? '當前商家'}」品牌語氣生成`,
-            {
-              description: aiJson.brandVoiceUsed
-                ? `語氣樣本: ${aiJson.brandVoiceUsed}`
-                : undefined,
-              duration: 3500,
-            },
-          );
-          if (aiJson.productId) setSavedProductId(aiJson.productId);
-          start(aiJson.data as ProductOutput);
+          // Poll for worker completion. 30s total budget at 1.5s interval = 20 attempts.
+          const POLL_INTERVAL_MS = 1500;
+          const POLL_BUDGET_MS = 30_000;
+          const start_ts = Date.now();
+          let result:
+            | { status: 'success'; productId: string; data: ProductOutput }
+            | { status: 'failed'; productId?: string; error: string }
+            | null = null;
+
+          while (Date.now() - start_ts < POLL_BUDGET_MS) {
+            await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+            const statusRes = await fetch(
+              `/api/products/generate/status?storageKey=${encodeURIComponent(uploadJson.key)}`,
+            );
+            if (!statusRes.ok) continue;
+            const statusJson = await statusRes.json();
+            if (statusJson.status === 'success' || statusJson.status === 'failed') {
+              result = statusJson;
+              break;
+            }
+          }
+          setVisionLoading(false);
+
+          if (!result) {
+            throw new Error('AI 處理超時 (30 秒) — Inngest dev CLI 是否在跑?');
+          }
+          if (result.status === 'failed') {
+            throw new Error(result.error);
+          }
+
+          toast.success(`已用「${enqueueJson.merchantSlug ?? '當前商家'}」品牌語氣生成`, {
+            duration: 3500,
+          });
+          setSavedProductId(result.productId);
+          start(result.data);
         } catch (err) {
           toast.dismiss('upload');
           setVisionLoading(false);

@@ -153,6 +153,12 @@ export type ProductAiMetadata = {
   status?: 'success' | 'failed';
   error?: string;
   attempts?: number;
+  /**
+   * V2.2.5: original storage key the user uploaded (before sharp processing).
+   * Used by /api/products/generate/status to correlate the async vision result
+   * back to the upload that triggered it. Worker fills this in; route polls by it.
+   */
+  source_key?: string;
 };
 
 /* ─────────────────────────── 5. orders ─────────────────────────── */
