@@ -9,9 +9,9 @@ Dev onboarding for someone (or future-you) cloning `demo-sass-2`. For project-le
 ```bash
 docker compose up -d                                        # 1. Postgres + roles
 cp .env.local.example .env.local                            # 2. Env (defaults work)
-bun install                                                 # 3. Deps
-bun run db:push                                             # 4. Migrate (0000..0007)
-bun run dev                                                 # 5. http://localhost:3000
+pnpm install                                                # 3. Deps
+pnpm db:migrate                                             # 4. Apply all SQL migrations
+pnpm dev                                                    # 5. http://localhost:3000
 ```
 
 If you want AI features (photo upload, IG/蝦皮 import) end-to-end, you also need:
@@ -82,23 +82,30 @@ Defaults in `.env.local.example` align with the Docker container — no edits ne
 ### 3. Install + migrate
 
 ```bash
-bun install
-bun run db:push
+pnpm install
+pnpm db:migrate
 ```
 
-`db:push` runs `drizzle-kit push`, which applies the schema in `src/db/schema.ts`. To apply individual migrations instead (useful when bisecting):
+`db:migrate` runs the custom SQL migration runner at `scripts/db/migrate.ts`. It reads every `drizzle/migrations/*.sql` (excluding `.rollback.sql`), tracks applied filenames in a `__migrations__` table, and runs each unapplied file in its own transaction.
+
+V2.2.0 reason for the custom runner: drizzle-kit's `migrate` only walks its own `_journal.json`, which only tracked 0000-0002. Hand-written RLS / feature migrations (`0001a_init_rls`, `0003-0008`) were never journaled and were applied historically via manual `psql` or `db:push`. This runner fixes that — `pnpm db:migrate` now applies everything in lexical order, idempotent. (V2.2.10 renamed `0001_init_rls.sql` → `0001a_init_rls.sql` to disambiguate from drizzle-generated `0001_confused_stone_men.sql`.)
 
 ```bash
-docker exec -i demo-sass-2-postgres psql -U owner -d demo_sass_2 \
-  < drizzle/migrations/0000_moaning_mimic.sql
-# ...repeat for 0001..0007
+pnpm db:migrate:status           # show which migrations are applied / pending
+pnpm db:migrate:bootstrap        # mark all current files as applied without running them
+                                  # (use this once if you have an existing local DB built via db:push)
 ```
+
+`db:push` (drizzle-kit push) is still available for quick schema iteration during dev but does NOT apply RLS / hand-written migrations. Production deploys must use `db:migrate`.
 
 Each migration has a paired `*.rollback.sql`. To roll back V1.7's onboarding hardening for example:
 
 ```bash
 docker exec -i demo-sass-2-postgres psql -U owner -d demo_sass_2 \
   < drizzle/migrations/0007_v17_onboarding_hardening.rollback.sql
+# Then manually remove the row from __migrations__:
+docker exec -i demo-sass-2-postgres psql -U owner -d demo_sass_2 \
+  -c "DELETE FROM __migrations__ WHERE filename = '0007_v17_onboarding_hardening.sql'"
 ```
 
 ### 4. Seed two demo merchants
@@ -258,7 +265,7 @@ ESLint blocks `dbAdmin` outside the allowlist in `eslint.config.mjs`. If you gen
 ```bash
 docker compose down -v   # destroy volume — full reset
 docker compose up -d
-bun run db:push          # re-migrate
+pnpm db:migrate          # re-apply all migrations
 # then re-seed (Step 4)
 ```
 
