@@ -19,6 +19,36 @@ import {
 } from '@/db/schema';
 import { sql, eq } from 'drizzle-orm';
 
+// drizzle-orm 0.45+ wraps the driver error in DrizzleQueryError. The original
+// postgres message ("row-level security policy" / "permission denied for table")
+// is on `.cause.message`, while `.message` is the templated "Failed query: ...".
+// vitest's .rejects.toThrow(regex) only consults .message, so it misses the
+// real RLS string. Walk the full cause chain.
+async function expectRejectsMatching(
+  promise: Promise<unknown>,
+  pattern: RegExp,
+): Promise<void> {
+  try {
+    await promise;
+  } catch (e: unknown) {
+    const parts: string[] = [];
+    let cur: unknown = e;
+    for (let i = 0; i < 10 && cur; i++) {
+      const m = (cur as { message?: unknown }).message;
+      if (typeof m === 'string') parts.push(m);
+      cur = (cur as { cause?: unknown }).cause;
+    }
+    const joined = parts.join(' | ');
+    if (pattern.test(joined)) return;
+    throw new Error(
+      `Expected error matching ${pattern} but error chain was:\n${joined}`,
+    );
+  }
+  throw new Error(
+    `Expected promise to reject with ${pattern} but it resolved successfully`,
+  );
+}
+
 // 用 99..., aa... 避免跟 demo merchant (11..., 22...) 撞
 const TENANT_A = '99999999-9999-9999-9999-999999999999';
 const TENANT_B = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -106,7 +136,7 @@ describe('RLS multi-tenant isolation', () => {
     expect(titles).not.toContain('B-item');
 
     // WITH CHECK：嘗試插 tenant B 的資料但 context 是 A → 應該被拒
-    await expect(
+    await expectRejectsMatching(
       dbUser.transaction(async (tx) => {
         await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
         await tx.execute(sql`
@@ -119,8 +149,9 @@ describe('RLS multi-tenant isolation', () => {
             '{}'::jsonb
           )
         `);
-      })
-    ).rejects.toThrow(/row-level security/i);
+      }),
+      /row-level security/i,
+    );
   });
 
   /**
@@ -131,8 +162,9 @@ describe('RLS multi-tenant isolation', () => {
    */
   it('T3: web_anon cannot escalate to bypass RLS', async () => {
     // 嘗試切到 BYPASSRLS role 應失敗 (web_anon 沒被 GRANT 到 web_admin)
-    await expect(dbUser.execute(sql`SET ROLE web_admin`)).rejects.toThrow(
-      /permission denied|must be member|does not exist|不存在/i
+    await expectRejectsMatching(
+      dbUser.execute(sql`SET ROLE web_admin`),
+      /permission denied|must be member|does not exist|不存在/i,
     );
 
     await expect(dbUser.execute(sql`SET SESSION AUTHORIZATION postgres`)).rejects.toThrow();
@@ -196,7 +228,7 @@ describe('RLS multi-tenant isolation', () => {
       status: 'paid',
     });
 
-    await expect(
+    await expectRejectsMatching(
       dbUser.transaction(async (tx) => {
         await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
         // 商家 A 試圖寫一筆 history 指向 B 的 order
@@ -205,7 +237,8 @@ describe('RLS multi-tenant isolation', () => {
           VALUES (${orderB}::uuid, 'pending', 'paid', 'merchant')
         `);
       }),
-    ).rejects.toThrow(/row-level security/i);
+      /row-level security/i,
+    );
   });
 
   /**
@@ -238,7 +271,7 @@ describe('RLS multi-tenant isolation', () => {
    * V1 #73: import_sessions WITH CHECK 拒商家 A 寫 B 的 session
    */
   it('T7: import_sessions WITH CHECK blocks cross-tenant insert', async () => {
-    await expect(
+    await expectRejectsMatching(
       dbUser.transaction(async (tx) => {
         await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
         await tx.execute(sql`
@@ -246,7 +279,8 @@ describe('RLS multi-tenant isolation', () => {
           VALUES (${TENANT_B}::uuid, 'https://shopee.tw/x', 'shopee')
         `);
       }),
-    ).rejects.toThrow(/row-level security/i);
+      /row-level security/i,
+    );
   });
 
   /**
@@ -254,11 +288,12 @@ describe('RLS multi-tenant isolation', () => {
    * 即使 set tenant context 也讀不到 (RA2 enforcement)
    */
   it('T8: admin_action_history deny-all to web_anon', async () => {
-    await expect(
+    await expectRejectsMatching(
       dbUser.transaction(async (tx) => {
         await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
         await tx.execute(sql`SELECT * FROM admin_action_history`);
       }),
-    ).rejects.toThrow(/permission denied|insufficient/i);
+      /permission denied|insufficient/i,
+    );
   });
 });
