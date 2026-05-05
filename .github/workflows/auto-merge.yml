@@ -58,8 +58,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ steps.pr.outputs.number }}
         run: |
-          DATA=$(gh pr view "$PR" --json labels,title,user,files --repo "${{ github.repository }}")
-          AUTHOR=$(echo "$DATA" | jq -r '.user.login')
+          # gh pr view --json field is `author` not `user` (caught when the
+          # workflow errored on PR #7 — gh dumps the valid field list on bad
+          # input; we use it now)
+          DATA=$(gh pr view "$PR" --json labels,title,author,files --repo "${{ github.repository }}")
+          AUTHOR=$(echo "$DATA" | jq -r '.author.login')
           TITLE=$(echo "$DATA" | jq -r '.title')
           LABELS=$(echo "$DATA" | jq -r '.labels[].name' | tr '\n' ',')
           FILES=$(echo "$DATA" | jq -r '.files[].path' | tr '\n' ',')
