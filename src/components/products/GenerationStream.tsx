@@ -109,27 +109,34 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
             );
           }
 
-          // Poll for worker completion. 45s budget at 1.5s interval = 30 attempts.
-          // V2.2.10 / autoplan v2 F10: budget bumped from 30s to 45s because Neon
-          // autosuspend cold (~2s) + Vercel fn cold (~1s) + Inngest dispatch
-          // (~1s) + vision (5-15s) can compound past 30s on first request of the
-          // day. Past 20s elapsed we update the reassurance copy so the user
-          // knows we're still working, not stuck.
+          // Poll for worker completion. V2.2.12: budget 45s → 180s after live-deploy
+          // measurement showed cold-start runs against Vercel sin1 + Neon Singapore +
+          // Inngest Cloud taking 60-90s end-to-end (sharp libvips first-load + multi-step
+          // function cold containers). 45s was always going to fixture-fallback the user
+          // on first-of-the-day uploads. Two progressive UI hints (30s, 90s) tell the user
+          // we're still working so they don't bounce.
           const POLL_INTERVAL_MS = 1500;
-          const POLL_BUDGET_MS = 45_000;
-          const SLOW_HINT_AT_MS = 20_000;
+          const POLL_BUDGET_MS = 180_000;
+          const COLD_HINT_AT_MS = 30_000;
+          const VERY_COLD_HINT_AT_MS = 90_000;
           const start_ts = Date.now();
           let result:
             | { status: 'success'; productId: string; data: ProductOutput }
             | { status: 'failed'; productId?: string; error: string }
             | null = null;
-          let slowHintShown = false;
+          let coldHintShown = false;
+          let veryColdHintShown = false;
 
           while (Date.now() - start_ts < POLL_BUDGET_MS) {
             await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-            if (!slowHintShown && Date.now() - start_ts > SLOW_HINT_AT_MS) {
-              slowHintShown = true;
-              toast.info('處理時間較長，再稍候一下...', { duration: 4000 });
+            const elapsed = Date.now() - start_ts;
+            if (!coldHintShown && elapsed > COLD_HINT_AT_MS) {
+              coldHintShown = true;
+              toast.info('AI 模型正在喚醒，第一次比較久...', { duration: 6000 });
+            }
+            if (!veryColdHintShown && elapsed > VERY_COLD_HINT_AT_MS) {
+              veryColdHintShown = true;
+              toast.info('還在跑 — 大型圖片處理 + GPT-4o 解析中', { duration: 8000 });
             }
             const statusRes = await fetch(
               `/api/products/generate/status?storageKey=${encodeURIComponent(uploadJson.key)}`,
@@ -144,7 +151,7 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           setVisionLoading(false);
 
           if (!result) {
-            throw new Error('AI 處理超時 (45 秒) — Inngest worker 是否在跑?');
+            throw new Error('AI 處理超時 (3 分鐘) — Inngest worker 是否在跑?');
           }
           if (result.status === 'failed') {
             throw new Error(result.error);
