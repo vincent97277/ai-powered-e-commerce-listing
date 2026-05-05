@@ -18,18 +18,18 @@ If you want AI features (photo upload, IG/蝦皮 import) end-to-end, you also ne
 
 ```bash
 # Add OPENAI_API_KEY to .env.local, then:
-bunx inngest-cli dev -u http://localhost:3000/api/inngest   # second terminal
+pnpm inngest:dev   # second terminal
 ```
 
 ---
 
 ## Prerequisites
 
-- **Node 20+** (for Next.js 15 / React 19)
-- **Bun** (preferred) — `curl -fsSL https://bun.sh/install | bash`. `pnpm` and `npm` work but the scripts assume `bun` for speed.
+- **Node 22+** (for Next.js 15 / React 19, matches `engines.node` in package.json)
+- **pnpm 9+** — install via `corepack enable` (uses the `packageManager` pin). `bun` / `npm` / `yarn` are blocked by an `only-allow` preinstall.
 - **Docker Desktop** (for the Postgres 16 container)
 - **OpenAI API key** — only required if you want to test AI photo → listing or batch import. Without it, the rest of the app runs.
-- **Inngest dev CLI** — only required for batch import (`/merchant/products/import`). Auto-fetched by `bunx`.
+- **Inngest dev CLI** — only required for batch import (`/merchant/products/import`). Run `pnpm inngest:dev` (auto-fetched on first use).
 
 ---
 
@@ -134,7 +134,7 @@ Note: V1.7 added `approved_at` — pre-existing merchants need it set or storefr
 ### 5. Run
 
 ```bash
-bun run dev
+pnpm dev
 ```
 
 http://localhost:3000.
@@ -142,7 +142,7 @@ http://localhost:3000.
 For AI batch import, run the Inngest dev CLI in a second terminal:
 
 ```bash
-bunx inngest-cli dev -u http://localhost:3000/api/inngest
+pnpm inngest:dev
 # Inngest UI at http://localhost:8288
 ```
 
@@ -193,13 +193,14 @@ The `(admin)` layout calls `validateAdminSession()` against the DB on every rend
 ## Tests
 
 ```bash
-bunx vitest run                                     # full suite (154 tests)
-bunx vitest run tests/rls.e2e.test.ts               # one file
-bunx vitest run tests/ai/cost-cap.test.ts           # AI cost cap
-bunx vitest run --reporter=verbose                  # see each test name
-bun run test:rls                                    # alias for the RLS suite
-bunx tsc --noEmit                                   # type check
-bun run lint                                        # ESLint (incl. dbAdmin allowlist)
+pnpm vitest run                                     # full suite (260+ tests)
+pnpm vitest run tests/rls.e2e.test.ts               # one file
+pnpm vitest run tests/ai/cost-cap.test.ts           # AI cost cap
+pnpm vitest run --reporter=verbose                  # see each test name
+pnpm test:rls                                       # alias for the RLS suite
+pnpm typecheck                                      # type check
+pnpm lint                                           # ESLint (incl. dbAdmin allowlist)
+pnpm lint:docs                                      # README drift check (V2.3.6)
 ```
 
 Tests connect to the same Docker Postgres. RLS suite runs as `web_anon`; everything else uses `dbAdmin` for fixture setup speed and uses UUID prefix `99999999-...` for cleanup namespacing.
@@ -216,7 +217,7 @@ Slug cache stuck on a stale negative result. Fix:
 
 ```bash
 rm -rf .next
-bun run dev
+pnpm dev
 ```
 
 The `(merchant)/settings` action calls `invalidateSlug()` on slug change — this avoids the issue in production. See `src/lib/tenant/resolver.ts`.
@@ -236,10 +237,10 @@ docker exec -it demo-sass-2-postgres psql -U owner -d demo_sass_2 \
 
 ### Inngest dev CLI can't reach the app
 
-Default URL is `http://localhost:3000/api/inngest`. If `bun run dev` ended up on port 3001 (3000 occupied), point the CLI explicitly:
+Default URL is `http://localhost:3000/api/inngest`. If `pnpm dev` ended up on port 3001 (3000 occupied), point the CLI explicitly:
 
 ```bash
-bunx inngest-cli dev -u http://localhost:3001/api/inngest
+pnpm exec inngest-cli dev -u http://localhost:3001/api/inngest
 ```
 
 ### `OPENAI_API_KEY` missing → 503 on AI routes
@@ -296,7 +297,7 @@ When switching to Neon + R2 + Vercel:
 |---|---|
 | **Neon** | `src/db/index.ts` — swap to `drizzle-orm/neon-serverless` driver. `.env` — Neon connection strings. **Important**: Neon roles need `CREATE ROLE web_anon WITH LOGIN PASSWORD '...'` + `CREATE ROLE web_admin WITH LOGIN PASSWORD '...' BYPASSRLS` re-applied via SQL editor (`docker compose` ran `01-roles.sql` automatically; Neon does not). |
 | **R2** | `src/lib/storage/` — promote the `.legacy` R2 client. Server actions switch to presigned URL flow. `useFileUpload` direct-uploads to R2. |
-| **Vercel** | `bunx vercel --prod` after pulling `.env.local` to Vercel env. |
+| **Vercel** | `pnpm dlx vercel --prod` after pulling `.env.local` to Vercel env. (V2.2 cloud deploy is the canonical path — see [DEPLOY.md](./DEPLOY.md).) |
 | **Inngest** | Add `INNGEST_EVENT_KEY` + `INNGEST_SIGNING_KEY` from app.inngest.com. The `/api/inngest` route is already serverless-ready. |
 
 V1.7 `approved_at` flow + reserved-slug list + IP rate limit work the same in production. Inngest worker logs map cleanly to the prod dashboard.

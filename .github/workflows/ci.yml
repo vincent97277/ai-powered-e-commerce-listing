@@ -101,6 +101,11 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: README drift check
+        # V2.3.6: catches README claiming wrong license / wrong test count /
+        # banned bun commands, so docs don't rot 8 versions deep again.
+        run: pnpm lint:docs
+
       - name: Typecheck
         run: pnpm typecheck
 

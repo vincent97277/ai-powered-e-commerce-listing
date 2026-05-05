@@ -102,12 +102,15 @@ jobs:
           fi
 
           # Rule 2: Pure docs (no src/ changes, label includes 'docs')
+          # V2.3.6: extend denylist to include .devcontainer/ and .github/workflows/ —
+          # those are executable config, not docs. Without this, a "docs"-labeled PR
+          # could silently change CI or the dev container. Caught by /autoplan eng review.
           if [ "$ALLOW" != "true" ] && echo ",$LABELS," | grep -q ",docs,"; then
-            if echo ",$FILES," | grep -qE ',src/|,scripts/|,drizzle/|,db/init/'; then
-              REASON="docs label but PR touches code paths — needs human review"
+            if echo ",$FILES," | grep -qE ',src/|,scripts/|,drizzle/|,db/init/|,\.devcontainer/|,\.github/workflows/'; then
+              REASON="docs label but PR touches code or executable config — needs human review"
             else
               ALLOW=true
-              REASON="Pure docs (no src/scripts/drizzle/db files touched)"
+              REASON="Pure docs (no src/scripts/drizzle/db/.devcontainer/.github/workflows files touched)"
             fi
           fi
 
