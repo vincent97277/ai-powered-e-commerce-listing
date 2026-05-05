@@ -6,6 +6,113 @@ Format: every entry is one Git commit with SHA + date + subject + bullet expansi
 
 ---
 
+## V2.2.14 — 2026-05-05 (PR #6)
+
+**docs: README live demo badge + STATUS V2.2 entry + CHANGELOG V2.2 entries**
+
+- README.md gets a `[![Live demo](...)](https://demo-sass-2.vercel.app)` badge at the top + storefront example links inline (`/store/akami` and `/store/afen`)
+- Tests badge bumped 154 → 260 (it was way out of date)
+- STATUS.md gets a full V2.2 section: 14 sub-versions (V2.2.0 → V2.2.14) describing what each shipped + the 4 deploy phases (CI / Neon / R2+Vercel / Inngest+smoke) + 4 post-deploy hotfix PRs, plus a production-data table (1m24s cold-start vs 3m1s pre-region-fix)
+- CHANGELOG entries for V2.2.0 → V2.2.13 added below
+
+No code changes; pure docs.
+
+---
+
+## V2.2.13 — 2026-05-05 (PR #5)
+
+**fix(v2.2.13): broken image URLs after R2 storage migration**
+
+V2.2.4 swapped to R2 but JSX kept hardcoded `<img src={`/uploads/${r2Key}`}>`. That path only resolves on local-fs (Next.js public/uploads/). On R2 the actual URL is `${R2_PUBLIC_URL}/${r2Key}`. Every uploaded product showed broken image in production until this fix.
+
+- New `src/lib/storage/public-url-client.ts` `imageUrlFor()` — client-safe (uses `NEXT_PUBLIC_R2_PUBLIC_URL` so Next.js inlines into client bundle), falls back to `/uploads/{key}` when env unset, treats `/fixtures/*` as local-only.
+- 4 JSX `<img src>` swapped: `(merchant)/merchant/products/page.tsx` (×2), `(storefront)/store/[slug]/page.tsx`, `(storefront)/store/[slug]/products/[id]/CustomerProductView.tsx`.
+- 2 export utilities now use server-side `getPublicUrl` from `@/lib/storage` (Shopee CSV imports need absolute URLs to fetch from outside our domain): `src/lib/export/shopee-csv.ts`, `src/lib/export/products-xlsx.ts`.
+- `src/lib/env.ts` adds required `NEXT_PUBLIC_R2_PUBLIC_URL` when `STORAGE_BACKEND=r2` in production.
+- Operator action: add `NEXT_PUBLIC_R2_PUBLIC_URL` to Vercel env (Production scope, same value as `R2_PUBLIC_URL`), redeploy.
+
+Test fix: `tests/export/shopee-csv.test.ts` now asserts absolute URL since that's the correct behavior. 260/260 pass.
+
+---
+
+## V2.2.12 — 2026-05-05 (PR #4)
+
+**fix(v2.2.12): bump frontend poll budget 45s → 180s for cold-start tolerance**
+
+Production data after V2.2 deploy:
+- iad1 (broken region) cold: 3m 1s
+- sin1 cold: 1m 24s
+- sin1 warm: ~30s estimated
+
+Frontend was at 45s — every cold-start upload hit fixture fallback even though Inngest worker actually succeeded. User saw fake data instead of their real product.
+
+- `POLL_BUDGET_MS` 45000 → 180000 (3 min covers cold start + sharp libvips first-load + Neon autosuspend wake + Inngest multi-step container init)
+- New progressive hints at 30s ("AI 模型正在喚醒") and 90s ("還在跑 — 大型圖片處理 + GPT-4o 解析中") so users know we're working
+- Timeout error message updated
+
+---
+
+## V2.2.11 — 2026-05-05 (PR #3)
+
+**fix(v2.2.11): guard against malformed Inngest event payload**
+
+Post-sync introspection delivered an event with empty data, crashed worker with `TypeError: Cannot read properties of undefined (reading 'includes')` from `assertSafeKey(undefined).includes('..')`.
+
+Three layers of guards + 4 tests:
+- `product-ingest.ts`: validate `tenantId` / `r2Key` / `merchantId` at handler top, return `{ ok: false, skipped: true, reason: '<missing_field>' }` instead of throwing.
+- `r2.ts`: `assertSafeKey` type-narrows via `asserts key is string`, rejects undefined / null / empty / non-string before `.includes()`.
+- `local-fs.ts`: same upfront check in `readFile` before `path.join`.
+
+256 → 260 tests.
+
+---
+
+## V2.2 — 2026-05-04/05 (PR #2, squash `58ca815`)
+
+**V2.2 Cloud Hardening Sprint — fix all /autoplan blockers before deploy**
+
+10 commits compressed into one squash merge. Each addresses a finding from the dual-voice /autoplan review (Codex + Claude subagent). 211 → 256 tests.
+
+**Critical fixes (would have broken first deploy)**:
+- **C1 — Vision sync timeout**: `/api/products/generate` did sync GPT-4o vision (5-15s) inside the request handler with `maxDuration=60`. Vercel Hobby caps at 10s. Refactored to enqueue Inngest event + return `{ status: 'pending' }` in <1s. Frontend polls `/api/products/generate/status?storageKey=`. Worker writes `aiMetadata.source_key` to correlate result back to upload.
+- **C2 — Local filesystem writes**: `local-fs.ts` wrote to `public/uploads/` which is read-only on Vercel. New `src/lib/storage/r2.ts` (R2 backend via `@aws-sdk/client-s3`) + `src/lib/storage/index.ts` facade dispatches by `STORAGE_BACKEND` env. 4 call sites swapped (uploads, generate, ingest worker, image downloader).
+- **C3 — Inngest step timing**: 9-step pipeline could exceed 10s per step on Hobby. New `timed()` wrapper in worker emits `[step-timing]` log lines + warns >9000ms. Verification recipe in commit message.
+- **C4 — Demo merchant prod backdoor**: `seed-merchant-auth.ts` hardcoded `demo1234` shared password. Added `--mode=prod` (auto when `NODE_ENV=production`) — generates random per-merchant 16-char passwords, sets `suspendedAt=now()` so merchants ship dark until admin approves.
+
+**High fixes**:
+- **H1 — pg.Pool storm**: `max=5/3` × N warm lambdas would exhaust Neon. Now `max=1` per pool in production. New `scripts/db/verify-pgbouncer.ts` runs 100 alternating tenant transactions through pooled endpoint, asserts RLS held throughout.
+- **H2 — Drizzle migration journal incomplete**: `_journal.json` only tracked 0000-0002. Hand-written 0001a_init_rls + 0003-0008 silently skipped by `drizzle-kit migrate`. New `scripts/db/migrate.ts` reads every `drizzle/migrations/*.sql` in lex order, tracks in `__migrations__` table. Idempotent.
+- **H3 — db/init hardcoded passwords**: `01-roles.sql` had literal `web_anon_pass` / `web_admin_pass`. Now marked LOCAL-ONLY + new `prod-roles.template.sql` uses psql variable substitution (`-v web_anon_password=...`).
+- **H4 — pg.Pool no SSL config**: Was relying entirely on URL string parsing. Added `ssl: { rejectUnauthorized: true }` explicitly in production. `env.ts` rejects `DATABASE_URL_*` without `sslmode=require` in prod.
+- **H5 — Env validation lazy-throws**: Typo'd env name = quiet 500 on first user request, not boot failure. New `src/lib/env.ts` with zod parse + `src/instrumentation.ts` validates at first cold start. Production fail-fasts; dev allows missing optional secrets.
+- **H6 — Threat model overstated**: ARCHITECTURE.md §4.4 rewritten to be honest about `web_admin` runtime exposure. Lists what RLS DOES protect (app-logic bugs), what it DOESN'T (compromise), what we have (ESLint allowlist + audit one-liner), what stronger protection would require (separate runtime / stored procedures, deferred).
+- **H7 — Test gaps**: New `tests/health/api-health.test.ts` (4 cases) + `tests/products/generate-cap.test.ts` (2 cases).
+
+**V2.2.10 review fixes — second `/autoplan` round on the post-hardening plan caught 5 more**:
+- F1: renamed `0001_init_rls.sql` → `0001a_init_rls.sql` (collision with drizzle-gen `0001_*` worked by accident)
+- F8: `instrumentation.ts` clarifies it runs at cold start, NOT deploy gate; rollback recipe documented
+- F19: `seed-merchant-auth.ts` refuses dev-mode against non-local DB host
+- F4: Preview env guard — throws if `VERCEL_ENV=preview && STORAGE_BACKEND=r2`
+- F7: ARCHITECTURE.md §4.4 honesty extended to Inngest worker (signing key compromise = arbitrary tenantId writes)
+- F10: `GenerationStream.tsx` poll budget 30s → 45s (later bumped to 180s in V2.2.12)
+
+**Phase A — GitHub Actions CI** (`58c2014`, `9ee11a7`):
+- `.github/workflows/ci.yml` on every PR + push to main
+- Postgres 16 service container with throwaway role passwords via `prod-roles.template.sql`
+- `pnpm db:migrate` (V2.2.0 runner) + lint + typecheck + build + 256 vitest
+- `pnpm dev` (not `pnpm start`) for HTTP integration tests — keeps env validation lenient on plain TCP localhost
+- 3m20s end-to-end
+- Operator-only follow-up: GitHub UI branch protection rule on `main` requiring `ci` status check
+
+**Operator-executed Phases B/C/D** documented in [DEPLOY.md](./DEPLOY.md):
+- Phase B: Neon Singapore project, 10 migrations applied, 100-iter pgBouncer compat passes
+- Phase C: R2 bucket + Account API token, Vercel project import, 17 env vars (Production scope), Function region pinned to sin1
+- Phase D: Inngest Cloud app synced, OpenAI $10/mo hard cap, smoke test
+
+Bottom line: Public URL live at https://demo-sass-2.vercel.app. $0/mo at idle. 260 vitest tests + GitHub Actions CI green.
+
+---
+
 ## V2.1.2 — 2026-05-04 (`1897aac`)
 
 **fix(v2.1.x): preset dropdown持久顯示 + theme FOUC 消除**

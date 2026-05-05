@@ -22,8 +22,14 @@ Version-by-version progression for `demo-sass-2`. This replaces the older `V1_ST
 | V2.0 | 2026-05-04 | Per-merchant authentication (email + password + DB sessions) | 164 → 195 | 0008 | `f96e02e` (PR #1) |
 | V2.1 | 2026-05-04 | 18 theme presets + brand-voice auto-match + radius save fix | 195 → 211 | — | `6da0489` |
 | V2.1.2 | 2026-05-04 | Preset dropdown 持久顯示 + theme FOUC 消除 (server-render `<style>`) | 211 | — | `1897aac` |
+| V2.2 | 2026-05-04/05 | Cloud hardening sprint — fix all 4 critical + 7 high /autoplan blockers | 211 → 256 | renamed 0001→0001a | `58ca815` (PR #2) |
+| V2.2.11 | 2026-05-05 | Inngest worker payload guard (post-deploy hotfix) | 256 → 260 | — | (PR #3) |
+| V2.2.12 | 2026-05-05 | Frontend poll budget 45s → 180s (cold start tolerance) | 260 | — | (PR #4) |
+| V2.2.13 | 2026-05-05 | Image URL fix — IMG src now uses imageUrlFor() not hardcoded /uploads/ | 260 | — | (PR #5) |
+| V2.2.14 | 2026-05-05 | Live demo badge + V2.2 docs entry | 260 | — | (PR #6) |
+| **V2.2 cloud deploy** | **2026-05-05** | **Public on https://demo-sass-2.vercel.app — Vercel sin1 + Neon Singapore + R2 APAC + Inngest Cloud** | | | |
 
-Bottom line: **211 vitest tests, 25-step manual smoke, 9 forward + 9 rollback migrations.**
+Bottom line: **260 vitest tests, GitHub Actions CI on every PR, public URL live.**
 
 ---
 
@@ -388,10 +394,77 @@ Previous state: `THEME_PICKS` array in onboarding had 3 themes, picked randomly.
 
 ---
 
+## V2.2 — Cloud hardening + public deploy (PR #2 → #6)
+
+**Why this version**: Triggered by `/autoplan` to plan production deploy. Both reviewers (Codex + Claude subagent, two independent dual-voice rounds) flagged the same blocker: app code wasn't actually serverless-ready. 4 critical + 7 high findings, all in app code, none in deploy plan. V2.2 = the code work that had to land before any cloud target made sense.
+
+**Sprint structure** — each sub-version is one self-contained commit on PR #2:
+
+- **V2.2.0** Custom SQL migration runner — drizzle-kit's `_journal.json` only tracked 0000-0002. Hand-written RLS migrations (0001a_init_rls, 0003-0008) silently skipped. New `pnpm db:migrate` script reads every `drizzle/migrations/*.sql` in lex order, tracks in `__migrations__` table.
+- **V2.2.1** Env zod validation + explicit SSL + serverless pool sizing — `src/lib/env.ts` fail-fasts on bad env at boot via `instrumentation.ts`. `pg.Pool` gets `ssl: { rejectUnauthorized: true }` in prod. `max=1` per pool in prod (each cold lambda creates own pool; was `max=5/3` × N warm = Neon connection storm).
+- **V2.2.2** Demo merchant prod-mode security — `seed-merchant-auth.ts` now generates random per-merchant 16-char passwords + sets `suspendedAt=now()` when `NODE_ENV=production` or `--mode=prod`. Was hardcoded `demo1234` shared password = backdoor.
+- **V2.2.3** Split `db/init/01-roles.sql` (LOCAL ONLY warning) from new `db/init/prod-roles.template.sql` using psql variable substitution (`-v web_anon_password=...`).
+- **V2.2.4** R2 storage backend — `src/lib/storage/index.ts` facade dispatches by `STORAGE_BACKEND` env. New `src/lib/storage/r2.ts` uses `@aws-sdk/client-s3` server-side. `local-fs.ts` refactored to match the same interface. 4 call sites swapped (api/uploads, api/products/generate, inngest worker, import downloader).
+- **V2.2.5** Vision async refactor — `POST /api/products/generate` now enqueues Inngest `product.ingest` event + returns `{ status: 'pending' }` in <1s (was sync 5-15s call that blew Vercel Hobby's 10s function timeout). New `GET /api/products/generate/status?storageKey=` polling endpoint. `GenerationStream.tsx` polls. Inngest worker writes `aiMetadata.source_key` so the route can correlate the async result back to the upload.
+- **V2.2.6** pgBouncer transaction-mode compat verifier (`scripts/db/verify-pgbouncer.ts`) — 100 alternating tenant transactions through Neon's pooled endpoint, asserts RLS held throughout. Documents in `src/db/index.ts` why `set_config(..., is_local=true)` + transaction-pool mode is correct + why we don't need named prepared statements.
+- **V2.2.7** Test gap fill — added `tests/health/api-health.test.ts` (4 cases) and `tests/products/generate-cap.test.ts` (2 cases). 256/256 total.
+- **V2.2.8** ARCHITECTURE.md §4.4 — honest threat model for `web_admin` (BYPASSRLS) in user-facing runtime. Earlier docs claimed "RLS mitigates container compromise"; that was overstated. New doc states reality (Vercel function compromise = full DB), what we DO have (ESLint allowlist + per-call-site justification + suspend guard), and what stronger protection would require (separate runtime / stored procedures, deferred).
+- **V2.2.9** Step-timing instrumentation in Inngest worker — `[step-timing]` log lines per step + warning above 9000ms (within 1s of Vercel Hobby cap).
+- **V2.2.10** /autoplan v2 review fixes — 5 ship-blockers + should-fixes:
+  - Renamed `0001_init_rls.sql` → `0001a_init_rls.sql` (collision with drizzle-gen `0001_*`)
+  - `instrumentation.ts` clarifies it runs at cold start, not deploy gate
+  - `seed-merchant-auth.ts` refuses dev-mode against non-local DB host
+  - Preview env guard: `instrumentation.ts` throws if `VERCEL_ENV=preview && STORAGE_BACKEND=r2`
+  - ARCHITECTURE.md §4.4 honesty extended to Inngest worker runtime
+  - `GenerationStream.tsx` poll budget 30s → 45s (later bumped again in V2.2.12)
+
+**Phase A — GitHub Actions CI** (`58c2014`, `9ee11a7`):
+- `.github/workflows/ci.yml` runs on every PR + push to main. Postgres 16 service container, role bootstrap via V2.2.3 template, V2.2.0 db:migrate, lint, typecheck, build, full vitest. ~3m20s end-to-end.
+
+**Phase B — Neon Singapore provisioning** (operator runs `DEPLOY.md`):
+- Direct + pooled URLs, 10 migrations applied, 100-iter pgBouncer compat passes.
+
+**Phase C — R2 + Vercel** (operator runs `DEPLOY.md`):
+- Cloudflare R2 bucket with public r2.dev subdomain, scoped Account API token.
+- Vercel project import, 17 env vars (Production scope), Function region pinned to `sin1`.
+
+**Phase D — Inngest Cloud + smoke tests**:
+- Inngest app `demo-sass-2` synced against `https://demo-sass-2.vercel.app/api/inngest`.
+- OpenAI hard cap $10/mo at vendor dashboard (defense in depth alongside app's `assertWithinDailyCap`).
+- 15-step manual smoke checklist completed.
+
+**Post-deploy hotfixes** (separate PRs):
+- **V2.2.11** (PR #3) — Inngest worker payload guard. Post-sync introspection delivered an event with empty data; `assertSafeKey(undefined).includes('..')` threw `TypeError`. Added explicit guards in `r2.ts`, `local-fs.ts`, and `product-ingest.ts` handler. 4 new tests.
+- **V2.2.12** (PR #4) — Frontend poll budget 45s → 180s. Production observed cold-start pipeline taking 1m24s (down from 3m1s after sin1 region change). 45s timeout was triggering fixture fallback even when worker succeeded. Added progressive UI hints at 30s and 90s.
+- **V2.2.13** (PR #5) — Image URL fix. V2.2.4 swapped storage to R2 but JSX kept hardcoded `<img src={`/uploads/${r2Key}`}>`. Created `src/lib/storage/public-url-client.ts` `imageUrlFor()` (uses `NEXT_PUBLIC_R2_PUBLIC_URL`). 4 IMG src + 2 export utilities (shopee-csv, products-xlsx now produce absolute URLs) swapped.
+- **V2.2.14** (PR #6) — README live demo badge + this STATUS entry + CHANGELOG entry.
+
+**Production data observed** (sin1 + Neon Singapore + Inngest Cloud):
+| State | Pipeline duration |
+|---|---|
+| First cold (iad1, broken region) | 3m 1s |
+| First cold (sin1) | 1m 24s |
+| Warm | ~30s estimated |
+
+**Tests**: 211 → 260 (+49: migration runner, env validation, storage facade, generate-async, generate-cap, api-health, payload guard, image URL).
+
+**Migrations**: 0001 renamed (one new file, no schema change). Total 10 forward + 9 rollback.
+
+**CI**: GitHub Actions on every PR, 3m20s end-to-end. 256+ tests + lint + typecheck + build + ephemeral postgres.
+
+**Cost at idle**: $0/mo (Vercel Hobby + Neon free + R2 free + Inngest free + OpenAI $10 hard cap).
+
+**Process notes**:
+- 6 PRs (#2 hardening + #3-#6 hotfixes). Hotfixes were caught in production smoke test, not CI — most were "code works locally but breaks under cloud-shape constraints (timeouts, env scopes, region latency)". CI can't easily catch these without integration against actual cloud services.
+- Two `/autoplan` rounds + dual-voice review per round flagged most issues before deploy. The remaining 4 hotfixes were genuine "production teaches you new things" findings.
+- DEPLOY.md (~500 lines) was written before Phase B/C/D execution and held up well — operator followed it click-by-click. Updated post-deploy with troubleshooting cases observed in practice.
+
+---
+
 ## Known limitations (still applies)
 
 - **No real payment gateway** — checkout walks a 「客服收款」 flow (待付款 status flipped manually by merchant). Schema has `payment_webhooks` + `ecpay_trade_no` ready for V2.
 - **No real shipping integration** — `tracking_number` / `carrier` are plain text; no 7-11 / 黑貓 API.
 - **No email/SMS notifications** — status changes write to audit log only.
-- **AI import requires OpenAI key + Inngest dev CLI** for end-to-end (`bunx inngest-cli dev`).
-- **Local-only deploy** — Docker Postgres + local filesystem uploads. Schema, migrations, and code are cloud-ready (Neon + R2 + Vercel) — switching is a V2 task.
+- **AI import requires OpenAI key + Inngest dev CLI** for end-to-end local dev (`bunx inngest-cli dev`). Production uses Inngest Cloud.
+- **Cold start UX** — first request of the day takes 60-90s on Vercel Hobby + sin1. Acceptable for portfolio; pre-warm cron or Vercel Pro would mitigate.
