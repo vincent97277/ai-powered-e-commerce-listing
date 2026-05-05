@@ -94,7 +94,10 @@ describe('generateShopeeCsv', () => {
     expect(dataRow[6]).toBe(''); // 規格選項1
     expect(dataRow[10]).toBe('390'); // 價格
     expect(dataRow[11]).toBe('120'); // 庫存
-    expect(dataRow[13]).toBe('/uploads/tenant1/abc123.webp'); // 主商品圖片
+    // V2.2.13: image URL is now absolute (Shopee imports need a public URL it can fetch).
+    // In tests NEXT_PUBLIC_APP_URL=http://localhost:3000 + STORAGE_BACKEND=local
+    // → getPublicUrl returns http://localhost:3000/uploads/<key>.
+    expect(dataRow[13]).toBe('http://localhost:3000/uploads/tenant1/abc123.webp'); // 主商品圖片
     // 物流預設全開啟
     expect(dataRow[18]).toBe('開啟');
     expect(dataRow[19]).toBe('開啟');

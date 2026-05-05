@@ -9,6 +9,7 @@ import { notFound, redirect } from 'next/navigation';
 import { eq, desc } from 'drizzle-orm';
 import { Pause, ShoppingBag } from 'lucide-react';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { imageUrlFor } from '@/lib/storage/public-url-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,7 +102,7 @@ export default async function StorefrontPage({ params }: { params: Promise<{ slu
                     {hasImg ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={`/uploads/${p.r2Key}`}
+                        src={imageUrlFor(p.r2Key)}
                         alt={p.title}
                         className="aspect-square w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                       />

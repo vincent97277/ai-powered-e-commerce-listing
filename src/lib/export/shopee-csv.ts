@@ -15,6 +15,7 @@
  *   - 圖片: r2Key → /uploads/{r2Key} 的相對路徑 (demo 用)
  */
 import type { Product } from '@/db/schema';
+import { getPublicUrl } from '@/lib/storage';
 
 /** UTF-8 BOM — 讓 Windows Excel 開啟 CSV 不亂碼 */
 export const UTF8_BOM = '﻿';
@@ -85,12 +86,12 @@ function mapCategory(category: string | undefined): string {
   return SHOPEE_CATEGORY_MAP[category] ?? DEFAULT_CATEGORY_CODE;
 }
 
-/** 圖片 URL: 本地 demo 用 /uploads/{r2Key}; 沒 key 回空字串 */
+/** 圖片 URL: V2.2.13 用 storage facade 的 absolute URL (R2 or local-fs).
+ *  Shopee 匯入需要絕對 URL — 從蝦皮 server 抓得到. */
 function resolveImageUrl(r2Key: string | null | undefined): string {
   if (!r2Key) return '';
-  // fixtures 是 demo placeholder, 不送進蝦皮
   if (r2Key.includes('/fixtures/')) return '';
-  return `/uploads/${r2Key}`;
+  return getPublicUrl(r2Key);
 }
 
 /** 把單一 product (含變體) 展開成蝦皮 CSV row[] */

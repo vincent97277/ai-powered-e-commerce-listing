@@ -68,6 +68,8 @@ function buildSchema() {
     R2_SECRET_ACCESS_KEY: r2Secret,
     R2_BUCKET: r2Bucket,
     R2_PUBLIC_URL: r2PublicUrl,
+    // V2.2.13: client bundle needs NEXT_PUBLIC_ prefix; must match R2_PUBLIC_URL
+    NEXT_PUBLIC_R2_PUBLIC_URL: r2PublicUrl,
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   });
 }
