@@ -616,16 +616,19 @@ describe('HTTP routes integration', () => {
 
   it('法遵頁實際內容 (不是空殼)', async () => {
     const aboutR = await tryFetch('/about');
-    const aboutHtml = aboutR ? await aboutR.text() : '';
+    if (!aboutR) return;
+    const aboutHtml = await aboutR.text();
     expect(aboutHtml).toMatch(/Catalogify|獨立小店/);
 
     const privacyR = await tryFetch('/privacy');
-    const privacyHtml = privacyR ? await privacyR.text() : '';
+    if (!privacyR) return;
+    const privacyHtml = await privacyR.text();
     expect(privacyHtml).toMatch(/個資法/);
     expect(privacyHtml).toMatch(/Cookies|cookie/i);
 
     const termsR = await tryFetch('/terms');
-    const termsHtml = termsR ? await termsR.text() : '';
+    if (!termsR) return;
+    const termsHtml = await termsR.text();
     expect(termsHtml).toMatch(/服務條款/);
     expect(termsHtml).toMatch(/台北地方法院/);
   });

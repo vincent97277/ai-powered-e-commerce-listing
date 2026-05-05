@@ -54,6 +54,22 @@ If ANY step above fails, fix before pushing. Don't push broken or partial state.
   `.github/workflows/ci.yml`. Production env validation requires `sslmode=require`,
   CI postgres is plain TCP, only dev mode is compatible.
 - **Auto-deploy**: Vercel auto-deploys `main`. Don't disable.
+- **Branch protection on `main` is required.** The V2.3.2 auto-merge workflow
+  uses `gh pr merge --auto`, which only actually waits for CI when there is at
+  least one required status check. Without branch protection, `--auto` falls
+  through to immediate merge — which is how PR #13 landed with red CI in V2.3.4.
+  Required check: `ci`. Squash-only enforced via repo setting. Admins may bypass
+  for emergency hotfixes.
+
+## Tests
+
+- **drizzle-orm 0.45+ error wrapping**: when asserting against driver-level
+  error text (postgres "row-level security policy", "permission denied"), use
+  `expectRejectsMatching(promise, /regex/)` from `tests/_helpers/db-error.ts`.
+  Never `.rejects.toThrow(/driver-text/)` — drizzle wraps the original error in
+  `DrizzleQueryError` with `.message = "Failed query: ..."`, so the regex never
+  matches. The helper walks the `.cause` chain. Application-level error text
+  (thrown by our own code) can keep using `rejects.toThrow` directly.
 
 ## Database / migrations
 

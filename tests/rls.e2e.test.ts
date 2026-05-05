@@ -18,36 +18,7 @@ import {
   importSessions,
 } from '@/db/schema';
 import { sql, eq } from 'drizzle-orm';
-
-// drizzle-orm 0.45+ wraps the driver error in DrizzleQueryError. The original
-// postgres message ("row-level security policy" / "permission denied for table")
-// is on `.cause.message`, while `.message` is the templated "Failed query: ...".
-// vitest's .rejects.toThrow(regex) only consults .message, so it misses the
-// real RLS string. Walk the full cause chain.
-async function expectRejectsMatching(
-  promise: Promise<unknown>,
-  pattern: RegExp,
-): Promise<void> {
-  try {
-    await promise;
-  } catch (e: unknown) {
-    const parts: string[] = [];
-    let cur: unknown = e;
-    for (let i = 0; i < 10 && cur; i++) {
-      const m = (cur as { message?: unknown }).message;
-      if (typeof m === 'string') parts.push(m);
-      cur = (cur as { cause?: unknown }).cause;
-    }
-    const joined = parts.join(' | ');
-    if (pattern.test(joined)) return;
-    throw new Error(
-      `Expected error matching ${pattern} but error chain was:\n${joined}`,
-    );
-  }
-  throw new Error(
-    `Expected promise to reject with ${pattern} but it resolved successfully`,
-  );
-}
+import { expectRejectsMatching } from './_helpers/db-error';
 
 // 用 99..., aa... 避免跟 demo merchant (11..., 22...) 撞
 const TENANT_A = '99999999-9999-9999-9999-999999999999';

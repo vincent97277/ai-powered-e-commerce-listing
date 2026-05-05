@@ -33,6 +33,12 @@ on:
 permissions:
   contents: read
 
+# Single source for the production URL. workflow_dispatch input default
+# can't reference env (GH limitation), so it stays inline above; runtime
+# refs both consume PROD_URL.
+env:
+  PROD_URL: 'https://demo-sass-2.vercel.app'
+
 jobs:
   wait-for-vercel:
     name: Wait for Vercel deploy
@@ -48,7 +54,7 @@ jobs:
 
       - name: Poll URL until 200 or 5min timeout
         env:
-          TARGET: ${{ github.event.inputs.target_url || 'https://demo-sass-2.vercel.app' }}
+          TARGET: ${{ github.event.inputs.target_url || env.PROD_URL }}
         run: |
           for i in $(seq 1 30); do
             CODE=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET" || echo "000")
@@ -68,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SMOKE_BASE_URL: ${{ github.event.inputs.target_url || 'https://demo-sass-2.vercel.app' }}
+      SMOKE_BASE_URL: ${{ github.event.inputs.target_url || env.PROD_URL }}
     steps:
       - uses: actions/checkout@v6
 
