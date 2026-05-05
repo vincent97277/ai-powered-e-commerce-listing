@@ -13,6 +13,7 @@
  */
 import ExcelJS from 'exceljs';
 import type { Product } from '@/db/schema';
+import { getPublicUrl } from '@/lib/storage';
 
 type Column = {
   header: string;
@@ -37,7 +38,10 @@ const COLUMNS: Column[] = [
 function imageUrl(r2Key: string | null | undefined): string {
   if (!r2Key) return '';
   if (r2Key.includes('/fixtures/')) return '';
-  return `/uploads/${r2Key}`;
+  // V2.2.13: server-side getPublicUrl returns absolute URL for both backends
+  // (R2_PUBLIC_URL or NEXT_PUBLIC_APP_URL/uploads/). Exports go to merchants
+  // who download + import elsewhere — must be absolute.
+  return getPublicUrl(r2Key);
 }
 
 function fmtTime(d: Date): string {

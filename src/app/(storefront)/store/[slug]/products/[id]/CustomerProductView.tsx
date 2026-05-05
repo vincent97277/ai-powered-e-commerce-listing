@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCart } from '@/lib/cart';
 import type { ProductAiMetadata } from '@/db/schema';
+import { imageUrlFor } from '@/lib/storage/public-url-client';
 
 export function CustomerProductView({
   slug,
@@ -64,7 +65,7 @@ export function CustomerProductView({
         >
           {hasImg ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={`/uploads/${r2Key}`} alt={title} className="h-full w-full object-cover" />
+            <img src={imageUrlFor(r2Key)} alt={title} className="h-full w-full object-cover" />
           ) : (
             <div
               className="flex h-full items-center justify-center"

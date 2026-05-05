@@ -12,6 +12,7 @@ import { dbAdmin } from '@/db/admin-only';
 import { ExportDropdown } from '@/components/merchant/ExportDropdown';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { imageUrlFor } from '@/lib/storage/public-url-client';
 
 /** V1.5 B1: 健康度 filter 種類 (對齊 src/lib/merchant/health-checks.ts). */
 const HEALTH_FILTERS = ['no_photo', 'short_title', 'zero_stock', 'zero_price'] as const;
@@ -295,7 +296,7 @@ export default async function MerchantProductsList({
                       >
                         {hasImg ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={`/uploads/${p.r2Key}`} alt={p.title} className="h-full w-full object-cover" />
+                          <img src={imageUrlFor(p.r2Key)} alt={p.title} className="h-full w-full object-cover" />
                         ) : (
                           <div className="flex h-full items-center justify-center">
                             <ImageIcon className="h-5 w-5 opacity-40" style={{ color: 'var(--brand-primary)' }} />
@@ -410,7 +411,7 @@ export default async function MerchantProductsList({
                           >
                             {hasImg ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={`/uploads/${p.r2Key}`} alt={p.title} className="h-full w-full object-cover" />
+                              <img src={imageUrlFor(p.r2Key)} alt={p.title} className="h-full w-full object-cover" />
                             ) : (
                               <div className="flex h-full items-center justify-center">
                                 <ImageIcon className="h-5 w-5 opacity-40" style={{ color: 'var(--brand-primary)' }} />
