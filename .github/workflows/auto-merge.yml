@@ -86,13 +86,19 @@ jobs:
           ALLOW=false
           REASON=""
 
-          # Rule 1: Dependabot patch/minor
-          if [ "$AUTHOR" = "dependabot[bot]" ]; then
-            # Dependabot includes update-type in the title, e.g.
-            # "chore(deps): bump foo from 1.2.3 to 1.2.4 (patch)" — but our
-            # dependabot.yml ignores major, so any Dependabot PR here is safe.
+          # Rule 1: Dependabot
+          # gh pr view --json author returns login as `app/dependabot`,
+          # NOT `dependabot[bot]` (which is the REST API form). Match both
+          # so the workflow works regardless of which gh CLI version GitHub
+          # Actions ships. Caught when 4 dep PRs sat OPEN despite ALLOW=true
+          # being expected.
+          if [ "$AUTHOR" = "app/dependabot" ] || [ "$AUTHOR" = "dependabot[bot]" ]; then
+            # npm ecosystem: dependabot.yml ignores major bumps — what hits
+            # this workflow from npm is always patch/minor.
+            # github-actions ecosystem: NO ignore block; majors land too.
+            # Both are acceptable to auto-merge for this repo's risk profile.
             ALLOW=true
-            REASON="Dependabot patch/minor (major bumps ignored in dependabot.yml)"
+            REASON="Dependabot PR (npm: patch/minor only; github-actions: any)"
           fi
 
           # Rule 2: Pure docs (no src/ changes, label includes 'docs')
