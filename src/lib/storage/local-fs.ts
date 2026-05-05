@@ -50,6 +50,13 @@ export async function writeFile(
 }
 
 export async function readFile(key: string): Promise<Buffer> {
+  // V2.2.11: explicit guard so a malformed event payload gets a clear error
+  // instead of a path.join TypeError or a path-traversal false positive.
+  if (typeof key !== 'string' || key.length === 0) {
+    throw new Error(
+      `[storage/local-fs] key must be a non-empty string (got ${typeof key === 'string' ? '<empty>' : typeof key})`,
+    );
+  }
   const filePath = path.join(UPLOADS_DIR, key);
   // Path traversal guard: resolved path must stay inside UPLOADS_DIR.
   const resolved = path.resolve(filePath);

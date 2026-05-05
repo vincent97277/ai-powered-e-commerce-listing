@@ -78,6 +78,16 @@ describe('storage facade — local backend round-trip', () => {
   it('readFile rejects path traversal', async () => {
     await expect(storage.readFile('../../etc/passwd')).rejects.toThrow(/path traversal/);
   });
+
+  it('readFile rejects undefined key with clear error (V2.2.11 guard)', async () => {
+    await expect(storage.readFile(undefined as unknown as string)).rejects.toThrow(
+      /must be a non-empty string/,
+    );
+  });
+
+  it('readFile rejects empty key with clear error (V2.2.11 guard)', async () => {
+    await expect(storage.readFile('')).rejects.toThrow(/must be a non-empty string/);
+  });
 });
 
 describe('storage facade — r2 backend (mocked S3 client)', () => {
@@ -125,6 +135,16 @@ describe('storage facade — r2 backend (mocked S3 client)', () => {
 
   it('readFile rejects unsafe key', async () => {
     await expect(storage.readFile('../escape')).rejects.toThrow(/unsafe key/);
+  });
+
+  it('readFile rejects undefined key with clear error (V2.2.11 guard)', async () => {
+    await expect(storage.readFile(undefined as unknown as string)).rejects.toThrow(
+      /must be a non-empty string/,
+    );
+  });
+
+  it('readFile rejects empty key with clear error (V2.2.11 guard)', async () => {
+    await expect(storage.readFile('')).rejects.toThrow(/must be a non-empty string/);
   });
 
   it('writeProcessed writes processed/<uuid>.webp', async () => {
