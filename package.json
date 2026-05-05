@@ -2,11 +2,18 @@
   "name": "demo-sass-2",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
+    "preinstall": "npx -y only-allow pnpm",
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "lint:docs": "tsx scripts/check-readme-drift.ts",
     "test:vision": "tsx scripts/test-vision.ts",
     "test:rls": "vitest run tests/rls.e2e.test.ts",
     "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest",
@@ -71,6 +78,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.16.0",
     "eslint-config-next": "15.5.15",
+    "only-allow": "^1.2.2",
     "postcss": "^8.5.14",
     "tailwindcss": "^4.0.0-beta.6",
     "tsx": "^4.19.2",

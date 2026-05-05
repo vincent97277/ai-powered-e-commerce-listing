@@ -68,9 +68,9 @@ jobs:
       - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@v6
-        with:
-          version: 9
-
+        # V2.3.6: pnpm version comes from package.json `packageManager` field
+        # (single source of truth). action-setup@v6 errors if `version:` is also
+        # set here — "Multiple versions of pnpm specified".
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -100,6 +100,11 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      - name: README drift check
+        # V2.3.6: catches README claiming wrong license / wrong test count /
+        # banned bun commands, so docs don't rot 8 versions deep again.
+        run: pnpm lint:docs
 
       - name: Typecheck
         run: pnpm typecheck
