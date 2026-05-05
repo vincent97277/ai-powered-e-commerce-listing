@@ -65,7 +65,7 @@ jobs:
       INNGEST_SIGNING_KEY: ci-fake-signing-key
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@v6
         with:
