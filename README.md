@@ -2,10 +2,13 @@
 
 > A multi-merchant e-commerce platform for Taiwan's independent stores. AI photo-to-listing in 7 seconds, multi-tenant Postgres RLS, and a platform-admin observability suite — built as a portfolio project that started life as a hackathon and got pushed four versions deeper to exercise real production patterns.
 
-[![Tests](https://img.shields.io/badge/tests-154%20passing-brightgreen)]()
+[![Live demo](https://img.shields.io/badge/demo-live-success?style=flat-square)](https://demo-sass-2.vercel.app)
+[![Tests](https://img.shields.io/badge/tests-260%20passing-brightgreen)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)]()
 [![Postgres RLS](https://img.shields.io/badge/Postgres-RLS%20enforced-336791)]()
 [![License](https://img.shields.io/badge/license-MIT-yellow)](./LICENSE)
+
+**Live:** https://demo-sass-2.vercel.app · **Storefront examples:** [/store/akami](https://demo-sass-2.vercel.app/store/akami) · [/store/afen](https://demo-sass-2.vercel.app/store/afen)
 
 ## Stack
 
