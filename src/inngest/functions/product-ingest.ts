@@ -40,6 +40,25 @@ export const productIngestFn = inngest.createFunction(
     const { tenantId, r2Key, merchantId, sourceText, importSessionId, itemIndex } = event.data;
     logger.info('product.ingest 開始', { tenantId, r2Key, merchantId, hasSourceText: !!sourceText });
 
+    // V2.2.11: validate event payload. The Inngest dashboard's "Run" button
+    // and post-sync introspection can deliver events with empty/partial data;
+    // without this guard, downstream readFile(undefined) crashes with a
+    // confusing "Cannot read properties of undefined (reading 'includes')"
+    // TypeError. Return a structured no-op so the failure is visible in the
+    // Inngest UI without polluting Sentry / error budgets.
+    if (typeof tenantId !== 'string' || !tenantId) {
+      logger.error('product.ingest: missing event.data.tenantId', { data: event.data });
+      return { ok: false, skipped: true, reason: 'missing_tenant_id' };
+    }
+    if (typeof r2Key !== 'string' || !r2Key) {
+      logger.error('product.ingest: missing event.data.r2Key', { data: event.data });
+      return { ok: false, skipped: true, reason: 'missing_r2_key' };
+    }
+    if (typeof merchantId !== 'string' || !merchantId) {
+      logger.error('product.ingest: missing event.data.merchantId', { data: event.data });
+      return { ok: false, skipped: true, reason: 'missing_merchant_id' };
+    }
+
     // V2.2.9: timing instrumentation — each step logs its wall time so the
     // operator can verify, after Neon + R2 provisioning, that no single step
     // exceeds the 10s Vercel Hobby per-fn cap. Log lines look like:

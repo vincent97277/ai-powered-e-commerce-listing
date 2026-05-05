@@ -68,7 +68,15 @@ function mimeToExt(mime: string): string {
   return EXT_BY_TYPE[mime] ?? 'jpg';
 }
 
-function assertSafeKey(key: string): void {
+function assertSafeKey(key: unknown): asserts key is string {
+  // V2.2.11: handle undefined/null/non-string before calling .includes
+  // (Inngest dashboard introspection sends empty payloads; without this,
+  //  `undefined.includes('..')` throws TypeError instead of a clear error.)
+  if (typeof key !== 'string' || key.length === 0) {
+    throw new Error(
+      `[storage/r2] key must be a non-empty string (got ${typeof key === 'string' ? '<empty>' : typeof key})`,
+    );
+  }
   // Reject path traversal / leading slash / absolute paths; allowed: tenant_id/uuid.ext
   if (key.includes('..') || key.startsWith('/') || key.startsWith('\\')) {
     throw new Error(`[storage/r2] unsafe key: ${key}`);
