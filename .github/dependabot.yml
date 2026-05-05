@@ -1,0 +1,61 @@
+# Dependabot — V2.3.2 throughput improvement.
+#
+# Goal: dependency / security update PRs land without operator review for
+# routine patches. Operator only sees deps that touch the codebase
+# meaningfully (cross-major bumps, new transitive deps, lockfile churn).
+#
+# Auto-merge for trusted updates is configured in
+# .github/workflows/auto-merge.yml. Dependabot just opens the PRs; the
+# workflow merges them once CI is green AND the update is patch/minor.
+
+version: 2
+
+updates:
+  # npm packages (pnpm uses package-ecosystem: npm)
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - chore(deps)
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+    # Group minor + patch into single PRs so we don't drown in 30 separate ones
+    groups:
+      production-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      development-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+    # Major bumps stay individual + reviewed (V2.2.10 Next.js 15→16 lesson)
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+
+  # GitHub Actions versions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: Asia/Taipei
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - chore(deps)
+      - ci
+    commit-message:
+      prefix: "chore(ci)"

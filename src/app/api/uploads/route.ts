@@ -57,6 +57,17 @@ export async function POST(req: NextRequest) {
       size: file.size,
     });
   } catch (err) {
+    // V2.3.3: propagate Next.js redirect signals (resolveMerchantFromCookie
+    // calls redirect() when cookie missing/invalid). Without this, an
+    // unauthenticated POST returns 500 instead of 307 → /merchant/login.
+    // Smoke test caught the regression.
+    if (
+      err instanceof Error &&
+      (err.message === 'NEXT_REDIRECT' ||
+        (err as { digest?: string }).digest?.startsWith?.('NEXT_REDIRECT'))
+    ) {
+      throw err;
+    }
     console.error('[/api/uploads] error', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : '上傳失敗' },

@@ -1,0 +1,145 @@
+name: Auto-merge trusted PRs
+
+# V2.3.2 throughput improvement.
+#
+# Auto-merges PRs that fit one of these trusted categories AFTER CI is green:
+#   1. Dependabot patch + minor updates (label: chore(deps), no major bumps)
+#   2. Pure docs (label: docs, no src/ changes)
+#   3. Pure tests (label: test, no production-code changes)
+#
+# Anything else (feat / fix / refactor / cross-major bumps) stays in human
+# review queue. Branch protection on main still enforces CI green.
+#
+# How: triggers on PR open + on check_suite completed. Calls `gh pr merge --auto
+# --squash` which queues the merge for "as soon as required checks pass."
+# GitHub does the actual merge when CI flips to green.
+
+on:
+  pull_request:
+    types: [opened, reopened, labeled, synchronize]
+  pull_request_review:
+    types: [submitted]
+  check_suite:
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false || github.event_name == 'check_suite'
+    steps:
+      - name: Determine PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # check_suite events don't carry a PR directly; resolve from head SHA.
+          if [ "${{ github.event_name }}" = "check_suite" ]; then
+            SHA="${{ github.event.check_suite.head_sha }}"
+            PR_NUMBER=$(gh pr list --search "$SHA" --json number --jq '.[0].number' --repo "${{ github.repository }}")
+          else
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          fi
+          if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "null" ]; then
+            echo "No PR found, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Inspect PR
+        id: inspect
+        if: steps.pr.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          # gh pr view --json field is `author` not `user` (caught when the
+          # workflow errored on PR #7 — gh dumps the valid field list on bad
+          # input; we use it now)
+          DATA=$(gh pr view "$PR" --json labels,title,author,files --repo "${{ github.repository }}")
+          AUTHOR=$(echo "$DATA" | jq -r '.author.login')
+          TITLE=$(echo "$DATA" | jq -r '.title')
+          LABELS=$(echo "$DATA" | jq -r '.labels[].name' | tr '\n' ',')
+          FILES=$(echo "$DATA" | jq -r '.files[].path' | tr '\n' ',')
+          echo "author=$AUTHOR" >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+          echo "labels=$LABELS" >> "$GITHUB_OUTPUT"
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+          echo "PR #$PR by $AUTHOR: $TITLE"
+          echo "Labels: $LABELS"
+          echo "Files (first 5): $(echo "$FILES" | tr ',' '\n' | head -5 | tr '\n' ' ')"
+
+      - name: Decide if auto-merge applies
+        id: decide
+        if: steps.pr.outputs.skip == 'false'
+        env:
+          AUTHOR: ${{ steps.inspect.outputs.author }}
+          TITLE: ${{ steps.inspect.outputs.title }}
+          LABELS: ${{ steps.inspect.outputs.labels }}
+          FILES: ${{ steps.inspect.outputs.files }}
+        run: |
+          ALLOW=false
+          REASON=""
+
+          # Rule 1: Dependabot patch/minor
+          if [ "$AUTHOR" = "dependabot[bot]" ]; then
+            # Dependabot includes update-type in the title, e.g.
+            # "chore(deps): bump foo from 1.2.3 to 1.2.4 (patch)" — but our
+            # dependabot.yml ignores major, so any Dependabot PR here is safe.
+            ALLOW=true
+            REASON="Dependabot patch/minor (major bumps ignored in dependabot.yml)"
+          fi
+
+          # Rule 2: Pure docs (no src/ changes, label includes 'docs')
+          if [ "$ALLOW" != "true" ] && echo ",$LABELS," | grep -q ",docs,"; then
+            if echo ",$FILES," | grep -qE ',src/|,scripts/|,drizzle/|,db/init/'; then
+              REASON="docs label but PR touches code paths — needs human review"
+            else
+              ALLOW=true
+              REASON="Pure docs (no src/scripts/drizzle/db files touched)"
+            fi
+          fi
+
+          # Rule 3: Pure tests (no production code touched)
+          if [ "$ALLOW" != "true" ] && echo ",$LABELS," | grep -q ",test,"; then
+            if echo ",$FILES," | grep -qE ',src/(?!.*\.test\.|.*\.spec\.)'; then
+              REASON="test label but PR touches src/ production code — needs review"
+            else
+              ALLOW=true
+              REASON="Pure tests (only tests/ or .test./.spec. files)"
+            fi
+          fi
+
+          echo "allow=$ALLOW" >> "$GITHUB_OUTPUT"
+          echo "reason=$REASON" >> "$GITHUB_OUTPUT"
+          echo "Decision: ALLOW=$ALLOW — $REASON"
+
+      - name: Enable auto-merge
+        if: steps.pr.outputs.skip == 'false' && steps.decide.outputs.allow == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          # gh pr merge --auto queues merge; GitHub merges once required checks pass
+          gh pr merge "$PR" --squash --auto --repo "${{ github.repository }}" || {
+            echo "Auto-merge enable failed (likely CI not yet defined as required, or already merging). Will retry on next event."
+            exit 0
+          }
+
+      - name: Comment on declined auto-merge
+        if: |
+          steps.pr.outputs.skip == 'false' &&
+          steps.decide.outputs.allow == 'false' &&
+          github.event_name == 'pull_request' &&
+          github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ steps.pr.outputs.number }}
+          REASON: ${{ steps.decide.outputs.reason }}
+        run: |
+          gh pr comment "$PR" --repo "${{ github.repository }}" --body "🤖 Auto-merge not applied: $REASON. Requires human review + merge." || true

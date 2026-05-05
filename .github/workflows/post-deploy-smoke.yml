@@ -1,0 +1,102 @@
+name: Post-deploy smoke
+
+# V2.3.3 throughput improvement.
+#
+# Runs Playwright smoke tests against the live production URL after every
+# successful merge to main (Vercel auto-deploys ~2-3 min later, then this
+# workflow waits + smokes).
+#
+# What this saves:
+#   Operator no longer manually browses the deployed site after every merge
+#   to verify it's not broken. CI tells them automatically.
+#
+# What this catches:
+#   - Frontend bundle regressions
+#   - R2 image URL issues (V2.2.13-style)
+#   - DB connection / pool config breakage
+#   - Cold-start env validation failures
+#   - Public route 5xx
+#
+# Failure surfaces as a red ❌ on the commit / PR. Operator investigates.
+
+on:
+  push:
+    branches: [main]
+  # Manual trigger for ad-hoc smokes
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'URL to smoke (default: prod)'
+        required: false
+        default: 'https://demo-sass-2.vercel.app'
+
+permissions:
+  contents: read
+
+jobs:
+  wait-for-vercel:
+    name: Wait for Vercel deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Wait 90s for Vercel build to start + finish
+        # Vercel auto-deploys on main push; typical build is 2-3 min, so we sleep
+        # 90s then poll the URL for readiness. The PR ref is what Vercel built.
+        run: |
+          echo "Sleeping 90s for Vercel build to start..."
+          sleep 90
+
+      - name: Poll URL until 200 or 5min timeout
+        env:
+          TARGET: ${{ github.event.inputs.target_url || 'https://demo-sass-2.vercel.app' }}
+        run: |
+          for i in $(seq 1 30); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET" || echo "000")
+            if [ "$CODE" = "200" ]; then
+              echo "URL ready after ${i} polls (~$((i*10))s)"
+              exit 0
+            fi
+            echo "poll $i: HTTP $CODE — sleeping 10s"
+            sleep 10
+          done
+          echo "::error::URL did not become healthy after 5 min"
+          exit 1
+
+  smoke:
+    name: Playwright smoke
+    needs: wait-for-vercel
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SMOKE_BASE_URL: ${{ github.event.inputs.target_url || 'https://demo-sass-2.vercel.app' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run smoke tests
+        run: pnpm exec playwright test
+        # Don't bury failures — let GitHub Actions surface the red X
+        # Playwright's reporter='github' annotates failed tests on the PR
+
+      - name: Upload trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-trace
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
