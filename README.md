@@ -10,6 +10,8 @@
 
 **Live:** https://demo-sass-2.vercel.app · **Storefront examples:** [/store/akami](https://demo-sass-2.vercel.app/store/akami) · [/store/afen](https://demo-sass-2.vercel.app/store/afen)
 
+[![Marketplace home](./docs/hero/marketplace-home.png)](https://demo-sass-2.vercel.app)
+
 > **Portfolio / showcase project.** Public for learning, hiring, and reference. Limited active maintenance — see [.github/CONTRIBUTING.md](./.github/CONTRIBUTING.md) before opening PRs.
 
 ## Stack
