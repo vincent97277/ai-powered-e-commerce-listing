@@ -8,7 +8,7 @@ import { products, orderItems, merchants } from '@/db/schema';
 import { asc, desc, eq, lte, sql, type SQL } from 'drizzle-orm';
 import { Plus, Package, ImageIcon, AlertTriangle, ArrowDown } from 'lucide-react';
 import { ProductRowActions } from './ProductRowActions';
-import { dbAdmin } from '@/db/admin-only';
+import { dbUser } from '@/db';
 import { ExportDropdown } from '@/components/merchant/ExportDropdown';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { EmptyState } from '@/components/feedback/EmptyState';
@@ -62,8 +62,9 @@ export default async function MerchantProductsList({
 
   const merchant = await resolveMerchantFromCookie();
 
-  // 取 lowStockThreshold from merchants (RLS 過, 但商家自己看自己沒問題)
-  const [merchantRow] = await dbAdmin
+  // 取 lowStockThreshold from merchants. V2.6: dbUser 即可 — merchants 表對
+  // web_anon 開放 SELECT (no RLS policy), 不需要 BYPASSRLS 查自己這條 row。
+  const [merchantRow] = await dbUser
     .select({ lowStockThreshold: merchants.lowStockThreshold })
     .from(merchants)
     .where(eq(merchants.id, merchant.tenantId))

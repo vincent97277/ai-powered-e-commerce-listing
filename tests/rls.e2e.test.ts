@@ -16,6 +16,7 @@ import {
   orders,
   orderStatusHistory,
   importSessions,
+  aiUsageEvents,
 } from '@/db/schema';
 import { sql, eq } from 'drizzle-orm';
 import { expectRejectsMatching } from './_helpers/db-error';
@@ -79,6 +80,8 @@ afterAll(async () => {
   await dbAdmin.delete(orders).where(eq(orders.tenantId, TENANT_B));
   await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_A));
   await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_B));
+  await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_A));
+  await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_B));
   await dbAdmin.delete(merchants).where(eq(merchants.id, TENANT_A));
   await dbAdmin.delete(merchants).where(eq(merchants.id, TENANT_B));
 });
@@ -274,6 +277,49 @@ describe('RLS multi-tenant isolation', () => {
         await tx.execute(sql`SELECT * FROM admin_action_history`);
       }),
       /permission denied|insufficient/i,
+    );
+  });
+
+  /**
+   * V2.6 T9: ai_usage_events RLS — close coverage gap flagged by Codex Eng review.
+   *
+   * 0006_ai_usage_events.sql declares ENABLE/FORCE RLS + WITH CHECK on the
+   * tenant_isolation policy, but no test pinned the behavior. Without a
+   * test, a future migration that drops the policy or weakens the WITH
+   * CHECK would silently let the AI cost dashboard cross-tenant — and
+   * cost-cap math would diverge from per-merchant truth.
+   *
+   * Three pins:
+   *   1. tenant A reads only its own rows
+   *   2. tenant A cannot read tenant B rows even with set_config to A
+   *   3. WITH CHECK blocks tenant A from inserting a row stamped with B's id
+   */
+  it('T9: ai_usage_events tenant isolation + WITH CHECK blocks cross-tenant insert', async () => {
+    // Seed: 2 events, one per tenant, via dbAdmin (BYPASSRLS).
+    await dbAdmin.insert(aiUsageEvents).values([
+      { tenantId: TENANT_A, tokensIn: 100, tokensOut: 50, source: 'photo_upload' },
+      { tenantId: TENANT_B, tokensIn: 200, tokensOut: 80, source: 'photo_upload' },
+    ]);
+
+    // Pin 1 + 2: tenant A only sees its own rows.
+    const aRows = await dbUser.transaction(async (tx) => {
+      await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
+      return await tx.execute(sql`SELECT tenant_id, tokens_in FROM ai_usage_events`);
+    });
+    const aTenants = aRows.rows.map((r: any) => r.tenant_id);
+    expect(aTenants).toContain(TENANT_A);
+    expect(aTenants).not.toContain(TENANT_B);
+
+    // Pin 3: WITH CHECK rejects cross-tenant insert (context A, row tenant B).
+    await expectRejectsMatching(
+      dbUser.transaction(async (tx) => {
+        await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
+        await tx.execute(sql`
+          INSERT INTO ai_usage_events (tenant_id, tokens_in, tokens_out, source)
+          VALUES (${TENANT_B}::uuid, 999, 999, 'photo_upload')
+        `);
+      }),
+      /row-level security/i,
     );
   });
 });
