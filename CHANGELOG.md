@@ -8,6 +8,51 @@ Format: every entry is one Git commit with SHA + date + subject + bullet expansi
 
 ---
 
+## V2.6 PR3 — 2026-05-06 (PR #30) — `310d155`
+
+**docs(v2.6): blog post 'Compile-time tenant isolation' + drift checker T4**
+
+- New file `docs/blog/compile-time-tenant-isolation.md` (~280 lines) — flagship V2.6 artifact. Frames the ESLint allowlist as one rung in a stack of layers (RLS WITH CHECK + `withTenantTx` UUID guard + ESLint rule + cross-tenant + role-escalation tests), names the 4 known ESLint bypass routes up front (module-specifier exact match, dynamic computed `import()`, re-export laundering, `eslint-disable` comments).
+- 5 code excerpts anchored via `<!-- src: path:line-line -->` markers: `eslint.config.mjs:27-48`, `drizzle/migrations/0001a_init_rls.sql:37-40`, `src/lib/db/with-tenant.ts:7-31`, `tests/rls.e2e.test.ts:103-129` (T2), `tests/rls.e2e.test.ts:137-142` (T3).
+- `scripts/check-readme-drift.ts` §8 — blog snippet drift checker (T4 from the V2.6 test plan). Walks `docs/blog/*.md` for source markers, reads the actual file at the specified line range, asserts snippet matches verbatim. On mismatch prints `file:line` + first-diff hint pointing to the divergent line. Single-line marker form (`:42`) and range form (`:42-50`) both accepted.
+- Negative test verified: mutating one snippet fired the checker with the diff hint; reverting restored green.
+
+---
+
+## V2.6 PR2 — 2026-05-06 (PR #29) — `3dba632`
+
+**chore(v2.6): narrow ESLint allowlist + close doc-drift bug + add T9 RLS test**
+
+Closes Codex's CRITICAL doc-drift finding from the V2.6 `/autoplan` eng review.
+
+- `eslint.config.mjs`: removed `'src/app/(merchant)/**'` and `'src/app/(storefront)/**'` glob allowlist entries. Added 3 exact-file entries with one-line justifications:
+  - `'src/app/(merchant)/layout.tsx'` — cookie → merchant lookup before `withTenantTx` context exists
+  - `'src/app/(storefront)/store/*/layout.tsx'` — slug → merchant resolution before tenant context exists (wildcard `*` instead of `[slug]` because minimatch parses brackets as char-classes)
+  - `'src/app/(merchant)/merchant/settings/actions.ts'` — UPDATE on `merchants` table (web_anon has SELECT but not UPDATE on that table; merchants intentionally has no RLS policy because storefronts cross-query for theme/name)
+- File-header comment rewritten to list the full allowlist with category-grouped reasons.
+- `(merchant)/merchant/settings/page.tsx` + `(merchant)/merchant/products/page.tsx`: refactored read-only queries from `dbAdmin` → `dbUser`. Both are SELECT on `merchants` where `merchants` has no RLS policy, so `dbUser` (web_anon SELECT grant) is sufficient.
+- `tests/rls.e2e.test.ts`: added T9 — `ai_usage_events` cross-tenant deny test. Three pins: tenant A reads only its own rows, A cannot read B's rows under set_config to A, WITH CHECK rejects A inserting a row stamped with B's id. Closes Codex's #6 RLS coverage gap. `aiUsageEvents` schema import + cleanup added to `beforeAll`/`afterAll`.
+- `README.md`, `ARCHITECTURE.md` §2 + §4.3, `CLAUDE.md` hard-rule #5: rewrote security claim from "UI code physically cannot bypass tenant isolation" to "3 narrow exceptions with reasons." Added a new "ESLint rule limits to acknowledge" paragraph naming the 4 known bypass routes so V2.6 PR3's blog post can reference it instead of surfacing them as a critique surprise.
+
+---
+
+## V2.6 PR1 — 2026-05-06 (PR #28) — `9d165f3`
+
+**feat(v2.6): wire Vercel Analytics with PII filter**
+
+V2.6 distribution-sprint observability prerequisite for the 90-day sunset gate.
+
+- Added `@vercel/analytics` 2.0.1.
+- New `src/lib/observability/analytics-filter.ts`: pure `shouldReportEvent(url)` + `analyticsBeforeSend(event)` adapter. Drops events for `/admin/**`, `/merchant/**`, `/api/**`, `/store/<slug>/order/**`, `/store/<slug>/checkout`, `/merchant/products/import/<uuid>`, and any URL with a UUID-shaped path segment (forgot-future-route protection).
+- New `src/components/observability/AnalyticsClient.tsx` — `'use client'` wrapper for `<Analytics beforeSend={...} />`. Required because Next.js App Router refuses to serialize function props from server → client; mounting `<Analytics>` directly in `layout.tsx` fails the build with "Functions cannot be passed directly to Client Components." Caught locally during `pnpm build`.
+- `src/app/layout.tsx`: import + mount `<AnalyticsClient />` inside `<body>`.
+- `src/app/privacy/page.tsx`: `Last updated 2026-04-29` → `2026-05-06` and added a 1-paragraph Vercel Analytics disclosure under §3 third-party sharing (PDPA hygiene).
+- New `tests/observability/analytics-filter.test.ts`: 35 unit tests covering allowed public surfaces, dropped private prefixes, dropped PII URLs (order/checkout/import session UUIDs), edge cases (malformed URLs, prefix-but-no-slash like `/admin-foo`, trailing slashes, the `analyticsBeforeSend` adapter shape).
+- Operational artifact: GitHub issue #27 created — `V2.6 sunset gate decision @ 2026-08-06` with criteria body (< 50 unique non-operator visitors AND < 2 inbound contacts → V2.7 = archive).
+- T5 cleanup: `tests/rls.e2e.test.ts:T3` second assertion converted from bare `.rejects.toThrow()` to `expectRejectsMatching` per `CLAUDE.md` hard-rule #7. Initial regex `/permission denied|insufficient|cannot|denied|must be superuser/i` failed CI because the test environment doesn't provision a `postgres` role; widened to also match `does not exist|不存在` in a follow-up commit (`6368bae`) to mirror the `SET ROLE web_admin` assertion above.
+
+---
+
 ## V2.2.14 — 2026-05-05 (PR #6)
 
 **docs: README live demo badge + STATUS V2.2 entry + CHANGELOG V2.2 entries**
