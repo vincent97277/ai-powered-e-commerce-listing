@@ -29,9 +29,13 @@ These have all caused a real PR-breaking incident. They are not suggestions.
 1. **Use `pnpm`. Never `bun*`, `npm install`, `yarn`.** A `preinstall` script blocks the wrong manager. The README and DECISIONS document this; agents that copy-paste from old commits or training data will reach for `bun` — don't.
 2. **Use `pnpm db:migrate` (the custom runner). Never `pnpm db:push` for prod or onboarding.** `db:push` bypasses the migration filename guard and `WITH CHECK` policies in 0001a/0003/0007. It silently works in dev iteration only.
 3. **Stage files explicitly. Never `git add -A` / `git add .`.** It will pick up `.env.local`, `test-results/`, `.next/`, or your scratch files. Pass paths.
-4. **No raw color classes (`bg-zinc-*`, `bg-red-50`) or raw `rounded-lg`.** Use `var(--brand-primary)` / `var(--brand-bg)` / `var(--brand-radius)`. ESLint will block raw colors at PR time.
+4. **No ad-hoc brand/accent color classes or raw radius on tenant-facing surfaces.** Use `var(--brand-*)` and project tokens. Zinc / shadcn neutrals are allowed only for neutral platform chrome or shared primitives where they're not expressing merchant brand (borders, muted text, disabled states). Brand surfaces (buttons, badges, accents, brand backgrounds) MUST use `var(--brand-primary)` / `var(--brand-bg)` / `var(--brand-radius)`. ESLint enforces — when in doubt, run `pnpm lint`.
 5. **Don't import `dbAdmin` outside the allowlist** in `eslint.config.mjs` (currently `(admin)/**`, `lib/observability/**`, `lib/admin/**`, `lib/onboarding/**`, Inngest workers, system queries). User-facing routes use `dbUser` + `withTenantTx(tenantId, fn)`.
-6. **Never hardcode `/uploads/${r2Key}` in JSX.** Use `imageUrlFor()` from `@/lib/storage/public-url-client` (client) or `getPublicUrl()` from `@/lib/storage` (server CSV / XLSX). V2.2.13 lesson.
+6. **Never construct public storage URLs by hand.** Three contexts, three helpers:
+   - **Client Component** (`"use client"`): `imageUrlFor()` from `@/lib/storage/public-url-client`
+   - **React Server Component** (default in App Router) and any server-rendered HTML: `getPublicUrl()` from `@/lib/storage`
+   - **Server-only data export** (CSV / XLSX / metadata / JSON response): `getPublicUrl()` from `@/lib/storage`
+   RSC is the common trap — looks like client JSX but runs on the server, so the client helper builds wrong URLs in production R2 mode. V2.2.13 lesson.
 7. **Match `/row-level security/i` and `/permission denied/i` via `expectRejectsMatching` from `tests/_helpers/db-error.ts`, not `.rejects.toThrow(/regex/)`.** Drizzle 0.45 wraps errors; `.message` is `"Failed query: ..."`, not the postgres text. V2.3.5 lesson.
 8. **Don't merge without CI green.** Branch protection on `main` requires the `ci` check to pass. Auto-merge is enabled via `gh pr merge --auto`; it queues until CI flips green. Force-merge bypasses BP and breaks main (V2.3.4 lesson with #13).
 
@@ -42,6 +46,21 @@ The canonical checklist lives in [DECISIONS.md § Pre-PR checklist](./DECISIONS.
 In summary: typecheck + lint + lint:docs + vitest + (UI? browser-verify) + (README media? rendered-github verify) + explicit `git add` + conventional commit + push + auto-merge via `gh pr merge --auto --squash`.
 
 If any step fails, fix before pushing. Don't push partial state.
+
+## Common errors → fix
+
+When the agent's terminal / CI output contains one of these strings, the fix is mechanical:
+
+| Symptom (substring in error) | Root cause | Fix |
+|---|---|---|
+| `ERR_PNPM_BAD_PM_VERSION` / `only-allow pnpm` | Tried `bun install` / `npm install` / `yarn` | Run `corepack enable && pnpm install`. The `preinstall` script enforces pnpm. |
+| `Failed query:` matching expected `/row-level security/i` or `/permission denied/i` | Drizzle 0.45+ wraps the postgres error; `.message` is the templated query, real text is on `.cause.message` | Use `expectRejectsMatching(promise, /regex/)` from `tests/_helpers/db-error.ts` (V2.3.5 helper). |
+| `Multiple versions of pnpm specified` in CI | Both workflow `version:` and `package.json packageManager` set | Drop `version:` from the workflow step; `package.json packageManager` is single source of truth (V2.3.6 lesson). |
+| Auto-merge fires immediately on PR (no CI wait) | Branch protection missing or `ci` not in required checks | Verify via `gh api repos/.../branches/main/protection`; the assert workflow runs Mondays (V2.3.5 lesson). |
+| `<video>` element renders blank on github.com README | GitHub HTML sanitizer strips `<video>` whose `src` is not on the user-attachments allowlist | Drag-drop the .mp4 into a github.com comment box, copy the `https://github.com/user-attachments/assets/...` URL, paste into README. NO public CLI for this (V2.3.8 lesson). |
+| Dependabot PR opened but didn't auto-merge | `gh pr view --json author` returns `app/dependabot`, not `dependabot[bot]` | The auto-merge workflow now matches both — ensure your matcher does too (V2.3.5 lesson). |
+
+If your error string isn't in this table, check [DECISIONS.md § Sprint hygiene § Platform contract probe](./DECISIONS.md#sprint-hygiene) — most third-party platform quirks have a documented allowlist or contract you can probe before guessing.
 
 ## Cookbook — common tasks
 

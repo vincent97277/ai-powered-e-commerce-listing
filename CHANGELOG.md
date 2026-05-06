@@ -4,6 +4,8 @@ Commit-level history for `demo-sass-2`. Per-version narrative + numbers in [STAT
 
 Format: every entry is one Git commit with SHA + date + subject + bullet expansion. Trivial commits (merge / formatting) are skipped.
 
+> **Doc role** (V2.4 forward-only): CHANGELOG = mechanical commit-level *what*. STATUS = per-version theme + numbers + rationale (*why*). Existing V1–V2.3 entries retain mixed-style content (not retroactively reclassified — that surgery was deemed too risky in the V2.4 retro).
+
 ---
 
 ## V2.2.14 — 2026-05-05 (PR #6)

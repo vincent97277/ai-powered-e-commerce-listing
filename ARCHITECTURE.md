@@ -126,6 +126,8 @@ Every migration has a paired `*.rollback.sql`.
 
 ## 2. Multi-tenant RLS
 
+> **Security model in 30 seconds**: All UI code talks to Postgres as `web_anon` (RLS-enforced). `dbAdmin` (BYPASSRLS) is restricted to `(admin)/**` / `lib/observability/**` / `lib/admin/**` / `lib/onboarding/**` / Inngest worker / system-query paths via an ESLint allowlist — UI routes can't even import it. Tenant context is set per-transaction via `withTenantTx(tenantId, fn)` with a UUID guard before the `set_config` call (no string concat into SQL). Migrations enforce isolation with `WITH CHECK` on every policy, not just `USING` — meaning cross-tenant **inserts** are blocked at the DB level too, not just selects.
+
 The pool model: one Postgres database, `tenant_id` UUID column on every tenant-scoped row, RLS enforces isolation at the database layer. UI code can't accidentally select cross-tenant.
 
 ### 2.1 Role split
@@ -431,7 +433,33 @@ Originally `SELECT * FROM merchants` — fine for 2 demo tenants, broken at 100+
 
 ## 7. Testing strategy
 
-154 vitest tests + 25-step manual smoke checklist (`tests/v1-smoke.md`).
+260+ vitest tests + 25-step manual smoke checklist (`tests/v1-smoke.md`) + 15 Playwright post-deploy smoke tests (V2.3.3) running against the live production URL after every main push.
+
+### Coverage by layer
+
+| Layer | Approx | File |
+|---|---|---|
+| RLS isolation (e2e) | 8 | `tests/rls.e2e.test.ts` |
+| Admin auth (e2e) | 15 | `tests/admin-auth.e2e.test.ts` |
+| Merchant auth (e2e) | 15+ | `tests/merchant-auth.e2e.test.ts` |
+| Admin search + filter + pagination | 8 | `tests/admin-search.test.ts` |
+| Operator queue (cross-tenant CTE) | 5 | `tests/admin/operator-queue.test.ts` |
+| AI cost cap | 15 | `tests/ai/cost-cap.test.ts` |
+| URL guard / SSRF | 15 | `tests/import/url-guard.test.ts` |
+| IG / Shopee fetchers | 8 | `tests/import/{ig,shopee}-fetcher.test.ts` |
+| Shopee CSV export | 6 | `tests/export/shopee-csv.test.ts` |
+| Onboarding security | 9 | `tests/onboarding/security.test.ts` |
+| Storage facade (local + R2) | 17 | `tests/storage/facade.test.ts` |
+| Env validation | 11 | `tests/env/env-validation.test.ts` |
+| Theme matching | 16 | `tests/themes/match.test.ts` |
+| Migration runner | varies | `tests/db/migrate-runner.test.ts` |
+| Feedback state primitives | 18 | `tests/components/feedback.test.tsx` |
+| V1 integration (HTTP) | 43 | `tests/v1-integration.test.ts` |
+| Post-deploy Playwright smoke | 15 | `tests/smoke/post-deploy.smoke.ts` |
+| **Total vitest** | **260+** | |
+| **Manual smoke** | 25 steps | `tests/v1-smoke.md` |
+
+Counts shift between versions; the source of truth is `pnpm vitest run`. CI badge on README tracks the current pass count.
 
 ### Patterns
 
