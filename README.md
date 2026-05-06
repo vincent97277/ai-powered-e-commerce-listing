@@ -10,7 +10,14 @@
 
 **Live:** https://demo-sass-2.vercel.app · **Storefront examples:** [/store/akami](https://demo-sass-2.vercel.app/store/akami) · [/store/afen](https://demo-sass-2.vercel.app/store/afen)
 
-[![Marketplace home](./docs/hero/marketplace-home.png)](https://demo-sass-2.vercel.app)
+[![Hero — 來，把商品交給 AI](./docs/hero/hero.png)](https://demo-sass-2.vercel.app)
+
+### Walkthrough — photo → AI listing in ~60s
+
+<video src="https://github.com/vincent97277/ai-powered-e-commerce-listing/raw/main/docs/hero/walkthrough.mp4" poster="./docs/hero/walkthrough-poster.jpg" autoplay loop muted playsinline width="100%"></video>
+
+> [!NOTE]
+> If the video doesn't autoplay above (e.g., on npm / mirror sites), [download or play it directly](./docs/hero/walkthrough.mp4).
 
 > **Portfolio / showcase project.** Public for learning, hiring, and reference. Limited active maintenance — see [.github/CONTRIBUTING.md](./.github/CONTRIBUTING.md) before opening PRs.
 
@@ -30,6 +37,22 @@ Cloud: Vercel (sin1) · Neon Singapore · Cloudflare R2 (APAC) · Inngest Cloud
 - **Platform admin tools** — sortable merchant ranking, AI cost dashboard with anomaly detection, cross-merchant operator queue (P1–P5 severity inbox)
 - **Production-shaped onboarding** — admin approval queue, reserved-slug list, IP rate limit, and honeypot defense, all without email or captcha
 - **Security-first by construction** — Postgres RLS with `WITH CHECK`, HMAC-signed admin sessions with DB liveness check, hostname-allowlist SSRF guard, ESLint-enforced `dbAdmin` containment
+
+## See it in action
+
+Three personas, one codebase. RLS keeps tenants apart; `dbAdmin` (BYPASSRLS) is allowlisted to platform surfaces only.
+
+| Storefront (顧客端) | Merchant dashboard (商家後台) |
+|---|---|
+| [![Storefront product detail](./docs/screenshots/storefront-product-detail.png)](./docs/screenshots/storefront-product-detail.png) | [![Merchant dashboard](./docs/screenshots/merchant-dashboard.png)](./docs/screenshots/merchant-dashboard.png) |
+| Brand-aware theming via per-merchant CSS vars; same `/store/{slug}` route, different visual identity per tenant. | KPI tiles, 7-day order chart, hot products, recent orders, action inbox — RLS-scoped to the logged-in merchant. |
+
+| AI cost dashboard (平台管理) | Operator queue (跨商家客服) |
+|---|---|
+| [![AI cost dashboard](./docs/screenshots/admin-ai-cost-dashboard.png)](./docs/screenshots/admin-ai-cost-dashboard.png) | [![Operator queue](./docs/screenshots/admin-operator-queue.png)](./docs/screenshots/admin-operator-queue.png) |
+| 14-day platform-wide AI token usage + per-merchant top-10. The cost cap is a load-bearing primitive — see `assertWithinDailyCap()`. | P1–P5 severity inbox aggregating action items across every tenant via cross-merchant CTE — `dbAdmin` BYPASSRLS, ESLint-allowlisted. |
+
+[More screenshots →](./docs/screenshots/) (settings, product list, order detail, A4 print slip, storefront grid, success page, merchant ranking)
 
 ## Architecture
 
