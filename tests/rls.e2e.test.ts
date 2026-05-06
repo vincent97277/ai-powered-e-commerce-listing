@@ -138,7 +138,16 @@ describe('RLS multi-tenant isolation', () => {
       /permission denied|must be member|does not exist|不存在/i,
     );
 
-    await expect(dbUser.execute(sql`SET SESSION AUTHORIZATION postgres`)).rejects.toThrow();
+    // CLAUDE.md hard-rule #7: drizzle 0.45 wraps errors; .rejects.toThrow()
+    // would only check the templated query message, not the postgres
+    // permission text on .cause. Pattern mirrors the SET ROLE assertion
+    // above — CI envs may report "role does not exist" instead of
+    // "permission denied" depending on whether the postgres role is
+    // provisioned.
+    await expectRejectsMatching(
+      dbUser.execute(sql`SET SESSION AUTHORIZATION postgres`),
+      /permission denied|insufficient|cannot|denied|must be superuser|does not exist|不存在/i,
+    );
 
     const r = await dbUser.execute(sql`
       SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user
