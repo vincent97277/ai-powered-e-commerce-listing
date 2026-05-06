@@ -221,6 +221,19 @@ landings don't re-walk the path.
 - OAuth approvals (operator's identity)
 - Payment / billing actions
 
+## Agent routing (observational)
+
+Operator-internal labels for which framework owns which kind of work. This is "framework ownership", not "review depth" — `/autoplan` handles the latter.
+
+- **Strategic / company-level work** → `agency-agents` (operator's role-based subagents: CEO / PM / Backend Architect / Frontend Developer / Security Engineer). Used in V1 / V1.6 sprints; revives when needed for cross-cutting product decisions.
+- **Engineering decisions** → `gstack` (this repo's planning + review framework — `/autoplan`, `/plan-ceo-review`, `/plan-eng-review`, `/investigate`, `/qa`, etc.). Actively in use; the canonical entry for non-trivial work.
+
+**Anchor rule** (the operative line in this section): RLS / tenant-isolation / auth-boundary changes → run `/plan-eng-review` before implementing. This sharpens the gap between "What requires human" (which gates truly destructive ops) and the `dbAdmin` allowlist (mechanical).
+
+For human-approval gates see § What requires human above. Execution-layer skills (TDD / code review / verification) are operator opt-in per task — this section will name an execution layer here only when repo evidence shows repeated current use.
+
+**Review by 2026-08-01** — if not referenced in any V2.x sprint plan by then, remove. Per V2.4 retro lesson: doc surface that goes unread for 90+ days is rot, not asset.
+
 ## Chinese vs English
 
 - Operator writes/speaks 繁體中文 + technical English mixed. Match this style
