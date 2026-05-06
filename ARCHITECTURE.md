@@ -126,7 +126,7 @@ Every migration has a paired `*.rollback.sql`.
 
 ## 2. Multi-tenant RLS
 
-> **Security model in 30 seconds**: All UI code talks to Postgres as `web_anon` (RLS-enforced). `dbAdmin` (BYPASSRLS) is restricted to `(admin)/**` / `lib/observability/**` / `lib/admin/**` / `lib/onboarding/**` / Inngest worker / system-query paths via an ESLint allowlist — UI routes can't even import it. Tenant context is set per-transaction via `withTenantTx(tenantId, fn)` with a UUID guard before the `set_config` call (no string concat into SQL). Migrations enforce isolation with `WITH CHECK` on every policy, not just `USING` — meaning cross-tenant **inserts** are blocked at the DB level too, not just selects.
+> **Security model in 30 seconds**: All UI **read** code talks to Postgres as `web_anon` (RLS-enforced). `dbAdmin` (BYPASSRLS) is restricted via an ESLint allowlist to `(admin)/**`, `lib/observability/**`, `lib/admin/**`, `lib/onboarding/**`, Inngest workers, system-query paths, plus 3 narrow user-facing exceptions: the 2 session-resolution layouts (cookie/slug → tenant context) and `settings/actions.ts` (the merchants-table UPDATE path; merchants has no RLS policy because storefronts cross-query it). Tenant context is set per-transaction via `withTenantTx(tenantId, fn)` with a UUID guard before the `set_config` call (no string concat into SQL). Migrations enforce isolation with `WITH CHECK` on every policy, not just `USING` — cross-tenant **inserts** are blocked at the DB level too, not just selects. See §4.3 for the rule's known bypass routes.
 
 The pool model: one Postgres database, `tenant_id` UUID column on every tenant-scoped row, RLS enforces isolation at the database layer. UI code can't accidentally select cross-tenant.
 
@@ -316,14 +316,30 @@ files: [
   'src/inngest/**',               // background workers
   'src/app/api/products/generate/**',  // sync vision needs brand_voice
   'src/app/onboarding/**',        // signup writes new merchant row
-  'src/app/(merchant)/**',        // resolves cookie → tenant
-  'src/app/(storefront)/**',      // storefront reads merchant theme/name
   'src/lib/admin-session.ts',     // admin session table CRUD
+  'src/lib/merchant-session.ts',  // merchant session table CRUD
   'src/db/index.ts',              // the export itself
+  // V2.6 narrowed: 3 exact-file exceptions in user-facing routes.
+  // Earlier versions allowlisted '(merchant)/**' and '(storefront)/**'
+  // wholesale; the doc claim "UI code physically cannot bypass tenant
+  // isolation" was therefore overstated. The narrowed allowlist:
+  'src/app/(merchant)/layout.tsx',                    // cookie → merchant lookup before withTenantTx context exists
+  'src/app/(storefront)/store/*/layout.tsx',          // slug → merchant lookup before tenant context exists
+  'src/app/(merchant)/merchant/settings/actions.ts',  // UPDATE on merchants (web_anon has no UPDATE grant on that table)
 ],
 ```
 
-UI code that wants to read tenant data must use `dbUser` + `withTenantTx`. CI fails the build if anything else reaches for `dbAdmin`.
+UI **read** code must use `dbUser` + `withTenantTx`. The 3 user-facing exceptions above are narrow:
+
+- The 2 layouts run BEFORE tenant context exists — they're the code paths that *establish* tenant context from cookie / URL slug.
+- `settings/actions.ts` writes to the `merchants` table, which intentionally has no RLS policy because storefront pages cross-query merchants for theme / name / slug; web_anon therefore has SELECT but not UPDATE on merchants. The runtime guard for ownership is the cookie session — a runtime check, not compile-time.
+
+CI fails the build if any other file reaches for `dbAdmin`.
+
+**ESLint rule limits to acknowledge** (the rule is one of several layers, not a hermetic seal):
+
+- `no-restricted-imports` matches by exact module specifier. Importing `@/db/index` instead of `@/db`, dynamic `await import(...)` with a computed string, and re-exports through an allowlisted file all bypass the rule. RLS + WITH CHECK at the DB layer is the actual security boundary; the lint rule prevents accidental misuse, not an adversarial bypass.
+- `eslint-disable-next-line no-restricted-imports` works inline. Code review greps for these.
 
 ---
 

@@ -62,7 +62,7 @@ For folks reading the source — the four load-bearing patterns:
 - **RLS done right.** Every tenant write goes through `withTenantTx(tenantId, fn)` → `SET LOCAL app.tenant_id` inside a transaction. Migrations include `WITH CHECK` to block cross-tenant inserts, not just selects. See [`src/lib/db/with-tenant.ts`](./src/lib/db/with-tenant.ts) + 8 RLS e2e cases (incl. role-escalation test).
 - **SSRF defense via hostname allowlist, not regex.** `assertSafeUrl()` parses with `new URL()`, DNS-resolves and rejects RFC1918/loopback/link-local v4+v6 to defeat DNS rebinding, follows redirects manually with re-validation per hop, 5MB body cap, 10s timeout. See [`src/lib/import/url-guard.ts`](./src/lib/import/url-guard.ts) + 15 unit cases.
 - **AI cost cap as a load-bearing primitive.** `ai_usage_events` (sync) + `import_sessions.tokens_in/out` (batch) aggregated by `getDailyCostCents()`. `assertWithinDailyCap()` gates every AI call and returns 429 when over. USD→TWD rate isolated to `ai-cost-pricing.ts` so platform-cost code can't silently re-derive and drift.
-- **`dbAdmin` (BYPASSRLS) restricted by ESLint allowlist.** Only `(admin)/**`, `lib/observability/**`, `lib/admin/**`, `lib/onboarding/**`, Inngest workers, and a handful of system queries can import it. UI code physically cannot bypass tenant isolation. See [`eslint.config.mjs`](./eslint.config.mjs).
+- **`dbAdmin` (BYPASSRLS) restricted by ESLint allowlist.** Admin / observability / Inngest / system-query paths, plus 3 narrow user-facing exceptions: the 2 session-resolution layouts (cookie/slug → tenant) and `settings/actions.ts` (UPDATE on the merchants table, which has no RLS policy). UI **read** code goes through `dbUser` + `withTenantTx`. The rule is one of several layers — it stops accidental misuse, not adversarial bypass; RLS + WITH CHECK at the DB is the actual boundary. See [`eslint.config.mjs`](./eslint.config.mjs) + ARCHITECTURE.md §4.3.
 
 Plus: production-shaped onboarding (admin approval queue + reserved-slug list + IP rate limit + honeypot, no email or captcha), defense-in-depth admin sessions (Edge HMAC + per-render DB liveness check), and V2.2 cloud deploy at $0/mo idle (Vercel sin1 + Neon Singapore + R2 + Inngest Cloud).
 
@@ -88,7 +88,7 @@ graph TB
   AIUsage --> PG
 ```
 
-**Security model in 30 seconds**: All UI code talks to Postgres as `web_anon` (RLS-enforced). `dbAdmin` (BYPASSRLS) is restricted to admin / observability / Inngest paths via an ESLint allowlist — UI routes can't even import it. Tenant context is set per-transaction via `withTenantTx(tenantId, fn)` with a UUID guard before the `set_config` call. Migrations enforce isolation with `WITH CHECK` on every policy, not just `USING`.
+**Security model in 30 seconds**: UI **read** code talks to Postgres as `web_anon` (RLS-enforced). `dbAdmin` (BYPASSRLS) is allowlisted to admin / observability / Inngest paths plus 3 narrow user-facing exceptions (2 session-resolution layouts + the `settings/actions.ts` UPDATE path). Tenant context is set per-transaction via `withTenantTx(tenantId, fn)` with a UUID guard before the `set_config` call. Migrations enforce isolation with `WITH CHECK` on every policy, not just `USING`. The ESLint rule stops accidental misuse — RLS + WITH CHECK at the DB layer is the actual boundary; ARCHITECTURE.md §4.3 documents the rule's known bypass routes.
 
 Deeper diagrams (data model, AI pipeline sequence, security layers) live in [ARCHITECTURE.md](./ARCHITECTURE.md).
 

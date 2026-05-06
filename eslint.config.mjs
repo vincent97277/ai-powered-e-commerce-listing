@@ -1,7 +1,19 @@
 /**
  * ESLint flat config — Next.js 15 + dbAdmin 防護 + V1.9 T1 raw-color guard
  *
- * dbAdmin 只允許 (admin)/** / lib/tenant/resolver.ts / lib/db/admin-only/** 使用
+ * dbAdmin 允許範圍 (V2.6 narrowed):
+ *   - (admin)/** + lib/admin/** + lib/observability/**         — platform admin / cross-tenant observability
+ *   - inngest/** + lib/storage/** + scripts/**                 — worker/system context, non-RLS
+ *   - lib/tenant/resolver.ts + lib/platform/** + lib/merchant/* — pre-tenant resolution + cross-merchant queries
+ *   - lib/admin-session.ts + lib/merchant-session.ts            — session table management (admin observability)
+ *   - app/onboarding/** + lib/onboarding/**                     — signup creates merchant before tenant context
+ *   - app/api/products/generate/** + app/api/health/**          — cross-pool / cap-check paths
+ *   - lib/db/admin-only/** + db/index.ts                        — the dbAdmin source itself
+ *   - 3 narrow exceptions in user-facing routes (V2.6):
+ *       app/(merchant)/layout.tsx                  — cookie → merchant lookup
+ *       app/(storefront)/store/[slug]/layout.tsx   — slug → merchant lookup
+ *       app/(merchant)/merchant/settings/actions.ts — UPDATE on merchants (no RLS policy on that table)
+ *
  * Raw color classes (bg-zinc-*, bg-red-50, etc.) 禁用於 (admin)/(merchant)/(storefront)
  *   pages + src/components/* — 改用 brand vars / semantic utilities / StatusChip.
  */
@@ -122,8 +134,15 @@ export default [
       'src/app/api/products/generate/**',  // V2.2.5 enqueue + status: cap check + status query
       'src/app/api/health/**',             // V2.2.1 platform health probe: pings dbUser + dbAdmin
       'src/app/onboarding/**',             // signup 需建 merchant (寫入 BYPASSRLS)
-      'src/app/(merchant)/**',             // 商家後台需 BYPASSRLS 解析 cookie 對應的 merchant
-      'src/app/(storefront)/**',           // storefront 需 BYPASSRLS 拿商家 theme/name
+      // V2.6 narrowed allowlist: was '(merchant)/**' + '(storefront)/**'
+      // (broad, included entire user-facing surface). Narrowed to the 3 exact
+      // files that truly need BYPASSRLS — pre-tenant cookie/slug resolution
+      // and the merchants-table UPDATE path (merchants has no RLS policy
+      // because storefronts cross-query, so writes need dbAdmin).
+      'src/app/(merchant)/layout.tsx',                   // cookie → merchant lookup before withTenantTx context exists
+      // [slug] in the path would be parsed as a glob character-class — use wildcard for the dynamic segment.
+      'src/app/(storefront)/store/*/layout.tsx',         // slug → merchant resolution before tenant context exists
+      'src/app/(merchant)/merchant/settings/actions.ts', // UPDATE on merchants (web_anon has no UPDATE grant; runtime guard via cookie session)
       'src/lib/admin-session.ts',          // V1 admin auth gate (#43): 管理 admin_sessions table
       'src/lib/merchant-session.ts',       // V2 merchant auth gate (task 103): 管理 merchant_sessions table
       'src/lib/platform/**',               // V1 platform 公開 query (RA17): 跨商家 dbAdmin 查熱門店鋪
