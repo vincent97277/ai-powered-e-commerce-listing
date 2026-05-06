@@ -37,16 +37,9 @@ These have all caused a real PR-breaking incident. They are not suggestions.
 
 ## Pre-PR checklist
 
-Run in order — do not skip:
+The canonical checklist lives in [DECISIONS.md § Pre-PR checklist](./DECISIONS.md#pre-pr-checklist-always-run-in-order). **Follow that one** — it's the single source of truth so the agent doc and the operator doc cannot drift (V2.3 retro caught a 7-vs-8-step drift within 24h of CLAUDE.md creation).
 
-1. `pnpm typecheck` — clean
-2. `pnpm lint` — clean (the `next lint` deprecation warning is expected)
-3. `pnpm lint:docs` — README accuracy guard, must pass
-4. `pnpm vitest run` — 260+/260+ green
-5. (UI changes) restart `pnpm dev`, browser-verify in a real browser
-6. Stage explicit paths (`git add tests/foo.ts src/bar.tsx`, never `-A`)
-7. Conventional commit: `feat(v2.3.x):`, `fix(v2.3.x):`, `chore:`, `docs:`, `test:`, `refactor:`, `ci:`
-8. Push, open PR; auto-merge wires up via `gh pr merge --auto --squash` once CI is queued
+In summary: typecheck + lint + lint:docs + vitest + (UI? browser-verify) + (README media? rendered-github verify) + explicit `git add` + conventional commit + push + auto-merge via `gh pr merge --auto --squash`.
 
 If any step fails, fix before pushing. Don't push partial state.
 

@@ -14,9 +14,11 @@
 
 ### Walkthrough — photo → AI listing in ~60s
 
-<video src="https://github.com/user-attachments/assets/86eb6f26-1708-4655-aeed-10b1795d9a23" autoplay loop muted playsinline controls></video>
+<video src="https://github.com/user-attachments/assets/86eb6f26-1708-4655-aeed-10b1795d9a23" autoplay loop muted playsinline controls poster="./docs/hero/walkthrough-poster.jpg"></video>
 
-Real AI photo→listing flow on the local env. Source `.mp4` archived at [`docs/hero/walkthrough.mp4`](./docs/hero/walkthrough.mp4) for raw access / mirrors.
+Real AI photo→listing flow on the local env.
+
+If the embed above doesn't render (npm package page, mirror, or some browsers): [▶ Play walkthrough (V2.3 release asset, 1.7 MB)](https://github.com/vincent97277/ai-powered-e-commerce-listing/releases/download/v2.3/walkthrough.mp4) · [Source `.mp4` in repo](./docs/hero/walkthrough.mp4) · [Poster image](./docs/hero/walkthrough-poster.jpg)
 
 > **Portfolio / showcase project.** Public for learning, hiring, and reference. Limited active maintenance — see [.github/CONTRIBUTING.md](./.github/CONTRIBUTING.md) before opening PRs.
 
@@ -95,16 +97,28 @@ Requires: Node 22+, pnpm 9+, Docker.
 # 1. Boot local Postgres + roles
 pnpm docker:up
 
-# 2. Install + migrate (uses the custom runner — never `pnpm db:push` for onboarding)
+# 2. Env (defaults work for local; openssl rand for any required *_SECRET)
+cp .env.local.example .env.local
+# Required: generate MERCHANT_SESSION_SECRET (≥32 chars) — `/merchant/*` 503s without it.
+echo "MERCHANT_SESSION_SECRET=$(openssl rand -hex 32)" >> .env.local
+
+# 3. Install + migrate (uses the custom runner — never `pnpm db:push` for onboarding)
 pnpm install
 pnpm db:migrate
 
-# 3. Run
+# 4. Seed demo merchants (akami + afen + 5 others, dev mode = shared `demo1234`)
+pnpm tsx scripts/seed-merchant-auth.ts
+
+# 5. Run
 pnpm dev          # http://localhost:3000
 
-# 4. Test
+# 6. Test
 pnpm vitest run   # 260+ tests
 ```
+
+**Demo logins** (dev mode only):
+- Merchant: `akami@demo.local` or `afen@demo.local` / password `demo1234`
+- Admin: whatever you put in `ADMIN_PASSWORD` in `.env.local` (default `changeme`)
 
 Full setup, env vars, RLS gotchas, sample data: [LOCAL_SETUP.md](./LOCAL_SETUP.md).
 
