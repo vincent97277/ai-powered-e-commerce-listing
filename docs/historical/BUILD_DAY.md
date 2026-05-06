@@ -1,6 +1,6 @@
 # Build Day Checklist — demo-sass-2
 
-> **Historical artifact** — preserved as the original hackathon checklist (V1 day-of plan). Project has shipped four versions since (V1 → V1.5 → V1.6 → V1.7). For current state see [STATUS.md](./STATUS.md); for setup see [LOCAL_SETUP.md](./LOCAL_SETUP.md).
+> **Historical artifact (archived V2.4)** — preserved as the original hackathon checklist (V1 day-of plan). Project has shipped 13+ versions since (V1 → V2.3). For current state see [STATUS.md](../../STATUS.md); for setup see [LOCAL_SETUP.md](../../LOCAL_SETUP.md). Path was `/BUILD_DAY.md` until V2.4 when it moved here to keep root focused on living docs.
 
 > 5 輪 orchestration 已完成。Code 80% 已 ready，dev server 已驗證可跑。
 > 你需要做的事：3 件 USER 必做 + 4 件 hackathon day 機械式跑

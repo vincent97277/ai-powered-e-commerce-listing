@@ -2,6 +2,19 @@
 
 Version-by-version progression for `demo-sass-2`. This replaces the older `V1_STATUS.md` (kept on disk only as historical context — see Git history if needed). Companion to [README.md](./README.md), [ARCHITECTURE.md](./ARCHITECTURE.md), and [CHANGELOG.md](./CHANGELOG.md).
 
+> **Doc role**: STATUS = per-version theme + numbers + rationale (the *why*). [CHANGELOG.md](./CHANGELOG.md) = commit-level mechanical entries (the *what*). Going forward, narrative belongs here; SHA-level minutiae belongs there.
+
+## TL;DR
+
+- **V1 (2026-04-30)** Hackathon → multi-merchant platform, 7 phases shipped, 81 tests.
+- **V1.5 → V1.7** AI cost cap + admin scale + onboarding security. 81 → 154 tests.
+- **V1.8 → V1.9** Portfolio docs + UI overhaul (brand tokens, theme system).
+- **V2.0 (2026-05-04)** Per-merchant auth (email + password + DB sessions). 164 → 195 tests.
+- **V2.1** 18 theme presets + brand-voice auto-match. 211 tests.
+- **V2.2 (2026-05-04/05)** **Cloud deploy** — Vercel sin1 + Neon Singapore + R2 + Inngest Cloud. 4 critical + 7 high /autoplan blockers fixed. 256 → 260 tests. **Public on https://demo-sass-2.vercel.app at $0/mo idle.**
+- **V2.3 (2026-05-05/06)** Throughput + tech debt + OSS readiness — Dependabot auto-merge, post-deploy smoke, branch protection, drizzle-orm 0.45 upgrade, real screenshots + walkthrough video, README clarity. 260+ tests.
+- **V2.4 (2026-05-06)** Doc consolidation — README trimmed to entry surface, "Why interesting" promoted above the fold, security 30-sec synthesis added, Tests table moved to ARCHITECTURE §7, BUILD_DAY archived. CLAUDE.md hard rules #4/#6 fixed; common-errors cookbook added.
+
 ---
 
 ## Summary table

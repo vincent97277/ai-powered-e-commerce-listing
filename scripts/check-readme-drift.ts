@@ -174,6 +174,91 @@ for (const f of testFiles) {
   }
 }
 
+// 6. V2.4: broken markdown relative links across docs (catches link-rot from
+// future doc moves, e.g. archiving BUILD_DAY or moving anything into docs/).
+// Walk all *.md at root + .github + docs, extract relative links, assert each
+// resolves. Skip URLs (http*), mailto:, anchors (#foo).
+import { dirname } from 'node:path';
+
+const docFiles: string[] = [];
+function walkMarkdown(dir: string, files: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    if (entry === 'node_modules' || entry === '.next' || entry === '.git') continue;
+    const full = join(dir, entry);
+    const st = statSync(full);
+    if (st.isDirectory()) {
+      walkMarkdown(full, files);
+    } else if (/\.md$/.test(entry)) {
+      files.push(full);
+    }
+  }
+  return files;
+}
+walkMarkdown(ROOT, docFiles);
+
+const linkPattern = /(?:!?\[[^\]]*\])\(((?!https?:|mailto:|#)[^)\s]+?)(?:\s+"[^"]*")?\)/g;
+let brokenCount = 0;
+for (const f of docFiles) {
+  let src = readFileSync(f, 'utf-8');
+  // Strip fenced code blocks (```...```) and inline code (`...`) before
+  // scanning — links inside code are documentation/syntax illustrations,
+  // not real links. Without this, CHANGELOG's `[![Live demo](...)]` fires.
+  src = src.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, '');
+  const dir = dirname(f);
+  let m: RegExpExecArray | null;
+  while ((m = linkPattern.exec(src)) !== null) {
+    const target = m[1].split('#')[0]; // strip anchor
+    if (!target) continue; // pure-anchor link
+    if (/^\.+$/.test(target)) continue; // bare `...` placeholder
+    const resolved = join(dir, target);
+    try {
+      statSync(resolved);
+    } catch {
+      const rel = f.replace(`${ROOT}/`, '');
+      err(`${rel}: broken relative link → ${m[1]}`);
+      brokenCount++;
+    }
+  }
+}
+
+// 7. V2.4: stack-version drift between README and package.json.
+// README claims like "Drizzle ORM 0.45" / "Next.js 15" / "React 19" / "Vitest 2"
+// must match the major version in package.json deps.
+const stackChecks: Array<{ readmeText: RegExp; pkgKey: string; pkgPath: 'dependencies' | 'devDependencies' }> = [
+  { readmeText: /Drizzle ORM 0\.(\d+)/, pkgKey: 'drizzle-orm', pkgPath: 'dependencies' },
+  { readmeText: /Next\.js 15/, pkgKey: 'next', pkgPath: 'dependencies' },
+  { readmeText: /React 19/, pkgKey: 'react', pkgPath: 'dependencies' },
+  { readmeText: /Vitest 2/, pkgKey: 'vitest', pkgPath: 'devDependencies' },
+];
+const pkgFull = JSON.parse(readFileSync(PACKAGE_JSON, 'utf-8')) as {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+for (const c of stackChecks) {
+  const m = readme.match(c.readmeText);
+  if (!m) {
+    warn(
+      `README does not mention "${c.readmeText.source}" — stack version claim missing or restructured.`,
+    );
+    continue;
+  }
+  const installed = pkgFull[c.pkgPath]?.[c.pkgKey];
+  if (!installed) {
+    err(`${c.pkgKey} claimed in README but not found in package.json ${c.pkgPath}.`);
+    continue;
+  }
+  // Extract major version from installed (e.g. "^0.45.2" → 0.45, "15.5.15" → 15)
+  const installedMajor = installed.replace(/^[\^~]/, '').match(/^\d+(?:\.\d+)?/)?.[0];
+  // Extract claimed version (e.g. "0.45" or "15")
+  const claimedMatch = c.readmeText.source.match(/(\d+(?:\\\.\d+)?)/);
+  const claimed = claimedMatch?.[1].replace(/\\/g, '');
+  if (claimed && installedMajor && !installedMajor.startsWith(claimed)) {
+    err(
+      `Stack version drift: README says ${c.pkgKey} ${claimed}, package.json has ${installed}.`,
+    );
+  }
+}
+
 // Report
 const errors = issues.filter((i) => i.severity === 'error');
 const warnings = issues.filter((i) => i.severity === 'warn');
