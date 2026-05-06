@@ -14,9 +14,9 @@
 
 ### Walkthrough — photo → AI listing in ~60s
 
-[![Walkthrough — click to play (60s, 1.7 MB)](./docs/hero/walkthrough-poster.jpg)](https://github.com/vincent97277/ai-powered-e-commerce-listing/blob/main/docs/hero/walkthrough.mp4)
+<video src="https://github.com/user-attachments/assets/86eb6f26-1708-4655-aeed-10b1795d9a23" autoplay loop muted playsinline controls></video>
 
-▶ **[Click to play walkthrough](https://github.com/vincent97277/ai-powered-e-commerce-listing/blob/main/docs/hero/walkthrough.mp4)** (60s, 1.7 MB) — real AI photo→listing on the local env. GitHub's blob viewer renders the player inline; the source `.mp4` is at [`docs/hero/walkthrough.mp4`](./docs/hero/walkthrough.mp4).
+Real AI photo→listing flow on the local env. Source `.mp4` archived at [`docs/hero/walkthrough.mp4`](./docs/hero/walkthrough.mp4) for raw access / mirrors.
 
 > **Portfolio / showcase project.** Public for learning, hiring, and reference. Limited active maintenance — see [.github/CONTRIBUTING.md](./.github/CONTRIBUTING.md) before opening PRs.
 
