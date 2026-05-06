@@ -57,3 +57,6 @@ playwright-report/
 
 # gstack project artifacts (retros, plans, etc — local-only)
 .context/
+
+# Asset staging — drop new images/videos here, then `mv` into docs/ when integrating (V2.3.8)
+assets/
