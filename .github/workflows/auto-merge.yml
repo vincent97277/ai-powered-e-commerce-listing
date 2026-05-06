@@ -84,7 +84,11 @@ jobs:
           FILES: ${{ steps.inspect.outputs.files }}
         run: |
           ALLOW=false
-          REASON=""
+          # Default reason — overwritten if a rule matches (allow OR explicit deny).
+          # Without this, a PR not in any trusted category produced a comment
+          # like "Auto-merge not applied: . Requires human review + merge."
+          # with empty REASON. Caught V2.3.9.x review.
+          REASON="Not in any trusted-merge category (Dependabot / docs label / test label). Operator runs \`gh pr merge --auto --squash\` manually if appropriate."
 
           # Rule 1: Dependabot
           # gh pr view --json author returns login as `app/dependabot`,
