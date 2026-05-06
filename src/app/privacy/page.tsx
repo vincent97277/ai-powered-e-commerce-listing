@@ -11,7 +11,7 @@ export default function PrivacyPage() {
   return (
     <LegalPageShell
       title="隱私權政策"
-      subtitle="最後更新: 2026-04-29 · 適用於 Catalogify 平台所有用戶 (商家與顧客)"
+      subtitle="最後更新: 2026-05-06 · 適用於 Catalogify 平台所有用戶 (商家與顧客)"
     >
       <h2 className="text-base font-semibold text-zinc-900">1. 我們收集哪些資料</h2>
       <p>
@@ -32,6 +32,9 @@ export default function PrivacyPage() {
       <h2 className="mt-6 text-base font-semibold text-zinc-900">3. 第三方分享</h2>
       <p>
         商家上架照片在 AI 文案生成過程中會傳送至 OpenAI 進行 vision 分析, 不會用於 OpenAI 模型訓練。 顧客個資僅分享給該訂單對應的商家用於出貨。 不對外販售或交換任何個資。
+      </p>
+      <p className="mt-2">
+        本平台首頁與店面 (/store/*) 使用 Vercel Analytics 統計匿名訪客數與來源頁面, 不使用 cookie、不收集 IP, 後台 (/admin、/merchant) 與訂單頁面已從統計中排除。
       </p>
 
       <h2 className="mt-6 text-base font-semibold text-zinc-900">4. Cookies</h2>

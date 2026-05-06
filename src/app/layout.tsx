@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Geist, Noto_Serif_TC, Noto_Sans_TC } from 'next/font/google';
 import { cn } from '@/lib/utils';
+import { AnalyticsClient } from '@/components/observability/AnalyticsClient';
 import { Toaster } from 'sonner';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body>
         {children}
+        <AnalyticsClient />
         <Toaster
           position="top-right"
           richColors
