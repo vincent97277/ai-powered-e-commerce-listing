@@ -32,13 +32,17 @@ and ask the operator — don't silently override.
 
 ## Pre-PR checklist (always run, in order)
 
+This is the **canonical** pre-PR checklist for this repo. CLAUDE.md links here; do not duplicate it elsewhere.
+
 1. `pnpm typecheck` clean
 2. `pnpm lint` clean
-3. `pnpm vitest run` 260+/260+ green
-4. (UI changes) restart dev server, browser-verify the change
-5. Stage only intentional files (`git add <paths>`, never `git add -A` / `git add .`)
-6. Commit with conventional format
-7. Push, open PR
+3. `pnpm lint:docs` (README drift checker) clean
+4. `pnpm vitest run` 260+/260+ green
+5. (UI changes) restart dev server, browser-verify the change
+6. (README media changes) verify the rendered README on github.com after merge — see § "Media embedding on GitHub README"
+7. Stage only intentional files (`git add <paths>`, never `git add -A` / `git add .`)
+8. Commit with conventional format
+9. Push, open PR
 
 If ANY step above fails, fix before pushing. Don't push broken or partial state.
 
@@ -59,7 +63,33 @@ If ANY step above fails, fix before pushing. Don't push broken or partial state.
   least one required status check. Without branch protection, `--auto` falls
   through to immediate merge — which is how PR #13 landed with red CI in V2.3.4.
   Required check: `ci`. Squash-only enforced via repo setting. Admins may bypass
-  for emergency hotfixes.
+  for emergency hotfixes. **BP state is asserted weekly** by
+  `.github/workflows/assert-branch-protection.yml` (V2.3.9) so silently disabling
+  it via UI fails the workflow loudly.
+
+## Media embedding on GitHub README
+
+V2.3.8 spent 4 PRs converging on the right pattern. Codify so future media
+landings don't re-walk the path.
+
+- **For inline `<video>` rendering on GitHub README**, the `src=` MUST point to
+  `https://github.com/user-attachments/assets/<uuid>`. This is the ONLY origin
+  GitHub's HTML sanitizer allowlists. Raw repo URLs / `raw.githubusercontent.com` /
+  external CDNs (jsDelivr, raw.githack) all get the `<video>` tag stripped.
+- **The user-attachments URL is generated only via web UI drag-drop** into any
+  github.com comment box (issue / PR / discussion). There is no public CLI/API.
+  Drag-drop, copy the URL from the auto-inserted markdown, abandon the comment.
+- **Always commit the source media in-repo** at `docs/hero/walkthrough.mp4` (or
+  similar). The user-attachments URL is decoupled from this repo and could
+  theoretically rot. Reference the in-repo file from a fallback link below the
+  `<video>` tag for raw access / mirrors / npm-package-page rendering.
+- **Mirror video to a GitHub Release asset** (`gh release upload <tag>
+  docs/hero/walkthrough.mp4`) for a stable, durable URL that doesn't depend on
+  user-attachments hosting.
+- **Verify rendering on github.com after merge** — README sanitizer behavior is
+  not testable locally. The pre-PR checklist explicitly requires browser-verify
+  for any README media change. (V2.3.8 caught the `<video>` strip only after
+  shipping.)
 
 ## Tests
 
@@ -157,6 +187,27 @@ If ANY step above fails, fix before pushing. Don't push broken or partial state.
   session must explicitly handle tenant resolution.
 - **Cookies**: `HttpOnly + Secure (prod) + SameSite=Strict (admin) /
   Lax (merchant)`. Don't change without security review.
+
+## Sprint hygiene
+
+- **Sub-version inflation rule**: a sub-version (e.g. `V2.3.8.1`) is reserved
+  for shipped capability changes, not bug-chase commits within an unreleased
+  version window. Bug fixes for `V2.3.x` go on `V2.3.x` itself or fold into the
+  next capability bump. Don't tag `V2.3.8.1` for "fix the previous sub-version."
+  V2.3 retro caught this pattern — V2.3.8.1 + V2.3.8.2 should have been a
+  single follow-up commit on V2.3.8 or rolled into V2.3.9.
+- **Platform contract probe pattern**: before shipping anything that depends on
+  third-party platform behavior (GitHub Actions event payloads, GitHub HTML
+  sanitizer rules, dependency error shapes, vendor API quirks), run a 5-minute
+  probe FIRST. Examples:
+  - GitHub workflow events → `gh api` + paste actual JSON into plan
+  - Major dep bump → read CHANGELOG between `from..to`, grep for "BREAKING"
+  - Embedded media in markdown → find the renderer's sanitizer allowlist
+  - Auth pattern (login matcher, signed cookies) → run on an existing live
+    sample before writing the matcher
+  V2.3 retro: 4 sequential fixes (Dependabot login string, drizzle `.cause`,
+  video sanitizer, user-attachments URL) all share this signature. Each was
+  avoidable with a 5-minute probe.
 
 ## What requires human (don't auto-decide)
 

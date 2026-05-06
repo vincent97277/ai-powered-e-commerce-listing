@@ -1,0 +1,63 @@
+name: Assert branch protection
+
+# V2.3.9 retro fix.
+#
+# The V2.3.2 auto-merge design depends on branch protection requiring the `ci`
+# status check. Without BP, `gh pr merge --auto` silently falls through to
+# immediate merge — exactly what caused PR #13 to land with red CI in V2.3.4.
+#
+# BP state is configured via the GitHub UI (or one-shot API call); it is NOT
+# code in the repo. An admin can disable it without leaving any commit trail.
+# This workflow runs weekly + on workflow_dispatch and asserts the immune
+# system is still armed. If BP is missing or the `ci` check is no longer
+# required, the workflow fails loudly.
+#
+# Caught by /autoplan retro Eng dual voices.
+
+on:
+  schedule:
+    # Mondays 04:30 UTC (12:30 Asia/Taipei) — same window as Dependabot
+    - cron: '30 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  assert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch protection on `main`
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          PROTECTION=$(gh api "repos/${{ github.repository }}/branches/main/protection" 2>&1) || {
+            echo "::error::Branch protection on `main` is NOT enabled."
+            echo "::error::V2.3.2 auto-merge design assumes BP requiring `ci` check."
+            echo "::error::See DECISIONS.md § CI / deploy. Re-enable via the GitHub UI."
+            exit 1
+          }
+
+          # Required check must include `ci`
+          REQUIRED=$(echo "$PROTECTION" | jq -r '.required_status_checks.contexts[]? // empty')
+          if ! echo "$REQUIRED" | grep -qx ci; then
+            echo "::error::Branch protection exists but `ci` is not in required status checks."
+            echo "::error::Required checks were: $REQUIRED"
+            echo "::error::Restore via: gh api -X PUT repos/${{ github.repository }}/branches/main/protection ..."
+            exit 1
+          fi
+
+          # Linear history must be enforced (squash-only)
+          LINEAR=$(echo "$PROTECTION" | jq -r '.required_linear_history.enabled')
+          if [ "$LINEAR" != "true" ]; then
+            echo "::warning::Linear history is not enforced. Squash-only is the documented merge strategy."
+          fi
+
+          # Force pushes must be blocked
+          FORCE=$(echo "$PROTECTION" | jq -r '.allow_force_pushes.enabled')
+          if [ "$FORCE" != "false" ]; then
+            echo "::warning::Force pushes are allowed on main. Should be blocked."
+          fi
+
+          echo "✓ Branch protection on main: ci required, linear history, force pushes blocked"

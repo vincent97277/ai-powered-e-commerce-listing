@@ -115,8 +115,13 @@ jobs:
           fi
 
           # Rule 3: Pure tests (no production code touched)
+          # V2.3.9 retro fix: was `grep -qE ',src/(?!.*\.test\.)'` — GNU ERE does
+          # not support PCRE negative lookahead; the regex always failed to match,
+          # so test-labeled PRs touching production src/ would fall through to
+          # ALLOW=true. Caught by /autoplan retro Codex Eng voice. Now uses two
+          # passes with -P (PCRE) for correctness.
           if [ "$ALLOW" != "true" ] && echo ",$LABELS," | grep -q ",test,"; then
-            if echo ",$FILES," | grep -qE ',src/(?!.*\.test\.|.*\.spec\.)'; then
+            if echo ",$FILES," | grep -qP ',src/(?!.*\.(test|spec)\.)'; then
               REASON="test label but PR touches src/ production code — needs review"
             else
               ALLOW=true

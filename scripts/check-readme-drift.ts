@@ -71,12 +71,16 @@ if (readmeBadgeMatch) {
 }
 
 // 2. Package manager: README must use pnpm, never bun*/npm install
+// V2.3.9 retro fix: added `bun i` and `npm i` short-forms (Eng+DX dual voices).
 const banned = [
   { pattern: /\bbun install\b/, name: 'bun install' },
+  { pattern: /\bbun\s+i\b/, name: 'bun i (short for install)' },
   { pattern: /\bbunx\s+\w/, name: 'bunx <cmd>' },
   { pattern: /\bbun\s+run\s+\w/, name: 'bun run <script>' },
   { pattern: /\bnpm\s+install\b/, name: 'npm install' },
+  { pattern: /\bnpm\s+i\b/, name: 'npm i (short for install)' },
   { pattern: /\byarn\s+install\b/, name: 'yarn install' },
+  { pattern: /\byarn\s+add\b/, name: 'yarn add' },
 ];
 
 for (const b of banned) {
@@ -138,6 +142,34 @@ if (quickstartMatch) {
   if (qs.includes('db:push')) {
     err(
       'README Quickstart uses `db:push`. Use `pnpm db:migrate` (the custom runner with format guards). `db:push` is dev-iteration only — never in onboarding docs.',
+    );
+  }
+}
+
+// 5. V2.3.9 retro: tests using `.rejects.toThrow(/db-driver-text/)` must use
+// `expectRejectsMatching` from `tests/_helpers/db-error.ts` instead. Drizzle
+// 0.45+ wraps errors so `.message` is "Failed query: ..." and the regex never
+// matches — silent test breakage.
+const dbErrorPattern =
+  /\.rejects\.toThrow\(\s*\/[^/\n]*(?:row-level security|permission denied|insufficient|policy violation)[^/\n]*\/[gimuy]*\s*\)/i;
+function listTestFiles(dir: string, files: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      listTestFiles(full, files);
+      continue;
+    }
+    if (/\.(test|spec)\.tsx?$/.test(entry)) files.push(full);
+  }
+  return files;
+}
+const testFiles = listTestFiles(testsRoot);
+for (const f of testFiles) {
+  const src = readFileSync(f, 'utf-8');
+  if (dbErrorPattern.test(src)) {
+    const rel = f.replace(`${ROOT}/`, '');
+    err(
+      `${rel}: uses .rejects.toThrow(/db-driver-text/) — drizzle 0.45+ wraps errors so this never matches. Use expectRejectsMatching from tests/_helpers/db-error.ts (DECISIONS.md § Tests).`,
     );
   }
 }
