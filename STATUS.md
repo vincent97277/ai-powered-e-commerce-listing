@@ -14,6 +14,8 @@ Version-by-version progression for `demo-sass-2`. This replaces the older `V1_ST
 - **V2.2 (2026-05-04/05)** **Cloud deploy** — Vercel sin1 + Neon Singapore + R2 + Inngest Cloud. 4 critical + 7 high /autoplan blockers fixed. 256 → 260 tests. **Public on https://demo-sass-2.vercel.app at $0/mo idle.**
 - **V2.3 (2026-05-05/06)** Throughput + tech debt + OSS readiness — Dependabot auto-merge, post-deploy smoke, branch protection, drizzle-orm 0.45 upgrade, real screenshots + walkthrough video, README clarity. 260+ tests.
 - **V2.4 (2026-05-06)** Doc consolidation — README trimmed to entry surface, "Why interesting" promoted above the fold, security 30-sec synthesis added, Tests table moved to ARCHITECTURE §7, BUILD_DAY archived. CLAUDE.md hard rules #4/#6 fixed; common-errors cookbook added.
+- **V2.5 (2026-05-06)** Agent-routing observational note codified in DECISIONS.md (B-minus per 4-voice consensus), with built-in 2026-08-01 expiry clause if not referenced by then.
+- **V2.6 (2026-05-06)** **First distribution-first sprint.** Vercel Analytics with PII `beforeSend` filter (35 unit tests), ESLint allowlist narrowed from `(merchant)/**` + `(storefront)/**` glob to 3 exact-file exceptions (closes Codex CRITICAL doc-drift bug), 2 user-facing `dbAdmin` → `dbUser` refactors, `ai_usage_events` cross-tenant deny test, blog post `docs/blog/compile-time-tenant-isolation.md` with source-anchored snippets, blog drift checker T4. **90-day sunset gate at 2026-08-06 (issue #27)** — `< 50 unique non-operator visitors AND < 2 inbound contacts → V2.7 = archive`. 260 → 275 tests.
 
 ---
 
@@ -41,6 +43,13 @@ Version-by-version progression for `demo-sass-2`. This replaces the older `V1_ST
 | V2.2.13 | 2026-05-05 | Image URL fix — IMG src now uses imageUrlFor() not hardcoded /uploads/ | 260 | — | (PR #5) |
 | V2.2.14 | 2026-05-05 | Live demo badge + V2.2 docs entry | 260 | — | (PR #6) |
 | **V2.2 cloud deploy** | **2026-05-05** | **Public on https://demo-sass-2.vercel.app — Vercel sin1 + Neon Singapore + R2 APAC + Inngest Cloud** | | | |
+| V2.3 | 2026-05-05/06 | Throughput + tech debt + OSS readiness — Dependabot auto-merge, post-deploy smoke, BP gate, drizzle 0.45 upgrade, screenshots + walkthrough, README clarity | 260+ | — | PRs #7–#22 |
+| V2.4 | 2026-05-06 | Doc consolidation — trim README, promote "Why interesting", security 30-sec synthesis, archive BUILD_DAY, CLAUDE.md fixes, common-errors cookbook | 260+ | — | (PR #25) |
+| V2.5 | 2026-05-06 | Agent-routing observational note in DECISIONS.md (B-minus consensus, 2026-08-01 expiry) | 260+ | — | (PR #26) |
+| V2.6 PR1 | 2026-05-06 | Vercel Analytics + `beforeSend` PII filter + sunset gate issue #27 + T5 cleanup | 260 → 274 | — | (PR #28) |
+| V2.6 PR2 | 2026-05-06 | ESLint allowlist narrowed to 3 exact-file exceptions + 2 dbAdmin→dbUser refactors + doc-drift fix + T9 ai_usage_events RLS | 274 → 275 | — | (PR #29) |
+| V2.6 PR3 | 2026-05-06 | Blog post `compile-time-tenant-isolation.md` + blog drift checker T4 | 275 | — | (PR #30) |
+| **V2.6 distribution sprint** | **2026-05-06** | **First sprint that ships external signal infra. 90-day sunset gate set 2026-08-06.** | | | |
 
 Bottom line: **260 vitest tests, GitHub Actions CI on every PR, public URL live.**
 
@@ -471,6 +480,37 @@ Previous state: `THEME_PICKS` array in onboarding had 3 themes, picked randomly.
 - 6 PRs (#2 hardening + #3-#6 hotfixes). Hotfixes were caught in production smoke test, not CI — most were "code works locally but breaks under cloud-shape constraints (timeouts, env scopes, region latency)". CI can't easily catch these without integration against actual cloud services.
 - Two `/autoplan` rounds + dual-voice review per round flagged most issues before deploy. The remaining 4 hotfixes were genuine "production teaches you new things" findings.
 - DEPLOY.md (~500 lines) was written before Phase B/C/D execution and held up well — operator followed it click-by-click. Updated post-deploy with troubleshooting cases observed in practice.
+
+---
+
+## V2.6 — Distribution-first sprint (PR #28 → #30)
+
+**Why this version**: Three retros in a row (V2.3, V2.4, V2.5) flagged the same finding — "external signal missing." Each next sprint deferred distribution work and shipped more internal polish (drift checker, doc clarity, agent routing). V2.6 is the first sprint where the operator stopped polishing and started broadcasting. Premise reframe accepted at the `/autoplan` premise gate: hook = tenant-boundary engineering (RLS + ESLint allowlist), NOT AI photo→listing (which is now commodity per Shopify Magic / Wix AI). Audience collapsed to one — technical hiring signal.
+
+**Sprint structure** — three small PRs, each independently revertible:
+
+- **V2.6 PR1** (#28) — Wired `@vercel/analytics` 2.0.1 with a load-bearing `beforeSend` PII filter. Pre-tenant-resolution operator IPs and PII-bearing URLs (`/admin/**`, `/merchant/**`, `/api/**`, `/store/*/order/*`, `/merchant/products/import/<uuid>`, any UUID-bearing path) are dropped at the SDK boundary. 35 unit tests pin the filter so a future refactor cannot silently re-enable PII collection. Created sunset-gate GitHub issue #27 with the 2026-08-06 decision criteria. Privacy page disclosure updated for PDPA hygiene. Caught a real bug during build: `<Analytics beforeSend={...} />` won't serialize across Next.js's server→client boundary; fix is the `AnalyticsClient` client-component wrapper. T5 cleanup landed: `tests/rls.e2e.test.ts:T3` second assertion converted to `expectRejectsMatching`. CI flapped once on regex (`postgres` role doesn't exist in CI env), one-line widening of the regex shipped in the same PR.
+
+- **V2.6 PR2** (#29) — Closed Codex's CRITICAL doc-drift finding from the `/autoplan` eng review. README + ARCHITECTURE.md claimed "UI code physically cannot bypass tenant isolation" but `eslint.config.mjs` allowlisted `(merchant)/**` + `(storefront)/**` wholesale, and 5 user-facing files actually imported `dbAdmin`. Either the claim shrinks or the surface shrinks; the PR shrinks the surface. The 2 read-only call sites (`settings/page.tsx`, `products/page.tsx`) refactored to `dbUser` (web_anon has SELECT on `merchants`; no RLS policy means no tenant scoping needed for the merchant-self read). The 3 remaining call sites that genuinely need BYPASSRLS — `(merchant)/layout.tsx` for cookie→merchant lookup, `(storefront)/store/*/layout.tsx` for slug→merchant lookup, and `settings/actions.ts` for the merchants-table UPDATE path — added to the allowlist by exact file path with one-line justifications. README + ARCHITECTURE.md §2 + §4.3 + CLAUDE.md hard-rule #5 all rewritten to match the 3-narrow-exception reality, plus a new "ESLint rule limits to acknowledge" paragraph names the 4 known bypass routes (module-specifier exact match, dynamic computed `import()`, re-export laundering, `eslint-disable` comments). T9 added to `tests/rls.e2e.test.ts` — `ai_usage_events` cross-tenant deny — closing Codex's #6 RLS coverage gap. Glob trap caught locally: `[slug]` is a minimatch character class, switched to `*`.
+
+- **V2.6 PR3** (#30) — Blog post `docs/blog/compile-time-tenant-isolation.md` (~280 lines, 5 source-anchored snippets via `<!-- src: path:line-line -->` markers). Sells the stack of layers (RLS WITH CHECK + `withTenantTx` UUID guard + ESLint allowlist + cross-tenant deny tests + role-escalation deny test), names the 4 ESLint bypass routes up front, frames the rule as a pragmatic boundary guard rather than novel RLS architecture. Drift checker T4 extends `scripts/check-readme-drift.ts` to scan `docs/blog/*.md` for source markers and assert snippet content matches verbatim — same drift-class V2.4 caught for README. Negative test verified: temporarily mutating one snippet fired the checker with file:line + first-diff hint.
+
+**Operational setup** (post-merge, manual):
+- ✅ Vercel Web Analytics enabled on the project.
+- ✅ Operator IP exclusions configured in Vercel dashboard (otherwise the 90-day gate gives a wrong read — operator + smoke traffic dominates). Smoke workflow only hits `/api/health` which is dropped by `beforeSend`, so no GitHub Actions runner IP exclusion needed.
+- ✅ Privacy page disclosure live on prod (`/privacy` returns 200 with disclosure text).
+- ✅ Sunset gate issue #27 commented with setup confirmation + 2026-05-07 health-check checklist.
+
+**90-day sunset gate** — issue #27, decision date 2026-08-06:
+- `< 50 unique non-operator visitors AND < 2 inbound contacts → V2.7 = archive` (write a post-mortem README, move on).
+- `≥ 50 visitors OR ≥ 2 inbound contacts → V2.7 = continue distribution` (with what worked / what didn't from this window).
+
+**Tests**: 260 → 275 (drift-checker static count). PR1 added `tests/observability/analytics-filter.test.ts` (35 vitest cases — most via `it.each(...)` which the heuristic counts as a single entry, hence the smaller static delta), PR2 added T9 to `rls.e2e.test.ts`, PR3 added zero tests but the drift checker now also scans blog snippets.
+
+**Process notes**:
+- Sprint budget was B+Spike (~2.5 days CC). Actual: 3 PRs in roughly 2 hours of CC time, compressed because `/autoplan`'s eng-phase Codex review caught the doc-drift bug as CRITICAL early — PR2 ended up bigger but cleaner than the original "narrow allowlist" plan suggested.
+- The blog post is in repo but not yet **distributed**. The V2.6 thesis is only fully tested when the post lands on dev.to / r/programming / Drizzle Discord (and possibly HN on a Tue/Wed ET morning) and analytics start showing real referrers. That's the operator-hand work the gate measures.
+- Optional positioning spike (`spike/template-positioning` branch with `README-as-template.md` reframing the repo as `rls-multitenant-template`) is in the V2.6 plan but deliberately unmerged — it's a V2.7 input signal, not V2.6 ship surface.
 
 ---
 
