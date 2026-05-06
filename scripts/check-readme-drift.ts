@@ -259,6 +259,85 @@ for (const c of stackChecks) {
   }
 }
 
+// 8. V2.6: blog snippet drift. docs/blog/*.md may include source-anchored
+// snippets via `<!-- src: path:start-end -->` markers immediately before a
+// fenced code block. The checker reads the actual source file at the given
+// line range and asserts the snippet matches verbatim. A future refactor
+// that changes the source code without updating the blog post fails CI
+// instead of silently misrepresenting the codebase to readers.
+//
+// Marker syntax:
+//   <!-- src: eslint.config.mjs:115-134 -->
+//   ```js
+//   ...content...
+//   ```
+//
+// Single-line form (`:42` instead of `:42-42`) is also accepted.
+const blogDir = join(ROOT, 'docs', 'blog');
+function dirExists(p: string): boolean {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+if (dirExists(blogDir)) {
+  const blogFiles = readdirSync(blogDir).filter((f) => /\.md$/.test(f));
+  // Marker is its own line; after the marker, allow optional whitespace lines,
+  // then a fenced code block. Capture the file path, line range, and snippet.
+  const markerRe =
+    /<!--\s*src:\s*([^\s:]+):(\d+)(?:-(\d+))?\s*-->\s*\n+```[a-zA-Z0-9_-]*\n([\s\S]*?)\n```/g;
+  for (const f of blogFiles) {
+    const blogPath = join(blogDir, f);
+    const blogSrc = readFileSync(blogPath, 'utf-8');
+    let m: RegExpExecArray | null;
+    while ((m = markerRe.exec(blogSrc)) !== null) {
+      const [, srcRel, startStr, endStr, snippet] = m;
+      const start = parseInt(startStr, 10);
+      const end = endStr ? parseInt(endStr, 10) : start;
+      if (start < 1 || end < start) {
+        err(`docs/blog/${f}: invalid range ${srcRel}:${start}-${end}`);
+        continue;
+      }
+      const srcAbs = join(ROOT, srcRel);
+      let srcContent: string;
+      try {
+        srcContent = readFileSync(srcAbs, 'utf-8');
+      } catch {
+        err(`docs/blog/${f}: source file not found → ${srcRel}`);
+        continue;
+      }
+      const lines = srcContent.split('\n');
+      if (end > lines.length) {
+        err(
+          `docs/blog/${f}: ${srcRel}:${start}-${end} exceeds file length (${lines.length} lines).`,
+        );
+        continue;
+      }
+      const expected = lines.slice(start - 1, end).join('\n');
+      if (snippet.trim() !== expected.trim()) {
+        // Surface a hint at first divergence to make the fix obvious.
+        const expLines = expected.split('\n');
+        const actLines = snippet.split('\n');
+        let firstDiff = -1;
+        for (let i = 0; i < Math.max(expLines.length, actLines.length); i++) {
+          if ((expLines[i] ?? '') !== (actLines[i] ?? '')) {
+            firstDiff = i;
+            break;
+          }
+        }
+        const hint =
+          firstDiff >= 0
+            ? `\n      first diff at line ${start + firstDiff}:\n        source:  ${(expLines[firstDiff] ?? '<eof>').slice(0, 100)}\n        in blog: ${(actLines[firstDiff] ?? '<eof>').slice(0, 100)}`
+            : '';
+        err(
+          `docs/blog/${f}: snippet drift vs ${srcRel}:${start}-${end}.${hint}`,
+        );
+      }
+    }
+  }
+}
+
 // Report
 const errors = issues.filter((i) => i.severity === 'error');
 const warnings = issues.filter((i) => i.severity === 'warn');
