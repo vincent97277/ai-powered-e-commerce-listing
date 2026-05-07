@@ -1,16 +1,19 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright config for post-deploy smoke tests.
+ * Playwright config for smoke tests.
  *
- * Two profiles:
- * - default (no --project flag): hits the production URL, used by CI
- *   .github/workflows/post-deploy-smoke.yml
- * - local: hits http://localhost:3000, useful for editing tests
+ * Three profiles:
+ * - `chromium` (default): public-surface smoke against PROD URL. Used by
+ *   .github/workflows/post-deploy-smoke.yml. Runs *.smoke.ts EXCEPT the
+ *   `*-local.smoke.ts` files (those need a running dev server + OpenAI key).
+ * - `local-ai` (V2.6.2 hotfix automation): operator runs `pnpm test:smoke:ai-local`.
+ *   Hits localhost + Inngest dev CLI + real OpenAI. Slow + costs ~$0.02/run.
+ *   Excluded from CI by `testIgnore` on the chromium project.
  *
  * Tests live in tests/smoke/. They are intentionally separate from vitest
  * (different runner, different concerns: vitest = unit + integration on
- * local DB, Playwright = end-to-end against deployed URL).
+ * local DB, Playwright = end-to-end against deployed URL or local dev).
  */
 
 const PROD_URL = process.env.SMOKE_BASE_URL || 'https://demo-sass-2.vercel.app';
@@ -29,17 +32,26 @@ export default defineConfig({
     timeout: 10_000,
   },
   use: {
-    baseURL: PROD_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    // Be polite to the deployed server
     actionTimeout: 10_000,
     navigationTimeout: 15_000,
   },
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'], baseURL: PROD_URL },
+      // V2.6.2: keep the expensive local-ai smoke out of post-deploy CI.
+      testIgnore: /.*-local\.smoke\.ts/,
+    },
+    {
+      name: 'local-ai',
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:3000' },
+      // 2 minutes per test — vision call alone can take 60s on cold start.
+      timeout: 120_000,
+      testMatch: /.*-local\.smoke\.ts/,
+      // Only one worker — needs DB + dev-server + Inngest exclusivity.
+      workers: 1,
     },
   ],
 });

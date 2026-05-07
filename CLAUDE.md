@@ -89,6 +89,20 @@ Don't. Dependabot opens these on Mondays via `.github/dependabot.yml`. The `auto
 ### "Drop a DB column / table"
 This is a `## What requires human` situation per [DECISIONS.md](./DECISIONS.md). Flag it, don't auto-decide.
 
+### "Smoke test the AI vision flow after an SDK / vision-path change"
+Don't manually click through the 7-step checklist. Run the automated smoke instead:
+
+```bash
+# Terminal 1: pnpm dev
+# Terminal 2: pnpm inngest:dev
+# Terminal 3:
+pnpm test:smoke:ai-local
+```
+
+What it does (replaces V2.6.2's manual checklist): preflight-checks env + DB + dev server + Inngest CLI all reachable, then logs in as `akami@demo.local`, uploads `tests/fixtures/smoke-product.jpg`, waits up to 90s for the AI-generated product to appear, asserts the title is NOT a fixture-fallback string, and queries `ai_usage_events` directly to confirm tokens > 0 (the load-bearing assertion that catches silent token-shape zeroing across SDK majors). Cleans up the test product on success.
+
+Cost: ~$0.02 in OpenAI tokens per run. Total runtime: ~90 seconds. Run on demand, not in CI (`*-local.smoke.ts` is excluded from the post-deploy chromium project).
+
 ## Things that look like a fork in the road but aren't
 
 - **Production vs dev DB connection mode**: prod uses `-pooler` host, local Docker uses unpooled. Don't try to "unify" — they're correct as-is.
