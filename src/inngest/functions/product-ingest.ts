@@ -26,7 +26,7 @@ import {
   products,
   type ProductAiMetadata,
 } from '@/db/schema';
-import { readFile, writeProcessed, getPublicUrl } from '@/lib/storage';
+import { readFile, writeProcessed, getPublicUrl, activeBackend } from '@/lib/storage';
 
 export const productIngestFn = inngest.createFunction(
   {
@@ -121,11 +121,21 @@ export const productIngestFn = inngest.createFunction(
 
     // Step 5: GPT-4o vision (the slow step — typically 5-15s; biggest risk on Hobby)
     //         V1 #67 (RA12): sourceText 從 IG/蝦皮 import 帶進來, 餵 GPT-4o 重寫成 brand voice
+    //
+    // V2.6.1 local-dev fix: when STORAGE_BACKEND=local, the processedKey resolves
+    // to http://localhost:3000/uploads/... — OpenAI cloud cannot reach localhost,
+    // so vision fails and the worker falls back to fixture mode. In local mode
+    // we pass the processed bytes inline (vision lib already supports imageBuffer
+    // path); in r2 mode we pass the public URL (R2 is publicly reachable, and
+    // this avoids resending bytes we just uploaded).
     const visionResult = await step.run('call-vision', () =>
       timed('call-vision', async () => {
-        const imageUrl = getPublicUrl(processedKey);
+        const visionPayload =
+          activeBackend() === 'r2'
+            ? { imageUrl: getPublicUrl(processedKey) }
+            : { imageBuffer: Buffer.from(processed.base64, 'base64') };
         return await callVisionWithRetry({
-          imageUrl,
+          ...visionPayload,
           brandVoice,
           sourceCaption: sourceText,
           maxRetries: 2,
