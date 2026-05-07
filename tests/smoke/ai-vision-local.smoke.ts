@@ -81,7 +81,17 @@ test.describe('V2.6.2 AI vision local smoke', () => {
     expect(res.status(), 'home page should return 200').toBe(200);
   });
 
-  test('2. Merchant login + upload + AI generation + DB write', async ({ page, request }) => {
+  test('2. Merchant login + upload + AI generation + DB write', async ({ page, context }) => {
+    // Disable Demo Mode BEFORE any navigation. The /merchant/products/new page
+    // defaults `demoMode='on'` in localStorage, which short-circuits kickoff()
+    // to fetch /fixtures/products/teacup.json instead of calling OpenAI. With
+    // demo mode on, no ai_usage_events row is written and the title would be
+    // a fixture-fallback string (caught by the post-poll assertion, but only
+    // after wasting 90s of polling).
+    await context.addInitScript(() => {
+      window.localStorage.setItem('demoMode', 'off');
+    });
+
     // Snapshot ai_usage_events count BEFORE — proves a new row was written
     // by THIS test, not by a previous run.
     const pool = adminPool();
@@ -101,42 +111,61 @@ test.describe('V2.6.2 AI vision local smoke', () => {
     // Navigate to upload page
     await page.goto(`${BASE}/merchant/products/new`);
 
-    // Upload — file input may be hidden behind a dropzone; locate the actual <input type=file>.
+    // Attach file. The dropzone wraps a hidden <input type="file">; setInputFiles
+    // on the input directly works without simulating drag-drop coordinates.
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(FIXTURE);
 
-    // Wait for the AI flow to complete — products list shows the new product.
-    // The Inngest pipeline takes 30-90s end-to-end on a cold dev environment.
-    // We wait on the URL change OR on a UI signal that generation finished.
-    // The simplest portable wait: navigate to /merchant/products and find a
-    // recent product whose title is not the fixture-fallback set.
-    await page.waitForTimeout(5_000); // give the upload + enqueue a head start
+    // Click the "開始上架，60 秒後見" button — without this, kickoff() never fires.
+    // The button is disabled until a file is attached, so this implicitly waits
+    // for the dropzone's onFile callback to set state.
+    const startButton = page.getByRole('button', { name: /開始上架/ });
+    await expect(startButton).toBeEnabled({ timeout: 10_000 });
+    await startButton.click();
 
-    let productTitle: string | null = null;
+    // Wait for the GenerationStream to complete. On success it renders a
+    // "查看商品 / 編輯 / 上架" link with href=/merchant/products/{uuid}.
+    // Vision call alone takes 5-15s on cold start; the full pipeline (upload
+    // → enqueue → sharp → vision → write product) lands in 30-90s typically.
+    const productLink = page.locator('a[href^="/merchant/products/"]').filter({
+      hasText: /查看商品|商品列表/,
+    });
+    await expect(productLink.first(), 'expected GenerationStream to surface a /merchant/products/{uuid} link within 90s').toBeVisible({
+      timeout: 90_000,
+    });
+
+    // Prefer the link that points to the actual product (UUID), not the
+    // generic /merchant/products fallback shown when savedProductId is null.
+    const allLinks = await productLink.all();
     let productId: string | null = null;
-    const deadline = Date.now() + 90_000; // 90s budget for the vision call
-    while (Date.now() < deadline) {
-      await page.goto(`${BASE}/merchant/products`);
-      // Most-recent product appears first by default sort.
-      const firstRow = page.locator('a[href^="/merchant/products/"]').first();
-      const href = await firstRow.getAttribute('href').catch(() => null);
-      if (href) {
-        const idMatch = href.match(/\/merchant\/products\/([0-9a-f-]{36})$/i);
-        if (idMatch) {
-          productId = idMatch[1];
-          productTitle = (await firstRow.locator('h2, h3, [data-product-title]').first().textContent())?.trim() || null;
-        }
+    for (const link of allLinks) {
+      const href = await link.getAttribute('href');
+      const m = href?.match(/^\/merchant\/products\/([0-9a-f-]{36})$/i);
+      if (m) {
+        productId = m[1];
+        break;
       }
-      // Found something AND it's not the fallback fixture? Done.
-      if (productTitle && !FIXTURE_FALLBACK_TITLES.has(productTitle)) break;
-      await page.waitForTimeout(3_000);
     }
 
-    expect(productId, 'product should appear in the list within 90s').toBeTruthy();
     expect(
-      productTitle,
-      `product title should not be a fixture-fallback string. Got: "${productTitle}". Fixture fallback means vision call FAILED (likely SDK shape mismatch or OpenAI auth issue).`,
-    ).not.toBeNull();
+      productId,
+      'GenerationStream finished but did not surface a saved-product link. The worker may have written a placeholder/failed row instead.',
+    ).toBeTruthy();
+
+    // Pull the actual product title from DB and assert it's not in the
+    // fixture-fallback set. This catches the silent worker-fallback path
+    // where vision failed but the worker still wrote a fixture-titled row
+    // (e.g. localhost-unreachable error before V2.6.1 PR #33's buffer fix).
+    const titleRes = await pool.query<{ title: string }>(
+      'SELECT title FROM products WHERE id = $1::uuid',
+      [productId],
+    );
+    expect(titleRes.rows.length, 'product row should exist').toBe(1);
+    const productTitle = titleRes.rows[0].title;
+    expect(
+      FIXTURE_FALLBACK_TITLES.has(productTitle),
+      `product title is a fixture-fallback string: "${productTitle}". Vision call FAILED — the worker fell back to fixture metadata. Check Inngest dashboard for the call-vision step error (likely SDK shape mismatch or OpenAI auth issue).`,
+    ).toBe(false);
 
     // Direct DB confirm: ai_usage_events row was written, tokens > 0.
     // This is the load-bearing assertion. If silent zeroing happened
