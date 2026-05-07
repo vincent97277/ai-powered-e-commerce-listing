@@ -95,7 +95,14 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run smoke tests
-        run: pnpm exec playwright test
+        # V2.6.2 hotfix: --project=chromium constrains the run to the
+        # public-surface smoke. Without this flag, Playwright runs ALL
+        # configured projects including `local-ai` (introduced in PR #38),
+        # which needs DEMO_MERCHANT_AKAMI_ID + DATABASE_URL_ADMIN +
+        # OPENAI_API_KEY + a running dev server + Inngest CLI — none of
+        # which CI has. Workflow ran red on every push from #38 through
+        # the V2.6.2 sprint until this fix.
+        run: pnpm exec playwright test --project=chromium
         # Don't bury failures — let GitHub Actions surface the red X
         # Playwright's reporter='github' annotates failed tests on the PR
 
