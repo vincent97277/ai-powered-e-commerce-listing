@@ -8,6 +8,44 @@ Format: every entry is one Git commit with SHA + date + subject + bullet expansi
 
 ---
 
+## V2.6.x Tier 1 #5 — 2026-05-07 (PR #47) — `f401b80`
+
+**refactor(ai): migrate generateObject → generateText + Output.object**
+
+- `src/lib/ai/vision.ts`: `generateObject({ schema })` → `generateText({ output: Output.object({ schema }) })`. AI SDK v6 marks `generateObject` as `@deprecated` (see `node_modules/ai/dist/index.d.ts:5223` — "Use generateText with an output setting instead"). Behavior is identical: same LLM call, same Zod-validated `ProductOutput`, same retry surface, same `normalizeUsage()` token plumbing.
+- Field rename in lockstep: `result.object` → `result.output`. `result.usage` shape unchanged (`normalizeUsage()` still owns the v4/v5/v6 shape adapter).
+- `tests/ai/cost-cap.test.ts`: mock updated from `generateObject: vi.fn()` to `generateText: vi.fn()` with matching `output: ...` field, plus `text: ''` and `content: []` for shape completeness.
+- `src/lib/ai/prompt.ts`: docstring mention updated for symmetry.
+- `NoObjectGeneratedError.isInstance()` retry trigger still works — the SDK throws it on JSON-parse / Zod-validate failures under either entry point.
+- Verified end-to-end via `gh workflow run "AI vision smoke (manual)"` against `main` post-merge: 36.8s real OpenAI call, `tokens_in > 0` + `tokens_out > 0` assertions both fired (~$0.02 spend). Catches the silent-zero failure mode if a future SDK bump renames the token shape again.
+
+---
+
+## V2.6.x Tier 1 #7 — 2026-05-07 (PR #46) — `dd9a72f`
+
+**feat(ci): workflow_dispatch action to run AI vision smoke from GH UI**
+
+- New file `.github/workflows/ai-vision-smoke-manual.yml` — promotes `tests/smoke/ai-vision-local.smoke.ts` to a manually-triggerable GitHub Action. Operator can now run the full end-to-end vision smoke from the Actions tab (or `gh workflow run "AI vision smoke (manual)"`) without needing Docker postgres + dev server + Inngest CLI on their local machine.
+- Manual trigger only — never on push/PR. Cost ~$0.02 per run (one GPT-4o vision call). V2.6.2 retro showed the local script catches regressions roughly once per SDK-major bump, not weekly; scheduled runs would burn ~$7/yr to find bugs that only exist after operator-initiated dependency upgrades. workflow_dispatch matches the actual failure cadence.
+- 15 steps mirror `ci.yml` env shape: postgres 16 service, RLS roles via `prod-roles.template.sql`, `pnpm db:migrate`, demo merchant rows seeded inline (verbatim from `LOCAL_SETUP.md` step 4 to keep the workflow self-contained), `seed-merchant-auth.ts --mode=dev` for bcrypt password backfill, dev server + Inngest CLI dev started in background, `pnpm test:smoke:ai-local` (preflight + Playwright), trace + server log upload on failure.
+- One-time operator setup: `Settings → Secrets → Actions → New repository secret` named `OPENAI_API_KEY_SMOKE`. Step 1 of the workflow fail-fast asserts the secret is non-empty, avoiding a 90s Playwright timeout on a fake-key 401.
+- First post-merge run: 2 min 21 sec wall, all 7 preflight checks + 2 Playwright tests green.
+
+---
+
+## V2.6.x Tier 1 #4 — 2026-05-06/07 (PR #45) — `f65f9b1`
+
+**feat(lint): dbUser compile-time enforcement + refactor 2 merchant reads**
+
+- `eslint.config.mjs`: extended the `no-restricted-imports` rule from banning `dbAdmin` only to banning **both** `dbAdmin` AND `dbUser` from `@/db`. Closes the V2.6.2 `/autoplan` Codex review's identified sister failure mode: developer reaches for `dbUser` directly inside a user-facing route, RLS GUC isn't set, every query fail-closes to 0 rows, "fix" is to switch to `dbAdmin` — which IS the leak. New required path for any tenant-scoped read: `import { withTenantTx } from '@/lib/db/with-tenant'`.
+- Allowlist for `dbUser` is broader than `dbAdmin`'s because (a) `withTenantTx` wrapper IS dbUser-based (added `src/lib/db/with-tenant.ts` to allowlist), (b) health checks ping the pool, (c) RLS tests exercise raw role behavior, (d) merchants-table reads are legitimate (no RLS policy on that table — storefronts cross-query for theme).
+- `src/app/(merchant)/merchant/settings/page.tsx`: refactored from direct `dbUser.select()` to `withTenantTx(current.tenantId, async (tx) => tx.select()...)`. Read query result identical (merchants has no RLS policy), but the import path no longer triggers the lint rule and the developer-facing pattern is now uniform across all tenant-scoped reads.
+- `src/app/(merchant)/merchant/products/page.tsx`: same refactor for the `lowStockThreshold` lookup, removed `dbUser` import.
+- `docs/blog/compile-time-tenant-isolation.md`: snippet marker `<!-- src: eslint.config.mjs:27-48 -->` shifted to `:49-70` (file-header comment block extended), snippet body updated to reflect the dual ban + new message string. Surrounding prose now explains the dbUser failure mode (skip wrapper → fail-closed 0 rows → dev "fixes" by switching to dbAdmin → THAT is the leak). The blog drift checker T4 (V2.6 PR3) caught the divergence on first push, working as intended.
+- Verified: `pnpm typecheck` + `lint` + `lint:docs` + `vitest run` all green pre-merge.
+
+---
+
 ## V2.6 PR3 — 2026-05-06 (PR #30) — `310d155`
 
 **docs(v2.6): blog post 'Compile-time tenant isolation' + drift checker T4**
