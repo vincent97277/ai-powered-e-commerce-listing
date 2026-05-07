@@ -37,17 +37,22 @@ import {
 } from '@/lib/observability/ai-cost-platform';
 import { getHealthIssues } from '@/lib/merchant/health-checks';
 
-// V1.5 review C1: mock `ai` SDK 的 generateObject 給 vision usage plumbing test 用.
+// V1.5 review C1: mock `ai` SDK 的 generateText 給 vision usage plumbing test 用.
 // 必須用 vi.mock (hoisted), factory 內讀外層變數會 hoist 失敗 → 在 mock factory 直接吐固定 usage.
-// 真正測 callVisionWithRetry import 後跟 mocked generateObject 對接是否拿到 usage.
+// 真正測 callVisionWithRetry import 後跟 mocked generateText 對接是否拿到 usage.
+//
+// V2.6.x Tier 1 #5: vision.ts migrated from generateObject (deprecated in v6)
+// to generateText + Output.object. Mock follows: result.object → result.output,
+// adds .text field per generateText shape. Usage shape stays v4 because
+// normalizeUsage handles all variants — that's the point of the adapter.
 const MOCK_USAGE = { promptTokens: 1000, completionTokens: 500, totalTokens: 1500 };
 vi.mock('ai', async () => {
   const actual = await vi.importActual<typeof import('ai')>('ai');
   return {
     ...actual,
-    // generateObject mock: 永遠回 valid productSchema + fixed usage
-    generateObject: vi.fn().mockResolvedValue({
-      object: {
+    // generateText mock: 永遠回 valid productSchema (via .output) + fixed usage
+    generateText: vi.fn().mockResolvedValue({
+      output: {
         title: 'Mock 商品',
         description: 'Mock 描述用於測試 token usage 透傳',
         category: '其他',
@@ -56,6 +61,8 @@ vi.mock('ai', async () => {
         price_twd: { min: 100, max: 200 },
         confidence: 0.9,
       },
+      text: '',
+      content: [],
       usage: MOCK_USAGE,
       finishReason: 'stop',
       warnings: [],
