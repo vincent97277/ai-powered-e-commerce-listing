@@ -20,6 +20,7 @@ import { openai } from '@ai-sdk/openai';
 import { APICallError, generateObject } from 'ai';
 import { buildSystemPrompt } from './prompt';
 import { productSchema, type ProductOutput } from './schema';
+import { normalizeUsage, type VisionUsage } from './usage-normalize';
 
 // GPT-4o 2024-11-20: V1 用過的版本, vision 品質和 latency 平衡點
 const MODEL_ID = 'gpt-4o-2024-11-20';
@@ -79,15 +80,25 @@ async function sleep(attempt: number): Promise<void> {
 }
 
 /**
- * V1.5 review C1: 把 generateObject 回傳的 usage 透傳出來給 worker 寫入
- * import_sessions.tokensIn/tokensOut, 不然 cost cap 是裝飾品。
+ * V1.5 review C1 + V2.6.2 prep: usage transparency.
  *
- * AI SDK v4 的 result.usage shape: { promptTokens, completionTokens, totalTokens }
- * 我們重命名成 tokensIn/tokensOut, 對齊 import_sessions 欄位語意。
+ * Worker writes import_sessions.tokensIn/tokensOut + ai_usage_events from this
+ * field; without it the cost cap is decorative. The actual shape of
+ * `result.usage` from `generateObject` differs across AI SDK majors:
+ *   - v4: { promptTokens, completionTokens, totalTokens? }
+ *   - v5: { inputTokens, outputTokens, cachedInputTokens?, totalTokens? }
+ *   - v6: { inputTokens, outputTokens, inputTokenDetails?: { cacheReadTokens? } }
  *
- * 失敗時 (重試耗盡) usage 給 0/0 — 真的沒打成功就不算 token 用量。
+ * We funnel everything through `normalizeUsage()` (./usage-normalize.ts) so a
+ * future SDK bump is a single typecheck-fix away from ai-cost.ts and the
+ * pricing math, instead of silently zeroing the cap.
+ *
+ * Failure path (retries exhausted) returns 0/0 — no successful API call =
+ * no token charge.
  */
-export type VisionUsage = { tokensIn: number; tokensOut: number };
+// VisionUsage type re-exported from ./usage-normalize so existing imports
+// from '@/lib/ai/vision' keep working.
+export type { VisionUsage };
 
 export type VisionResult =
   | {
@@ -151,12 +162,11 @@ export async function callVisionWithRetry(opts: {
         temperature: 0.7,
       });
 
-      // V1.5 review C1: SDK v4 usage.{promptTokens, completionTokens} → tokensIn/Out
-      // 老版本 SDK / 異常情況 usage 可能 undefined → fallback 0
-      const usage: VisionUsage = {
-        tokensIn: result.usage?.promptTokens ?? 0,
-        tokensOut: result.usage?.completionTokens ?? 0,
-      };
+      // V2.6.2: route through normalizeUsage() so an SDK major bump cannot
+      // silently zero the cost cap. Adapter handles v4/v5/v6 shapes; today
+      // (on v4) it reads promptTokens/completionTokens, after the bump it
+      // reads inputTokens/outputTokens — same VisionUsage out either way.
+      const usage = normalizeUsage(result.usage);
 
       return {
         success: true,
@@ -178,6 +188,8 @@ export async function callVisionWithRetry(opts: {
     success: false,
     error: msg,
     attempts: totalAttempts,
-    usage: { tokensIn: 0, tokensOut: 0 },
+    // Same shape as the success path's normalizeUsage return; cachedInputTokens=0
+    // because no API call succeeded.
+    usage: { tokensIn: 0, tokensOut: 0, cachedInputTokens: 0 },
   };
 }
