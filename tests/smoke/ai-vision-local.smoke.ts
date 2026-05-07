@@ -71,9 +71,19 @@ test.describe('V2.6.2 AI vision local smoke', () => {
   test.setTimeout(120_000);
 
   test.beforeAll(() => {
-    // Refuse to run if the operator forgot something.
-    expect(DEMO_TENANT_ID, 'DEMO_MERCHANT_AKAMI_ID missing in env').toBeTruthy();
-    expect(ADMIN_DSN, 'DATABASE_URL_ADMIN missing in env').toBeTruthy();
+    // V2.6.2 hotfix: skip cleanly (rather than fail) if the suite ends up
+    // running in an env that lacks the local-dev secrets. Catches the
+    // "forgot --project=chromium in CI" footgun — the post-deploy workflow
+    // sets the filter explicitly, but if a future workflow drops it, this
+    // suite no-ops instead of going red. Operator running locally always
+    // has these set (preflight-ai-smoke.ts checks them before invocation).
+    if (!DEMO_TENANT_ID || !ADMIN_DSN) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[ai-vision-local.smoke] required env missing (DEMO_MERCHANT_AKAMI_ID / DATABASE_URL_ADMIN). Skipping.',
+      );
+      test.skip();
+    }
   });
 
   test('1. Dev server reachable', async ({ request }) => {
