@@ -57,8 +57,19 @@ function buildSchema() {
     OPENAI_API_KEY: isProd ? z.string().min(20) : z.string().optional(),
     INNGEST_EVENT_KEY: isProd ? z.string().min(8) : z.string().optional(),
     INNGEST_SIGNING_KEY: isProd ? z.string().min(8) : z.string().optional(),
-    DEMO_MERCHANT_AKAMI_ID: z.string().uuid().optional(),
-    DEMO_MERCHANT_AFEN_ID: z.string().uuid().optional(),
+    // V2.6.2: zod 4 tightened .uuid() to enforce RFC 4122 variant bits (8/9/a/b
+    // at position 17). Our demo merchant IDs are intentionally legible patterns
+    // (11111111-1111-1111-1111-111111111111, etc.) used as DB primary keys —
+    // postgres uuid type accepts any 36-char hex pattern, so a syntactic regex
+    // matches our actual constraint better than RFC 4122 strict validation.
+    DEMO_MERCHANT_AKAMI_ID: z
+      .string()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+      .optional(),
+    DEMO_MERCHANT_AFEN_ID: z
+      .string()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+      .optional(),
     ADMIN_PASSWORD: z.string().min(1),
     ADMIN_SESSION_SECRET: z.string().min(32),
     MERCHANT_SESSION_SECRET: z.string().min(32),

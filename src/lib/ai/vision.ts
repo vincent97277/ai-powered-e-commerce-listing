@@ -17,7 +17,7 @@
  */
 
 import { openai } from '@ai-sdk/openai';
-import { APICallError, generateObject } from 'ai';
+import { APICallError, NoObjectGeneratedError, generateObject } from 'ai';
 import { buildSystemPrompt } from './prompt';
 import { productSchema, type ProductOutput } from './schema';
 import { normalizeUsage, type VisionUsage } from './usage-normalize';
@@ -65,10 +65,15 @@ function isRetryableViaMessage(err: unknown): boolean {
   );
 }
 
-// 哪些錯誤值得重試 — APICallError-first, 字串比對 fallback
+// 哪些錯誤值得重試 — APICallError-first, then NoObjectGeneratedError, then string fallback.
+// V2.6.2: NoObjectGeneratedError became a public class in v5. The SDK throws it
+// when the LLM returns content that fails Zod schema validation; we want to
+// retry these (the LLM occasionally drops or adds fields, a second try usually
+// hits the schema). Codex eng review #5.
 function isRetryable(err: unknown): boolean {
   const sdkVerdict = isRetryableViaApiCallError(err);
   if (sdkVerdict !== null) return sdkVerdict;
+  if (NoObjectGeneratedError.isInstance(err)) return true;
   return isRetryableViaMessage(err);
 }
 
@@ -158,7 +163,8 @@ export async function callVisionWithRetry(opts: {
           },
         ],
         // 對應 OpenAI 的 max_tokens / temperature
-        maxTokens: 1500,
+        // V2.6.2: AI SDK v5 renamed maxTokens → maxOutputTokens.
+        maxOutputTokens: 1500,
         temperature: 0.7,
       });
 
