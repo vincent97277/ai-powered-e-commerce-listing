@@ -288,7 +288,12 @@ The implementation is **one compound CTE** (`product_signals` UNION `order_signa
 
 ### 4.3 `dbAdmin` containment
 
-`dbAdmin` (BYPASSRLS) is a footgun. ESLint enforces who can import it:
+Both `dbAdmin` (BYPASSRLS) and `dbUser` (RLS-enforced) are footguns when imported directly into user-facing code. V2.6.x Tier 1 #4 extended the lint rule to ban both — the failure modes are sister bugs:
+
+- **`dbAdmin` direct use** → BYPASSRLS → cross-tenant data leak (the obvious bug).
+- **`dbUser` direct use outside `withTenantTx`** → RLS GUC unset → every query fails-closed to 0 rows. Dev sees empty UI, "fixes" by switching to `dbAdmin` to debug → THAT is the leak. The blast radius is identical; the symptom just looks different.
+
+So both are gated:
 
 ```js
 // eslint.config.mjs
@@ -297,14 +302,16 @@ const dbAdminRule = {
     'no-restricted-imports': ['error', {
       paths: [{
         name: '@/db',
-        importNames: ['dbAdmin'],
-        message: 'dbAdmin 會繞過 RLS。請改 import dbUser，...',
+        importNames: ['dbAdmin', 'dbUser'],
+        message:
+          'dbAdmin 會繞過 RLS, dbUser 直用會 fail-closed 0 rows (RLS GUC 未設)。' +
+          '請 import withTenantTx — 它 dbUser-backed + UUID-guarded + tx-scoped。',
       }],
     }],
   },
 };
 
-// allowlist (dbAdmin permitted):
+// allowlist (direct dbAdmin / dbUser permitted):
 files: [
   'src/app/(admin)/**',           // platform admin UI
   'src/lib/observability/**',     // platform cost aggregation
@@ -313,8 +320,10 @@ files: [
   'src/lib/platform/**',          // marketplace home (cross-merchant)
   'src/lib/merchant/**',          // suspend guard reads merchant status
   'src/lib/tenant/resolver.ts',   // slug → tenant before RLS context exists
+  'src/lib/db/with-tenant.ts',    // V2.6.x Tier 1 #4: the dbUser-backed wrapper itself
   'src/inngest/**',               // background workers
   'src/app/api/products/generate/**',  // sync vision needs brand_voice
+  'src/app/api/health/**',        // platform health probe pings dbUser + dbAdmin
   'src/app/onboarding/**',        // signup writes new merchant row
   'src/lib/admin-session.ts',     // admin session table CRUD
   'src/lib/merchant-session.ts',  // merchant session table CRUD
@@ -329,12 +338,12 @@ files: [
 ],
 ```
 
-UI **read** code must use `dbUser` + `withTenantTx`. The 3 user-facing exceptions above are narrow:
+UI **read** code must go through `withTenantTx(tenantId, async (tx) => ...)` — the wrapper is dbUser-backed under the hood (it opens a `dbUser.transaction` and runs `SET LOCAL app.tenant_id` inside), so callers never need to import `dbUser` themselves. The 3 user-facing exceptions above are narrow:
 
 - The 2 layouts run BEFORE tenant context exists — they're the code paths that *establish* tenant context from cookie / URL slug.
 - `settings/actions.ts` writes to the `merchants` table, which intentionally has no RLS policy because storefront pages cross-query merchants for theme / name / slug; web_anon therefore has SELECT but not UPDATE on merchants. The runtime guard for ownership is the cookie session — a runtime check, not compile-time.
 
-CI fails the build if any other file reaches for `dbAdmin`.
+CI fails the build if any other file reaches for `dbAdmin` or `dbUser`.
 
 **ESLint rule limits to acknowledge** (the rule is one of several layers, not a hermetic seal):
 

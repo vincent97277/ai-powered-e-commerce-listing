@@ -176,13 +176,18 @@ landings don't re-walk the path.
 
 ## Security / RLS
 
-- **dbUser** is the default for any user-facing route. Imports allowed
-  everywhere.
-- **dbAdmin** is BYPASSRLS. ESLint allowlist (`eslint.config.mjs`) controls
-  who can import. New file needing `dbAdmin` must be added to the allowlist
-  with a one-line justification comment.
-- **withTenantTx**: use for any user-action SQL. Never hand-roll
-  `set_config('app.tenant_id', ...)`.
+- **withTenantTx** is the default for any user-facing tenant-scoped SQL.
+  Opens a `dbUser` transaction internally + UUID-guards the tenant id +
+  sets `app.tenant_id` GUC + auto-resets on COMMIT/ROLLBACK. Use it for
+  every user-action SQL — never hand-roll `set_config('app.tenant_id', ...)`.
+- **dbUser** is gated by the same ESLint allowlist as dbAdmin (V2.6.x
+  Tier 1 #4). Direct import outside the allowlist is a CI failure.
+  Reason: `dbUser` without `withTenantTx` skips the GUC and fail-closes
+  to 0 rows; the dev's "fix" to switch to `dbAdmin` to debug IS the leak.
+- **dbAdmin** is BYPASSRLS. Same ESLint allowlist (`eslint.config.mjs`)
+  controls who can import. New file needing `dbAdmin` (or, more rarely,
+  raw `dbUser`) must be added to the allowlist with a one-line
+  justification comment.
 - **Public routes**: any route under `/api/*` not gated by admin or merchant
   session must explicitly handle tenant resolution.
 - **Cookies**: `HttpOnly + Secure (prod) + SameSite=Strict (admin) /

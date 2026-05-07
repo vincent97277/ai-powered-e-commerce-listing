@@ -30,7 +30,7 @@ These have all caused a real PR-breaking incident. They are not suggestions.
 2. **Use `pnpm db:migrate` (the custom runner). Never `pnpm db:push` for prod or onboarding.** `db:push` bypasses the migration filename guard and `WITH CHECK` policies in 0001a/0003/0007. It silently works in dev iteration only.
 3. **Stage files explicitly. Never `git add -A` / `git add .`.** It will pick up `.env.local`, `test-results/`, `.next/`, or your scratch files. Pass paths.
 4. **No ad-hoc brand/accent color classes or raw radius on tenant-facing surfaces.** Use `var(--brand-*)` and project tokens. Zinc / shadcn neutrals are allowed only for neutral platform chrome or shared primitives where they're not expressing merchant brand (borders, muted text, disabled states). Brand surfaces (buttons, badges, accents, brand backgrounds) MUST use `var(--brand-primary)` / `var(--brand-bg)` / `var(--brand-radius)`. ESLint enforces — when in doubt, run `pnpm lint`.
-5. **Don't import `dbAdmin` outside the allowlist** in `eslint.config.mjs` (admin / observability / Inngest / lib system paths + 3 narrow user-facing exceptions: `(merchant)/layout.tsx`, `(storefront)/store/*/layout.tsx`, `(merchant)/merchant/settings/actions.ts`). User-facing **read** code uses `dbUser` + `withTenantTx(tenantId, fn)`. New file needing `dbAdmin` → justify why and add to the exact-file allowlist (V2.6 narrowed away from `(merchant)/**` / `(storefront)/**` glob; do not re-add the glob).
+5. **Don't import `dbAdmin` OR `dbUser` outside the allowlist** in `eslint.config.mjs` (admin / observability / Inngest / lib system paths + 3 narrow user-facing exceptions: `(merchant)/layout.tsx`, `(storefront)/store/*/layout.tsx`, `(merchant)/merchant/settings/actions.ts`). User-facing **read** code uses `withTenantTx(tenantId, async (tx) => ...)` — the wrapper IS dbUser-backed; calling `dbUser` directly skips the GUC and fail-closes to 0 rows (V2.6.x Tier 1 #4 added dbUser to the rule because the "0 rows → switch to dbAdmin" debug instinct is the actual leak). New file needing `dbAdmin` → justify why and add to the exact-file allowlist (V2.6 narrowed away from `(merchant)/**` / `(storefront)/**` glob; do not re-add the glob).
 6. **Never construct public storage URLs by hand.** Three contexts, three helpers:
    - **Client Component** (`"use client"`): `imageUrlFor()` from `@/lib/storage/public-url-client`
    - **React Server Component** (default in App Router) and any server-rendered HTML: `getPublicUrl()` from `@/lib/storage`
@@ -66,7 +66,7 @@ If your error string isn't in this table, check [DECISIONS.md § Sprint hygiene 
 
 ### "Add a new tenant-scoped merchant route"
 1. Create `src/app/(merchant)/<feature>/page.tsx` (or route handler)
-2. Use `dbUser.transaction(...)` wrapped by `withTenantTx(tenantId, fn)` — never `set_config` by hand
+2. Use `await withTenantTx(tenantId, async (tx) => tx.select()...)` — the wrapper opens a dbUser transaction, sets `app.tenant_id` GUC, and gives you `tx`. Never call `dbUser` / `dbAdmin` directly (ESLint blocks both per hard-rule #5), never `set_config` by hand
 3. Schema additions go in `src/db/schema.ts` + a new migration `drizzle/migrations/NNNN_<name>.sql` with `WITH CHECK` on tenant_id
 4. Run `pnpm db:migrate` to apply
 5. Tests: integration test in `tests/v1-integration.test.ts`, unit tests for any pure helpers
