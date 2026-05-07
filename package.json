@@ -29,7 +29,7 @@
     "docker:reset": "docker compose down -v && docker compose up -d"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^2.0.106",
+    "@ai-sdk/openai": "^3.0.62",
     "@aws-sdk/client-s3": "^3.1044.0",
     "@base-ui/react": "^1.4.1",
     "@hookform/resolvers": "^3.9.0",
@@ -43,7 +43,7 @@
     "@radix-ui/react-tabs": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.4",
     "@vercel/analytics": "^2.0.1",
-    "ai": "^5.0.185",
+    "ai": "^6.0.175",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
