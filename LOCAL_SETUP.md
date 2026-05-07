@@ -199,13 +199,26 @@ pnpm vitest run tests/ai/cost-cap.test.ts           # AI cost cap
 pnpm vitest run --reporter=verbose                  # see each test name
 pnpm test:rls                                       # alias for the RLS suite
 pnpm typecheck                                      # type check
-pnpm lint                                           # ESLint (incl. dbAdmin allowlist)
+pnpm lint                                           # ESLint (incl. dbAdmin + dbUser allowlist)
 pnpm lint:docs                                      # README drift check (V2.3.6)
 ```
 
 Tests connect to the same Docker Postgres. RLS suite runs as `web_anon`; everything else uses `dbAdmin` for fixture setup speed and uses UUID prefix `99999999-...` for cleanup namespacing.
 
 Manual smoke: `tests/v1-smoke.md` (25 steps, 10–15 minutes).
+
+**AI vision automated smoke** (V2.6.2 — replaces the 7-step manual checklist):
+
+```bash
+# Terminal 1: pnpm dev
+# Terminal 2: pnpm inngest:dev
+# Terminal 3:
+pnpm test:smoke:ai-local   # ~90s wall, ~$0.02 OpenAI tokens
+```
+
+Preflight-checks env + DB + dev server + Inngest CLI all reachable, then logs in as `akami@demo.local` (password `demo1234` after `pnpm tsx scripts/seed-merchant-auth.ts --mode=dev`), uploads `tests/fixtures/smoke-product.jpg`, polls for the AI-generated product, asserts the title is NOT a fixture-fallback string, and queries `ai_usage_events` directly to confirm `tokens_in > 0` (load-bearing — catches silent token-shape zeroing across SDK majors). Cleans up the test product on success. **Don't run in CI** — `*-local.smoke.ts` is excluded from the post-deploy chromium project.
+
+If you don't have local Docker/Inngest running, V2.6.x Tier 1 #7 ships a `workflow_dispatch` GH Action mirror: `gh workflow run "AI vision smoke (manual)"` (requires `OPENAI_API_KEY_SMOKE` repo secret).
 
 ---
 
@@ -255,9 +268,9 @@ V1.7 added `approved_at` — new signups are suspended-by-default until admin ap
 UPDATE merchants SET approved_at = NOW(), approved_by_admin = 'system' WHERE slug = '<slug>';
 ```
 
-### `dbAdmin` import error in lint
+### `dbAdmin` / `dbUser` import error in lint
 
-ESLint blocks `dbAdmin` outside the allowlist in `eslint.config.mjs`. If you genuinely need cross-tenant access (rare — almost always you want `withTenantTx` + `dbUser`), add the file path to the allowlist with a one-line justification.
+ESLint blocks both `dbAdmin` AND `dbUser` outside the allowlist in `eslint.config.mjs` (V2.6.x Tier 1 #4 added `dbUser` because direct use skips the RLS GUC and fail-closes to 0 rows). For tenant-scoped reads/writes, import `withTenantTx` from `@/lib/db/with-tenant` instead — the wrapper is dbUser-backed and sets the GUC inside a transaction. If you genuinely need cross-tenant `dbAdmin` access (rare), add the file path to the allowlist with a one-line justification.
 
 ---
 
@@ -283,7 +296,7 @@ pnpm db:migrate          # re-apply all migrations
 | `src/lib/observability/ai-cost-pricing.ts` | USD→TWD rate + GPT-4o pricing constants (sole source) |
 | `src/lib/admin-session.ts` + `admin-session-edge.ts` | Admin session helpers — split for Edge runtime |
 | `src/lib/admin/operator-queue.ts` | Cross-merchant operator queue compound CTE |
-| `eslint.config.mjs` | `dbAdmin` allowlist — extend carefully |
+| `eslint.config.mjs` | `dbAdmin` + `dbUser` allowlist — extend carefully |
 | `drizzle/migrations/` | Forward + rollback SQL, one pair per version |
 | `tests/v1-smoke.md` | 25-step manual QA checklist |
 
