@@ -405,13 +405,24 @@ describe('getHealthIssues — no_photo includes fixture path', () => {
  * 共用 TENANT_A / TENANT_B 但每個 test 自己 cleanup, 免污染後續 test.
  */
 describe('V1.6 A9 — platform-wide cost aggregation', () => {
-  // 每個 test 跑完都把兩 tenant 的 import_sessions / ai_usage_events 清乾淨
-  // 不能放 outer beforeAll / afterAll 因為跟這檔其他 describe 共用 tenant rows
+  // 每個 test 跑完都把 import_sessions / ai_usage_events 全清乾淨。
+  //
+  // 為什麼是「全清」不是「清 A/B」: getPlatformCostToday / getCostTimeseries14d /
+  // flagAnomaly 是 platform-wide 聚合 — 沒有 tenant filter (這就是 platform-wide
+  // 的意思)。任何來自其他 test (e.g. tests/rls.e2e.test.ts T9 用 99999999-... /
+  // aaaaaaaa-... 兩個 tenant 跑 ai_usage_events 寫入測試) 或手動操作 (operator 跑
+  // local upload) 留下的 row 都會混入聚合結果。
+  //
+  // V2.6.2 retro 發現: T9 seed 後 afterAll 若曾因 crash 沒跑完, 留下 100+50 tokens
+  // 的 row 永遠掛在 local docker postgres, 之後每次跑 cost-cap 都會 +23 cents 對不上
+  // 預期值。CI 用 ephemeral postgres 不受影響, 但 local dev 會。
+  //
+  // 風險: 若另一個測試檔正在 parallel 執行寫入這兩張表, 此 wipe 會踩到它。
+  // 但 vitest 預設 fork pool + 不同檔不共用 fixtures → 在實務上 platform-agg
+  // describe 跑時其他檔不會同步寫這兩張表。
   async function cleanupCostRows() {
-    await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_A));
-    await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, TENANT_B));
-    await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_A));
-    await dbAdmin.delete(aiUsageEvents).where(eq(aiUsageEvents.tenantId, TENANT_B));
+    await dbAdmin.delete(importSessions);
+    await dbAdmin.delete(aiUsageEvents);
   }
 
   it('getPlatformCostToday — sums across multiple tenants AND both source tables', async () => {
