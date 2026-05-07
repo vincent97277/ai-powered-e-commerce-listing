@@ -16,6 +16,7 @@ Version-by-version progression for `demo-sass-2`. This replaces the older `V1_ST
 - **V2.4 (2026-05-06)** Doc consolidation — README trimmed to entry surface, "Why interesting" promoted above the fold, security 30-sec synthesis added, Tests table moved to ARCHITECTURE §7, BUILD_DAY archived. CLAUDE.md hard rules #4/#6 fixed; common-errors cookbook added.
 - **V2.5 (2026-05-06)** Agent-routing observational note codified in DECISIONS.md (B-minus per 4-voice consensus), with built-in 2026-08-01 expiry clause if not referenced by then.
 - **V2.6 (2026-05-06)** **First distribution-first sprint.** Vercel Analytics with PII `beforeSend` filter (35 unit tests), ESLint allowlist narrowed from `(merchant)/**` + `(storefront)/**` glob to 3 exact-file exceptions (closes Codex CRITICAL doc-drift bug), 2 user-facing `dbAdmin` → `dbUser` refactors, `ai_usage_events` cross-tenant deny test, blog post `docs/blog/compile-time-tenant-isolation.md` with source-anchored snippets, blog drift checker T4. **90-day sunset gate at 2026-08-06 (issue #27)** — `< 50 unique non-operator visitors AND < 2 inbound contacts → V2.7 = archive`. 260 → 275 tests.
+- **V2.6.x Tier 1 (2026-05-07)** Backlog cleanup — dbUser compile-time enforcement (fail-closed sister of V2.6 PR2's dbAdmin work; prevents the "switch-to-dbAdmin-to-debug-zero-rows" leak), `workflow_dispatch` GH Action so operator can run AI vision smoke from GH UI without local Docker/dev/Inngest setup (~$0.02/run, manual trigger), `generateObject` → `generateText + Output.object` AI SDK v6 deprecation migration (verified post-merge against real OpenAI, `tokens_in > 0` assertion fired in 36.8s). 275 → 304 tests (drift-checker reconciled badge).
 
 ---
 
@@ -50,8 +51,11 @@ Version-by-version progression for `demo-sass-2`. This replaces the older `V1_ST
 | V2.6 PR2 | 2026-05-06 | ESLint allowlist narrowed to 3 exact-file exceptions + 2 dbAdmin→dbUser refactors + doc-drift fix + T9 ai_usage_events RLS | 274 → 275 | — | (PR #29) |
 | V2.6 PR3 | 2026-05-06 | Blog post `compile-time-tenant-isolation.md` + blog drift checker T4 | 275 | — | (PR #30) |
 | **V2.6 distribution sprint** | **2026-05-06** | **First sprint that ships external signal infra. 90-day sunset gate set 2026-08-06.** | | | |
+| V2.6.x #4 | 2026-05-07 | dbUser ESLint ban + 2 merchant page refactors via `withTenantTx` + blog snippet sync | 275 | — | (PR #45) |
+| V2.6.x #7 | 2026-05-07 | `workflow_dispatch` GH Action for AI vision smoke (manual operator trigger, ~$0.02/run) | 275 | — | (PR #46) |
+| V2.6.x #5 | 2026-05-07 | `generateObject` → `generateText + Output.object` AI SDK v6 deprecation migration | 275 | — | (PR #47) |
 
-Bottom line: **260 vitest tests, GitHub Actions CI on every PR, public URL live.**
+Bottom line: **300+ vitest tests, GitHub Actions CI on every PR, public URL live.**
 
 ---
 
