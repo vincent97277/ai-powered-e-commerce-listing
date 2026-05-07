@@ -33,11 +33,13 @@ on:
 permissions:
   contents: read
 
-# Single source for the production URL. workflow_dispatch input default
-# can't reference env (GH limitation), so it stays inline above; runtime
-# refs both consume PROD_URL.
-env:
-  PROD_URL: 'https://demo-sass-2.vercel.app'
+# NOTE on PROD_URL DRY: V2.3.5 tried to extract this URL into a workflow-level
+# `env: PROD_URL` and reference it via `${{ github.event.inputs.target_url || env.PROD_URL }}`.
+# That broke smoke for 30+ consecutive runs — GitHub Actions rejects the expression
+# when triggered via `push` (where `github.event.inputs` doesn't exist) combined
+# with `env.X` referenced inside a step's `env:` block, surfacing as "workflow file
+# issue" with empty jobs. V2.6.1 hotfix: revert to inline literals. The URL is also
+# inline at the workflow_dispatch input default below — three copies; that's fine.
 
 jobs:
   wait-for-vercel:
@@ -54,7 +56,7 @@ jobs:
 
       - name: Poll URL until 200 or 5min timeout
         env:
-          TARGET: ${{ github.event.inputs.target_url || env.PROD_URL }}
+          TARGET: ${{ github.event.inputs.target_url || 'https://demo-sass-2.vercel.app' }}
         run: |
           for i in $(seq 1 30); do
             CODE=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET" || echo "000")
@@ -74,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SMOKE_BASE_URL: ${{ github.event.inputs.target_url || env.PROD_URL }}
+      SMOKE_BASE_URL: ${{ github.event.inputs.target_url || 'https://demo-sass-2.vercel.app' }}
     steps:
       - uses: actions/checkout@v6
 
