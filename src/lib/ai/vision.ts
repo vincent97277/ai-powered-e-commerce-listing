@@ -1,14 +1,19 @@
 /**
  * Vision call wrapper (OpenAI GPT-4o)
  *
- * 用 Vercel AI SDK 的 generateObject() 配 productSchema，
+ * 用 Vercel AI SDK 的 generateText() + Output.object() 配 productSchema，
  * 自動拿到 typed + 已驗證的 ProductOutput。
+ *
+ * V2.6.x Tier 1 #5: migrated from generateObject() (deprecated in AI SDK v6)
+ * to generateText({ output: Output.object({ schema }) }). Behavior is the
+ * same (LLM call → JSON parse → Zod validate → typed result), the entry
+ * point is just on the supported function path. result.object → result.output.
  *
  * 重試策略：
  * - 預設 maxRetries=2（總共最多 3 次：原始 + 2 retry）
  * - retry 觸發條件：
  *   1. fetch / network / 429 rate limit / 5xx error (透過 APICallError.statusCode 判定)
- *   2. Zod schema 驗證失敗（LLM 偶爾會吐多餘欄位、漏欄位）
+ *   2. Zod schema 驗證失敗 (NoObjectGeneratedError, LLM 偶爾會吐多餘欄位、漏欄位)
  *   3. fallback: 字串比對 (相容非 APICallError 例外)
  * - 不 retry：4xx 認證錯誤、quota 用完（因為 retry 也救不了）
  *
@@ -17,7 +22,7 @@
  */
 
 import { openai } from '@ai-sdk/openai';
-import { APICallError, NoObjectGeneratedError, generateObject } from 'ai';
+import { APICallError, NoObjectGeneratedError, generateText, Output } from 'ai';
 import { buildSystemPrompt } from './prompt';
 import { productSchema, type ProductOutput } from './schema';
 import { normalizeUsage, type VisionUsage } from './usage-normalize';
@@ -140,11 +145,11 @@ export async function callVisionWithRetry(opts: {
 
   for (let attempt = 0; attempt < totalAttempts; attempt++) {
     try {
-      // generateObject 自動：呼叫 LLM → 解析 JSON → Zod 驗證
+      // generateText + Output.object 自動：呼叫 LLM → 解析 JSON → Zod 驗證
       // 只要任一步失敗都會 throw，外層 catch 接到後決定要不要 retry
-      const result = await generateObject({
+      const result = await generateText({
         model: openai(MODEL_ID),
-        schema: productSchema,
+        output: Output.object({ schema: productSchema }),
         system,
         // multi-modal message：text + image
         messages: [
@@ -170,13 +175,14 @@ export async function callVisionWithRetry(opts: {
 
       // V2.6.2: route through normalizeUsage() so an SDK major bump cannot
       // silently zero the cost cap. Adapter handles v4/v5/v6 shapes; today
-      // (on v4) it reads promptTokens/completionTokens, after the bump it
-      // reads inputTokens/outputTokens — same VisionUsage out either way.
+      // (on v6) it reads inputTokens/outputTokens, on the v4/v5 fallback
+      // path it reads promptTokens/completionTokens — same VisionUsage out
+      // either way.
       const usage = normalizeUsage(result.usage);
 
       return {
         success: true,
-        data: result.object,
+        data: result.output,
         attempts: attempt + 1,
         usage,
       };
