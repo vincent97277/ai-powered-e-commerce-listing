@@ -8,7 +8,6 @@ import { products, orderItems, merchants } from '@/db/schema';
 import { asc, desc, eq, lte, sql, type SQL } from 'drizzle-orm';
 import { Plus, Package, ImageIcon, AlertTriangle, ArrowDown } from 'lucide-react';
 import { ProductRowActions } from './ProductRowActions';
-import { dbUser } from '@/db';
 import { ExportDropdown } from '@/components/merchant/ExportDropdown';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { EmptyState } from '@/components/feedback/EmptyState';
@@ -62,13 +61,16 @@ export default async function MerchantProductsList({
 
   const merchant = await resolveMerchantFromCookie();
 
-  // 取 lowStockThreshold from merchants. V2.6: dbUser 即可 — merchants 表對
-  // web_anon 開放 SELECT (no RLS policy), 不需要 BYPASSRLS 查自己這條 row。
-  const [merchantRow] = await dbUser
-    .select({ lowStockThreshold: merchants.lowStockThreshold })
-    .from(merchants)
-    .where(eq(merchants.id, merchant.tenantId))
-    .limit(1);
+  // 取 lowStockThreshold from merchants. V2.6.2 Tier 1 #4: 走 withTenantTx
+  // 維持「所有 tenant-scoped query 過同一條路」一致性。merchants 表本身沒
+  // RLS policy 但走包裝層讓 user-facing route 永遠不需要直接 import dbUser。
+  const [merchantRow] = await withTenantTx(merchant.tenantId, async (tx) =>
+    tx
+      .select({ lowStockThreshold: merchants.lowStockThreshold })
+      .from(merchants)
+      .where(eq(merchants.id, merchant.tenantId))
+      .limit(1),
+  );
   const threshold = merchantRow?.lowStockThreshold ?? 5;
 
   const items = await withTenantTx(merchant.tenantId, async (tx) => {
