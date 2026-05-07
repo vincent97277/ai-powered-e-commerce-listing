@@ -1,7 +1,14 @@
 /**
- * ESLint flat config — Next.js 15 + dbAdmin 防護 + V1.9 T1 raw-color guard
+ * ESLint flat config — Next.js 15 + dbAdmin/dbUser 防護 + V1.9 T1 raw-color guard
  *
- * dbAdmin 允許範圍 (V2.6 narrowed):
+ * V2.6.2 Tier 1 #4: dbUser is also restricted (in same rule as dbAdmin).
+ * Direct dbUser imports skip withTenantTx → tenant_id GUC unset → fail-closed
+ * 0 rows. Sister failure mode to dbAdmin's BYPASSRLS — symptom is empty UI
+ * instead of cross-tenant leak, but the next "fix" is usually "switch to
+ * dbAdmin" which IS the leak. Path forward for any tenant-scoped read:
+ * `import { withTenantTx } from '@/lib/db/with-tenant'`.
+ *
+ * dbAdmin/dbUser 允許範圍 (V2.6 narrowed):
  *   - (admin)/** + lib/admin/** + lib/observability/**         — platform admin / cross-tenant observability
  *   - inngest/** + lib/storage/** + scripts/**                 — worker/system context, non-RLS
  *   - lib/tenant/resolver.ts + lib/platform/** + lib/merchant/* — pre-tenant resolution + cross-merchant queries
@@ -24,6 +31,21 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const compat = new FlatCompat({ baseDirectory: __dirname });
 
+// V2.6.2 Tier 1 #4: tenant-isolation enforcement is two rules.
+//
+// 1. dbAdmin (BYPASSRLS) — narrow allowlist (see V2.6 PR2 narrowing).
+// 2. dbUser (RLS-enforced) — also restricted: direct usage skips
+//    `withTenantTx` and gets fail-closed 0-row results because tenant_id
+//    GUC isn't set. The Codex /autoplan eng review flagged this as the
+//    sister failure mode to dbAdmin: developer reaches for dbUser, sees
+//    empty results, "fixes" by switching to dbAdmin → entire tenant
+//    isolation defeated.
+//
+//    Allowlist for dbUser is bigger than dbAdmin's because (a) the
+//    `withTenantTx` wrapper IS dbUser-based, (b) health checks ping
+//    the pool, (c) tests exercise raw RLS behavior, (d) direct
+//    merchants-table reads are legitimate (no RLS policy on that
+//    table — storefronts cross-query for theme).
 const dbAdminRule = {
   rules: {
     'no-restricted-imports': [
@@ -32,9 +54,9 @@ const dbAdminRule = {
         paths: [
           {
             name: '@/db',
-            importNames: ['dbAdmin'],
+            importNames: ['dbAdmin', 'dbUser'],
             message:
-              'dbAdmin 會繞過 RLS。請改 import dbUser，或將檔案移至 (admin)/ 或 lib/db/admin-only/',
+              'dbAdmin 會繞過 RLS, dbUser 直用會 fail-closed 0 rows (RLS GUC 未設)。請 import withTenantTx — 它 dbUser-backed + UUID-guarded + tx-scoped。如果你是 admin / 跨 tenant observability, 移到 (admin)/ 或 lib/db/admin-only/。',
           },
           {
             name: '@/db/admin-only',
@@ -129,6 +151,7 @@ export default [
       'src/lib/tenant/resolver.ts',
       'src/db/admin-only/**',
       'src/db/index.ts',
+      'src/lib/db/with-tenant.ts',         // V2.6.2 Tier 1 #4: dbUser-backed wrapper; every UI route imports withTenantTx, not dbUser
       'src/inngest/**',         // background job 走 dbAdmin (worker context，非 user-facing)
       'src/lib/storage/**',     // R2 / 系統內部，非 RLS 範圍
       'src/app/api/products/generate/**',  // V2.2.5 enqueue + status: cap check + status query

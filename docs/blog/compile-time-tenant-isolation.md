@@ -89,9 +89,11 @@ Three things this gives you:
 
 ## Layer 5: the actual rule
 
-Now the part the post is about. The setup is `eslint-plugin`-free; just a single `no-restricted-imports` config that bans the symbol `dbAdmin` exported from `@/db`, plus a second entry for the dedicated `@/db/admin-only` module.
+Now the part the post is about. The setup is `eslint-plugin`-free; just a single `no-restricted-imports` config that bans both `dbAdmin` and `dbUser` exports from `@/db`, plus a second entry for the dedicated `@/db/admin-only` module.
 
-<!-- src: eslint.config.mjs:27-48 -->
+Why both? `dbAdmin` is the BYPASSRLS connection — the obvious leak. But `dbUser` (the RLS-enforced one) is just as dangerous if used directly: it skips the `withTenantTx` wrapper, the GUC never gets set, and every query fails-closed to 0 rows. The developer's instinct after seeing 0 rows is "switch to dbAdmin to debug" — which IS the leak. So the rule funnels every tenant-scoped query through `withTenantTx` (Layer 4), and any direct import of either handle from outside the allowlist fails CI.
+
+<!-- src: eslint.config.mjs:49-70 -->
 ```js
 const dbAdminRule = {
   rules: {
@@ -101,9 +103,9 @@ const dbAdminRule = {
         paths: [
           {
             name: '@/db',
-            importNames: ['dbAdmin'],
+            importNames: ['dbAdmin', 'dbUser'],
             message:
-              'dbAdmin 會繞過 RLS。請改 import dbUser，或將檔案移至 (admin)/ 或 lib/db/admin-only/',
+              'dbAdmin 會繞過 RLS, dbUser 直用會 fail-closed 0 rows (RLS GUC 未設)。請 import withTenantTx — 它 dbUser-backed + UUID-guarded + tx-scoped。如果你是 admin / 跨 tenant observability, 移到 (admin)/ 或 lib/db/admin-only/。',
           },
           {
             name: '@/db/admin-only',
@@ -117,7 +119,7 @@ const dbAdminRule = {
 };
 ```
 
-The default state of every file in the codebase is "you cannot import the BYPASSRLS handle." Then a second rule block flips the rule off for an explicit allowlist of paths — admin pages, observability code, Inngest workers, system queries. To add a new file to the allowlist you have to edit `eslint.config.mjs`, and that diff is the artifact a reviewer reads.
+The default state of every file in the codebase is "you cannot import either DB handle directly." Then a second rule block flips the ban off for an explicit allowlist of paths — admin pages, observability code, Inngest workers, system queries, plus the `with-tenant.ts` wrapper itself (which IS dbUser-based). To add a new file to the allowlist you have to edit `eslint.config.mjs`, and that diff is the artifact a reviewer reads.
 
 In a project I've been building this is currently the entire allowlist:
 
