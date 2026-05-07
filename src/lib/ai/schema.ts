@@ -63,6 +63,15 @@ export const CATEGORY_ENUM = [
 // ============================================================
 
 // V1: 放寬 min length 讓 fallback 也能 pass (max + 禁字 refine 仍嚴格)
+//
+// V2.6.2: removed `.default([])` from seo_tags + variants. AI SDK v6 emits
+// strict OpenAI structured-output schemas — every property must be in
+// `required` or the API rejects with "Invalid schema for response_format
+// 'response': 'required' is required to be supplied and to be an array
+// including every key in properties." Default values mark fields as
+// optional in zod's JSON schema output, breaking strict mode. Removing
+// them just means the LLM must return both fields (even as `[]`) — which
+// it now does under strict mode automatically.
 export const productSchema = z
   .object({
     // 商品標題 — 1-60 字 (放寬以容納 fallback「需人工審核」)
@@ -74,8 +83,8 @@ export const productSchema = z
     // 分類
     category: z.enum(CATEGORY_ENUM),
 
-    // SEO tags — 0-10 個 (fallback 可以空)
-    seo_tags: z.array(safeText(1, 20)).max(10).default([]),
+    // SEO tags — 0-10 個 (LLM may emit [] for fixture-fallback rows)
+    seo_tags: z.array(safeText(1, 20)).max(10),
 
     // 變體 — 0-6 個
     variants: z
@@ -87,8 +96,7 @@ export const productSchema = z
           })
           .strict(),
       )
-      .max(6)
-      .default([]),
+      .max(6),
 
     // 定價建議 (新台幣)
     price_twd: z
