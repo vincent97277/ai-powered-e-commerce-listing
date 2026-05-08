@@ -1,4 +1,4 @@
-# Contributing to demo-sass-2
+# Contributing to rls-ai-shop
 
 Thanks for stopping by. This is a **portfolio / showcase project** — the source is open under Apache-2.0 so you can read, fork, and learn from it, but active maintenance is limited.
 

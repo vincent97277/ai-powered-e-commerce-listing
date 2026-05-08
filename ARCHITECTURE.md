@@ -1,6 +1,6 @@
 # Architecture
 
-Engineering depth doc for `demo-sass-2`. Covers the patterns that make multi-tenancy, AI pipelines, and admin observability cohabit safely. Companion to [README.md](./README.md) and [STATUS.md](./STATUS.md).
+Engineering depth doc for `rls-ai-shop`. Covers the patterns that make multi-tenancy, AI pipelines, and admin observability cohabit safely. Companion to [README.md](./README.md) and [STATUS.md](./STATUS.md).
 
 ---
 

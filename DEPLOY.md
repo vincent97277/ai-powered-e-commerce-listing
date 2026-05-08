@@ -1,6 +1,6 @@
 # Deploy Runbook — V2.2 Cloud (Vercel + Neon + R2 + Inngest)
 
-Step-by-step recipe for shipping `demo-sass-2` from local-only to a public URL.
+Step-by-step recipe for shipping `rls-ai-shop` from local-only to a public URL.
 Companion to [README.md](./README.md), [LOCAL_SETUP.md](./LOCAL_SETUP.md), and
 [ARCHITECTURE.md](./ARCHITECTURE.md).
 
@@ -35,7 +35,7 @@ Companion to [README.md](./README.md), [LOCAL_SETUP.md](./LOCAL_SETUP.md), and
 ### B.1 — Create the Neon project
 
 1. Go to https://console.neon.tech → "New Project"
-2. Project name: `demo-sass-2`
+2. Project name: `rls-ai-shop`
 3. Region: **Asia Pacific (Singapore)** — colocated with our chosen Vercel region
 4. Postgres version: 16 (or latest)
 5. Database name: `demo_sass_2`
@@ -189,16 +189,16 @@ shred -u /tmp/merchant-creds.txt   # macOS: rm -P /tmp/merchant-creds.txt
 ### C.1 — Cloudflare R2 bucket
 
 1. https://dash.cloudflare.com → **R2 Object Storage** → "Create bucket"
-2. Name: `demo-sass-2-prod` (must be globally unique within your account)
+2. Name: `rls-ai-shop-prod` (must be globally unique within your account)
 3. Location hint: **Asia-Pacific** (closest to Vercel sin1)
 4. Click **Create bucket**
 
 5. Open the bucket → **Settings** → **Public access** → enable "Allow access via R2.dev subdomain". Capture the public URL (looks like `https://pub-<hash>.r2.dev`).
 
 6. Top-right user menu → **API Tokens** → "Create Account API Token":
-   - Token name: `demo-sass-2-prod`
+   - Token name: `rls-ai-shop-prod`
    - Permissions: **Object Read & Write**
-   - Specify bucket: `demo-sass-2-prod` (NOT all buckets)
+   - Specify bucket: `rls-ai-shop-prod` (NOT all buckets)
    - TTL: leave default
    - Click **Create**
 
@@ -206,7 +206,7 @@ shred -u /tmp/merchant-creds.txt   # macOS: rm -P /tmp/merchant-creds.txt
 - `R2_ENDPOINT`: `https://<account_id>.r2.cloudflarestorage.com` (shown after token create)
 - `R2_ACCESS_KEY_ID`: shown once
 - `R2_SECRET_ACCESS_KEY`: shown once
-- `R2_BUCKET`: `demo-sass-2-prod`
+- `R2_BUCKET`: `rls-ai-shop-prod`
 - `R2_PUBLIC_URL`: `https://pub-<hash>.r2.dev` (from step 5)
 
 ### C.2 — Vercel project import
@@ -238,7 +238,7 @@ STORAGE_BACKEND            = r2
 R2_ENDPOINT                = <from C.1>
 R2_ACCESS_KEY_ID           = <from C.1>
 R2_SECRET_ACCESS_KEY       = <from C.1>
-R2_BUCKET                  = demo-sass-2-prod
+R2_BUCKET                  = rls-ai-shop-prod
 R2_PUBLIC_URL              = <from C.1>
 ```
 
@@ -289,7 +289,7 @@ This colocates serverless functions with the Neon Singapore database. Without th
 ### D.1 — Inngest Cloud project
 
 1. https://app.inngest.com → "New App"
-2. App name: `demo-sass-2`
+2. App name: `rls-ai-shop`
 3. Plan: Hobby (free)
 4. Click **Create**
 
@@ -309,7 +309,7 @@ This colocates serverless functions with the Neon Singapore database. Without th
 
 ### D.3 — Connect Inngest to your URL
 
-1. https://app.inngest.com → your `demo-sass-2` app → "Apps" tab → "Sync new app"
+1. https://app.inngest.com → your `rls-ai-shop` app → "Apps" tab → "Sync new app"
 2. SDK URL: `https://demo-sass-2.vercel.app/api/inngest` (replace with your real Vercel URL)
 3. Click **Sync**. Inngest discovers the function and shows "Product Ingest Pipeline" registered.
 
