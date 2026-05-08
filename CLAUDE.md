@@ -6,7 +6,7 @@ This file targets Claude Code, Cursor, Copilot, and any other coding agent. The 
 
 ## What this project is
 
-`rls-ai-shop` — a Taiwan multi-merchant e-commerce demo. Multi-tenant Postgres with Row-Level Security (RLS), AI photo→listing via GPT-4o, admin observability, and a per-merchant authentication system. Live at https://demo-sass-2.vercel.app. Apache-2.0 portfolio project, V2.3.
+`rls-ai-shop` — a Taiwan multi-merchant e-commerce demo. Multi-tenant Postgres with Row-Level Security (RLS), AI photo→listing via GPT-4o, admin observability, and a per-merchant authentication system. Live at https://rls-ai-shop.vercel.app. Apache-2.0 portfolio project, V2.3.
 
 The architecture is summarized in [README.md § Architecture](./README.md#architecture). The deeper technical doc is [ARCHITECTURE.md](./ARCHITECTURE.md). For a concise version table, see [STATUS.md](./STATUS.md).
 

@@ -16,7 +16,7 @@ import { defineConfig, devices } from '@playwright/test';
  * local DB, Playwright = end-to-end against deployed URL or local dev).
  */
 
-const PROD_URL = process.env.SMOKE_BASE_URL || 'https://demo-sass-2.vercel.app';
+const PROD_URL = process.env.SMOKE_BASE_URL || 'https://rls-ai-shop.vercel.app';
 
 export default defineConfig({
   testDir: './tests/smoke',

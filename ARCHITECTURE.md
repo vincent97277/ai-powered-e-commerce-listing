@@ -134,7 +134,7 @@ The pool model: one Postgres database, `tenant_id` UUID column on every tenant-s
 
 ```mermaid
 graph LR
-  Owner[owner role<br/>postgres superuser] -. "migrations only" .-> DB[(demo_sass_2)]
+  Owner[owner role<br/>postgres superuser] -. "migrations only" .-> DB[(rls_ai_shop)]
   WebAnon[web_anon<br/>RLS enforced] --> DB
   WebAdmin[web_admin<br/>BYPASSRLS] --> DB
 

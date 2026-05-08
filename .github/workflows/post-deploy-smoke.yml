@@ -28,7 +28,7 @@ on:
       target_url:
         description: 'URL to smoke (default: prod)'
         required: false
-        default: 'https://demo-sass-2.vercel.app'
+        default: 'https://rls-ai-shop.vercel.app'
 
 permissions:
   contents: read
@@ -56,7 +56,7 @@ jobs:
 
       - name: Poll URL until 200 or 5min timeout
         env:
-          TARGET: ${{ github.event.inputs.target_url || 'https://demo-sass-2.vercel.app' }}
+          TARGET: ${{ github.event.inputs.target_url || 'https://rls-ai-shop.vercel.app' }}
         run: |
           for i in $(seq 1 30); do
             CODE=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET" || echo "000")
@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SMOKE_BASE_URL: ${{ github.event.inputs.target_url || 'https://demo-sass-2.vercel.app' }}
+      SMOKE_BASE_URL: ${{ github.event.inputs.target_url || 'https://rls-ai-shop.vercel.app' }}
     steps:
       - uses: actions/checkout@v6
 

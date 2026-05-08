@@ -39,7 +39,7 @@ const FILTERED_PREFIXES = ['/admin', '/merchant', '/api'];
 export function shouldReportEvent(urlOrPath: string): boolean {
   let pathname: string;
   try {
-    // Accept full URLs ("https://demo-sass-2.vercel.app/store/akami") and bare
+    // Accept full URLs ("https://rls-ai-shop.vercel.app/store/akami") and bare
     // paths ("/store/akami"). URL constructor needs a base for bare paths.
     const u = new URL(urlOrPath, 'https://placeholder.invalid');
     pathname = u.pathname;
