@@ -1,11 +1,11 @@
 /**
- * KpiCard — 共用 KPI display block (V1 #47)
+ * KpiCard — shared KPI display block (V1 #47)
  *
- * 抽自 src/app/(merchant)/merchant/page.tsx (RA4)
- * 使用 brand vars (--brand-primary / --brand-bg / --brand-text / --brand-radius)
- * 在 .platform wrapper 內這些 vars 會被 aliased 成 platform palette (見 #48 globals.css)
+ * Extracted from src/app/(merchant)/merchant/page.tsx (RA4).
+ * Uses brand vars (--brand-primary / --brand-bg / --brand-text / --brand-radius).
+ * Inside a .platform wrapper these vars are aliased to the platform palette (see #48 globals.css).
  *
- * Server component, 沒 client 互動
+ * Server component, no client interaction.
  */
 import Link from 'next/link';
 import type { ComponentType, SVGProps } from 'react';

@@ -1,11 +1,11 @@
 /**
- * /admin/merchants/[id] — 平台 admin 看單一商家 detail (V1 #50)
- * - Header: 商家名 + slug + 狀態徽章 + 3 actions (停權 / 改 slug)
- * - 4 KPI: 商品 / 訂單 / GMV / 註冊日
- * - Tabs: 商品 (前 20) / 訂單 (前 20) — V1 純 SSR, 無 client tabs (URL ?tab= 切)
- * - admin_action_history timeline (右側 column)
+ * /admin/merchants/[id] — platform admin view of a single merchant detail (V1 #50)
+ * - Header: merchant name + slug + status badge + 3 actions (suspend / rename slug)
+ * - 4 KPIs: products / orders / GMV / signup date
+ * - Tabs: products (top 20) / orders (top 20) — V1 pure SSR, no client tabs (switch via URL ?tab=)
+ * - admin_action_history timeline (right column)
  *
- * 全 dbAdmin (跨商家視角)
+ * Uses dbAdmin throughout (cross-merchant view)
  */
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -84,7 +84,7 @@ export default async function AdminMerchantDetail({
           .limit(20)
       : [];
 
-  // Admin action history (右側)
+  // Admin action history (right column)
   const actionLog = await dbAdmin
     .select()
     .from(adminActionHistory)

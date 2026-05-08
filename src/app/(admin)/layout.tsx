@@ -16,13 +16,13 @@ import { PlatformShell } from '@/components/platform/PlatformShell';
 import { ADMIN_SESSION_COOKIE, validateAdminSession } from '@/lib/admin-session';
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  // 二段檢查 (middleware 已過 HMAC, 這裡查 DB session 仍存活)
+  // Second gate (middleware already passed HMAC; here we check the DB session is still alive)
   const c = await cookies();
   const cookieValue = c.get(ADMIN_SESSION_COOKIE)?.value;
   const sessionId = await validateAdminSession(cookieValue);
   if (!sessionId) {
-    // session 被 revoke / 過期 / DB row 不見 → 回 login
-    // 與 middleware 一致: 帶 next=/admin (layout 拿不到 pathname, 用 admin root 當 fallback)
+    // session revoked / expired / DB row missing → back to login
+    // Consistent with middleware: pass next=/admin (layout can't read pathname, use admin root as fallback)
     redirect('/admin/login?next=%2Fadmin');
   }
 

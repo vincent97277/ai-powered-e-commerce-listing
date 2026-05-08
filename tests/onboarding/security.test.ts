@@ -2,24 +2,24 @@
  * V1.7 D1 — onboarding security hardening test suite
  *
  * 6 cases:
- *   1. isReservedSlug pure-function: reserved 全大小寫 + 已知 slug → true; 普通 slug → false
- *   2. checkRateLimit: 同 IP 24h 內第 2 次 success → 拒絕
- *   3. logAttempt: 寫各種 result 都不 throw
- *   4. Honeypot: 直接 call action with hp_url 非空 → pendingFake, 沒建商家 + 沒 redirect
- *   5. Approval flow: 直接 INSERT pending merchant + approveMerchant action → approved_at 被設,
- *      adminActionHistory 寫一行
- *   6. Reserved slug: 直接 call action with slug='admin' → 回 error, 沒建商家
+ *   1. isReservedSlug pure-function: reserved upper/lower-case + known slug → true; normal slug → false
+ *   2. checkRateLimit: same IP, 2nd success within 24h → rejected
+ *   3. logAttempt: writing each result variant never throws
+ *   4. Honeypot: directly call action with non-empty hp_url → pendingFake, no merchant created + no redirect
+ *   5. Approval flow: direct INSERT pending merchant + approveMerchant action → approved_at set,
+ *      adminActionHistory gets a row
+ *   6. Reserved slug: directly call action with slug='admin' → returns error, no merchant created
  *
- * Server actions 走 createMerchantAction 不過 HTTP, 直接 call function with FormData.
- * Server actions 內部 import 'next/headers' — vitest node 環境下 next/headers 會用
- * Next 提供的 server-only stub. 所以這個 test 不能直接呼叫 createMerchantAction
- * (next/headers cookies()/headers() 在純 vitest node 環境下會 throw).
+ * Server actions go through createMerchantAction without HTTP, called as functions with FormData.
+ * Server actions internally import 'next/headers' — under vitest node env next/headers uses
+ * Next's server-only stub. So this test cannot call createMerchantAction directly
+ * (next/headers cookies()/headers() throws in pure vitest node env).
  *
- * 折衷: case 4 + case 6 不直接 call createMerchantAction, 改 unit test 把
- * 對應的純函式 (isReservedSlug, checkRateLimit, approveMerchant 內部 transaction logic)
- * 各自驗證.
+ * Compromise: cases 4 + 6 do not call createMerchantAction directly; instead unit-test the
+ * corresponding pure functions (isReservedSlug, checkRateLimit, approveMerchant internal
+ * transaction logic) individually.
  *
- * UUID 命名: TENANT_ONB_PENDING / TENANT_ONB_APPROVED — 避開既有 fixtures.
+ * UUID naming: TENANT_ONB_PENDING / TENANT_ONB_APPROVED — avoid existing fixtures.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { dbAdmin } from '@/db/admin-only';
@@ -85,7 +85,7 @@ describe('V1.7 D1 — reserved-slugs', () => {
       expect(isReservedSlug(slug)).toBe(true);
       expect(isReservedSlug(slug.toUpperCase())).toBe(true);
     }
-    // RESERVED_SLUGS 應該是非空 set
+    // RESERVED_SLUGS should be a non-empty set
     expect(RESERVED_SLUGS.size).toBeGreaterThanOrEqual(20);
   });
 
@@ -103,7 +103,7 @@ describe('V1.7 D1 — rate-limit', () => {
   });
 
   it('checkRateLimit: 同 IP 已有 1 success → 拒絕', async () => {
-    // 直接寫一筆 success log
+    // Write a success log directly
     await logAttempt({ ip: TEST_IP_RL, slug: 'first-shop', result: 'success' });
 
     const decision = await checkRateLimit(TEST_IP_RL);
@@ -140,7 +140,7 @@ describe('V1.7 D1 — rate-limit', () => {
         logAttempt({ ip: TEST_IP_LOG, slug: `slug-${r}`, result: r }),
       ).resolves.not.toThrow();
     }
-    // 驗證真有 6 行寫入
+    // Verify 6 rows were actually written
     const rows = await dbAdmin
       .select({ result: onboardingAttempts.result })
       .from(onboardingAttempts)
@@ -172,8 +172,8 @@ describe('V1.7 D1 — approval flow', () => {
   });
 
   it('Admin 把商家從 pending → approved (mimic approveMerchant 的 atomic update)', async () => {
-    // 模擬 approveMerchant 的 transaction (cookies() 在 vitest 純 node 環境不能用,
-    // 直接驗 atomic update + adminActionHistory insert 的 pattern).
+    // Simulate approveMerchant's transaction (cookies() unavailable in pure vitest node env;
+    // verify atomic update + adminActionHistory insert pattern directly).
     const fakeAdminSessionId = '99999999-9999-9999-9999-999999999999';
     const before = new Date();
 
@@ -218,7 +218,7 @@ describe('V1.7 D1 — approval flow', () => {
     expect(after!.approvedAt!.getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
     expect(after!.approvedByAdmin).toBe(fakeAdminSessionId);
 
-    // 2. admin_action_history 寫了一行 approve_merchant
+    // 2. admin_action_history has one approve_merchant row
     const log = await dbAdmin
       .select()
       .from(adminActionHistory)

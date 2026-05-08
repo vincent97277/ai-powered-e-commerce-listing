@@ -14,8 +14,8 @@ export default function NewProductPage() {
   const streamRef = useRef<GenerationStreamHandle>(null);
   const kickedOff = useRef(false);
 
-  // 修 race condition: setStarted 跟 ref attach 不在同一 tick
-  // 用 useEffect 等 GenerationStream mount 完成 (ref 可用) 後再呼叫 kickoff
+  // Fix race condition: setStarted and ref attach happen on different ticks.
+  // Use useEffect to wait until GenerationStream mounts (ref available) before calling kickoff
   useEffect(() => {
     if (started && !kickedOff.current && streamRef.current) {
       kickedOff.current = true;

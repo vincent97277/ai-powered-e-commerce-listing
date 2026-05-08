@@ -1,8 +1,8 @@
 /**
- * AI → UI 邊界轉換
+ * AI → UI boundary conversion.
  *
- * AI 出來的 variants 是 [{name: "顏色", options: ["黑","白"]}, {...}]
- * UI 要的是 ["顏色 黑", "顏色 白", ...] flat string[]
+ * AI returns variants as [{name: "顏色", options: ["黑","白"]}, {...}].
+ * UI wants flat string[]: ["顏色 黑", "顏色 白", ...].
  */
 import type { ProductOutput as AiOutput } from './schema';
 import type { ProductOutput as UiOutput } from '@/lib/types';

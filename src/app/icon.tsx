@@ -1,7 +1,7 @@
 /**
  * App Router icon (V1.9 T2)
  *
- * 32x32 favicon — two stacked rectangles in 柿色 #D97757 (primary) and
+ * 32x32 favicon — two stacked rectangles in persimmon #D97757 (primary) and
  * warm-black #1A1614 @ 18% (offset shadow), on paper-warm #FAF8F3 bg.
  *
  * Mirrors the <Wordmark> glyph so favicon ↔ in-app brand mark stay coherent.
@@ -38,7 +38,7 @@ export default function Icon() {
               opacity: 0.18,
             }}
           />
-          {/* Primary rect (柿色) */}
+          {/* Primary rect (persimmon) */}
           <div
             style={{
               position: 'absolute',

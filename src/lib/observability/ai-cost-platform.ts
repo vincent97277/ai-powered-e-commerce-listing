@@ -45,7 +45,7 @@ export type AnomalyFlag = {
   isAnomaly: boolean;
   todayCents: number;
   prev7dAvgCents: number;
-  /** Chinese description, UI consumes directly (e.g. '今日 > 2× 過去 7 天平均') */
+  /** Chinese description, UI consumes directly (e.g. "today > 2x past 7-day average") */
   reason?: string;
 };
 

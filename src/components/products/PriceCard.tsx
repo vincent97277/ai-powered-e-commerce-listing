@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Card } from '@/components/ui/card';
 import { TrendingUp, ShieldCheck, AlertTriangle, HandHeart } from 'lucide-react';
 
-// Whimsy: 4 段 confidence + 不同呼吸節奏 (在 globals.css whimsy-conf-* 定義)
+// Whimsy: 4 confidence tiers + different breathing rhythms (defined in globals.css whimsy-conf-*)
 const TOKEN_INPUT = 1100;
 const TOKEN_OUTPUT = 600;
 const COST_USD = (TOKEN_INPUT * 2.5 + TOKEN_OUTPUT * 10) / 1_000_000;
@@ -14,7 +14,7 @@ export function PriceCard({ min, max, confidence }: { min: number; max: number; 
   const mid = Math.round((min + max) / 2);
   const [showTokens, setShowTokens] = useState(false);
 
-  // Confidence: 4 級 (含 emoji + 呼吸節奏)
+  // Confidence: 4 tiers (with emoji + breathing rhythm)
   const tier =
     confidence >= 0.85 ? 'high' :
     confidence >= 0.6  ? 'mid'  :
@@ -56,7 +56,7 @@ export function PriceCard({ min, max, confidence }: { min: number; max: number; 
         boxShadow: 'var(--elev-1)',
       }}
     >
-      {/* 角落裝飾 */}
+      {/* Corner decoration */}
       <span
         aria-hidden
         className="pointer-events-none absolute -right-12 -top-12 h-32 w-32 opacity-20"
@@ -70,7 +70,7 @@ export function PriceCard({ min, max, confidence }: { min: number; max: number; 
         <h2 className="t-caption" style={{ color: 'var(--brand-primary)' }}>
           建議定價
         </h2>
-        {/* Confidence badge — 顏色分級 + 呼吸節奏 + hover token 彩蛋 B */}
+        {/* Confidence badge — color tiers + breathing rhythm + hover token easter egg B */}
         <div
           className="relative cursor-help select-none"
           onMouseEnter={() => setShowTokens(true)}
@@ -116,7 +116,7 @@ export function PriceCard({ min, max, confidence }: { min: number; max: number; 
         </div>
       </div>
 
-      {/* 主要價格區 — tabular-nums */}
+      {/* Main price area — tabular-nums */}
       <div className="relative space-y-1">
         <p
           className="t-tabular leading-none"

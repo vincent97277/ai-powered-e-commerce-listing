@@ -1,20 +1,21 @@
 /**
  * /merchant/logout — POST handler (V2 task 104, 105 finalized)
  *
- * 為什麼是 route 不是 server action: 從 layout header 的 logout button 用 <form> POST
- * 直接觸發, 不需要 client-side hydration 也能 work. 純 server-rendered, no JS required.
+ * Why a route and not a server action: triggered directly by the layout header's logout button
+ * via <form> POST — works without client-side hydration. Pure server-rendered, no JS required.
  *
- * 行為:
- *   1. 讀 merchant-session cookie → verify HMAC → revoke DB row (revoked_at = now())
+ * Behavior:
+ *   1. read merchant-session cookie → verify HMAC → revoke DB row (revoked_at = now())
  *   2. clear merchant-session cookie
  *   3. 303 → /merchant/login
  *
- * Idempotent: 沒 cookie / 簽章爛掉 / DB row 已 revoke → 仍然清 cookie + redirect, 不報錯.
+ * Idempotent: no cookie / bad signature / DB row already revoked → still clears cookie + redirects, no error.
  *
- * 安全: revoke 必須 hit DB — 純清 cookie 不夠. 若 attacker 在另一台裝置撈到 cookie value,
- *      revoke 會把 DB row 標 revoked_at, validateMerchantSession 立刻擋下.
+ * Security: revoke must hit the DB — clearing the cookie alone isn't enough. If an attacker grabs
+ *           the cookie value on another device, revoke marks the DB row revoked_at and
+ *           validateMerchantSession blocks immediately.
  *
- * V2 task 105: 不再清 demo-merchant-id 過渡 cookie (login 也不再 set 它).
+ * V2 task 105: no longer clears the demo-merchant-id transitional cookie (login no longer sets it).
  */
 import { NextResponse, type NextRequest } from 'next/server';
 import {
@@ -28,14 +29,14 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   const cookieValue = req.cookies.get(MERCHANT_SESSION_COOKIE)?.value;
 
-  // 簽章合法 → 撈 sessionId → revoke DB row. 簽章爛掉就直接跳 (clear cookie 即可).
+  // Valid signature → extract sessionId → revoke DB row. If signature is bad, just skip (clearing the cookie is enough).
   if (cookieValue) {
     const sessionId = verifyCookieSignature(cookieValue);
     if (sessionId) {
       try {
         await revokeMerchantSession(sessionId);
       } catch (err) {
-        // revoke 寫不進去也不能擋掉登出流程 (e.g. DB hiccup); log + 繼續 clear cookie.
+        // A failed revoke write must not block the logout flow (e.g. DB hiccup); log + continue clearing the cookie.
         console.error('[merchant/logout] revoke failed', err);
       }
     }
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
   return res;
 }
 
-// GET → method-not-allowed (logout 必須 POST 防 CSRF / prefetch-as-logout)
+// GET → method-not-allowed (logout must be POST to prevent CSRF / prefetch-as-logout)
 export async function GET() {
   return new NextResponse('Method Not Allowed', { status: 405, headers: { Allow: 'POST' } });
 }

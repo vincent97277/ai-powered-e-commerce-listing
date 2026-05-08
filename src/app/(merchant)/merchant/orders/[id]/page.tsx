@@ -1,10 +1,10 @@
 /**
- * 商家訂單 detail page (V1 #54)
- * - 顧客資訊 (email/name/phone/address)
- * - 訂單明細 (items + 單價 + 數量)
- * - 內部備註欄
+ * Merchant order detail page (V1 #54)
+ * - Customer info (email/name/phone/address)
+ * - Order line items (items + unit price + quantity)
+ * - Internal note field
  * - status badge + status flip panel (#55 client component)
- * - audit timeline 底部
+ * - audit timeline at the bottom
  * - PrintableInvoice (#57)
  */
 import Link from 'next/link';
@@ -37,7 +37,7 @@ export default async function MerchantOrderDetailPage({
   const { id } = await params;
   const merchant = await resolveMerchantFromCookie();
 
-  // 一個 withTenantTx 取所有資料
+  // Single withTenantTx fetches everything
   const data = await withTenantTx(merchant.tenantId, async (tx) => {
     const [order] = await tx
       .select()

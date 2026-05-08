@@ -1,12 +1,12 @@
 /**
- * MerchantCard — 平台首頁 marketplace 店鋪卡 (V1 #58)
- * Linear-tone: dense, sharp, 邊框細, emoji + 名 + brand voice 一行 + 商品數 + GMV
+ * MerchantCard — platform homepage marketplace storefront card (V1 #58)
+ * Linear-tone: dense, sharp, thin border, emoji + name + brand voice in one line + product count + GMV
  *
  * V1.9 T2:
  *   - H: 4px brand-color stripe at top (uses m.themeVars['--brand-primary'],
  *        falls back to --platform-accent so 5 fallback rows still feel branded)
  *   - Hover: shadow-md + -translate-y-0.5 (lift)
- *   - 「— 尚未設定品牌語氣 —」 not italic (CJK italic looks broken)
+ *   - "brand voice not yet set" placeholder not italic (CJK italic looks broken)
  *   - GMV row: bigger weight + var(--brand-text) instead of zinc-700
  *   - Emoji 3xl, slug pill smaller mono caption
  */

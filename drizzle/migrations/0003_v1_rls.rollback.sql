@@ -1,8 +1,8 @@
 -- ============================================================
 -- Rollback for 0003_v1_rls.sql
--- 順序: drop policies → revoke grants
--- 注: 因 0002 rollback 會 DROP TABLE, policies 會 cascade 自動 drop
--- 此 file 只在「不 drop tables 但要 reset RLS」場景用
+-- Order: drop policies, then revoke grants
+-- Note: 0002 rollback DROPs the tables, which cascades policy drops.
+-- This file is only used in the "do not drop tables but reset RLS" scenario.
 -- ============================================================
 
 DROP POLICY IF EXISTS "tenant_isolation" ON "import_sessions";

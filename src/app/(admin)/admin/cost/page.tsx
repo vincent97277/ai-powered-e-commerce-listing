@@ -1,16 +1,17 @@
 /**
- * /admin/cost — 平台 AI cost dashboard (V1.6 Track A9)
+ * /admin/cost — platform AI cost dashboard (V1.6 Track A9)
  *
- * 三段式 layout:
- *   1. Anomaly chip (頂部)        — 今日全平台 NT$X, 異常時 amber/red
- *   2. 14-day bar chart (中段)     — CSS-only, 每根 = 一天
- *   3. Top-10 tenant table (底部)  — 今日用量排行
+ * Three-section layout:
+ *   1. Anomaly chip (top)         — today's platform-wide NT$X, amber/red on anomaly
+ *   2. 14-day bar chart (middle)  — CSS-only, one bar per day
+ *   3. Top-10 tenant table (bottom) — today's usage ranking
  *
- * 不放 per-merchant drill (使用者點 slug 直接到 /admin/merchants/[id])
- * 不放 CSV 匯出 / forecasting / date picker — V2 工作
+ * No per-merchant drill (clicking a slug jumps to /admin/merchants/[id])
+ * No CSV export / forecasting / date picker — V2 work
  *
- * 三個 query 各自 try/catch — 任一段失敗只顯示該段 ErrorState, 其他段仍可看.
- * 為什麼 import 三個 query 而不是一個 bundle: section-level error boundary 比較乾淨.
+ * Each query is independently try/catch — a single failure only renders that section's ErrorState;
+ * other sections remain visible.
+ * Why three query imports instead of one bundle: section-level error boundary is cleaner.
  */
 import Link from 'next/link';
 import { ArrowUpRight, AlertTriangle, AlertCircle, CheckCircle2, Activity } from 'lucide-react';
@@ -28,7 +29,7 @@ import { ErrorState } from '@/components/feedback/ErrorState';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminCostPage() {
-  // 三個 query 平行 — 任一拋錯只 degrade 該段
+  // Three queries in parallel — any throw only degrades that one section
   const [todayRes, seriesRes, anomalyRes] = await Promise.allSettled([
     getPlatformCostToday(10),
     getCostTimeseries14d(),
@@ -45,7 +46,7 @@ export default async function AdminCostPage() {
   return (
     <main className="px-4 py-10 sm:px-8 lg:px-12">
       <div className="mx-auto max-w-6xl space-y-8">
-        {/* Header — sibling nav 跟 /admin overview 對齊 */}
+        {/* Header — sibling nav aligned with /admin overview */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div className="space-y-2">
             <p className="font-mono text-xs uppercase tracking-wider text-ink-muted">
@@ -216,19 +217,19 @@ export default async function AdminCostPage() {
 /* ─────────────────────────── PlatformCostChip ─────────────────────────── */
 
 /**
- * 平台版的 DailyCostChip — 跟 merchant settings DailyCostChip 同視覺語彙,
- * 但顏色判定邏輯不同:
- *   - 沒異常: 綠 (success), 顯示「今日全平台 AI 用量: NT$X」
- *   - >2× avg (mild): 黃 (warning), 顯示倍率
- *   - >5× avg (severe): 紅 (error), 顯示倍率
+ * Platform-level DailyCostChip — same visual vocabulary as merchant settings DailyCostChip,
+ * but with different color logic:
+ *   - no anomaly: green (success), shows "Today's platform AI usage: NT$X"
+ *   - >2× avg (mild): yellow (warning), shows the ratio
+ *   - >5× avg (severe): red (error), shows the ratio
  *
- * 「平均不足」(prev7dAvgCents=0): 中性灰, 不警示
+ * "Insufficient baseline" (prev7dAvgCents=0): neutral gray, no warning
  */
 function PlatformCostChip({ anomaly }: { anomaly: AnomalyFlag }) {
   const todayTwd = Math.round(anomaly.todayCents / 100);
   const avgTwd = Math.round(anomaly.prev7dAvgCents / 100);
 
-  // 嚴重程度判定 (independent of isAnomaly flag — UI 層判 5× severe)
+  // Severity determination (independent of the isAnomaly flag — UI layer decides 5× severe)
   const ratio = anomaly.prev7dAvgCents > 0 ? anomaly.todayCents / anomaly.prev7dAvgCents : 0;
   const severe = anomaly.isAnomaly && ratio >= 5;
   const mild = anomaly.isAnomaly && !severe;
@@ -249,9 +250,9 @@ function PlatformCostChip({ anomaly }: { anomaly: AnomalyFlag }) {
     tone === 'error' ? AlertCircle : tone === 'warning' ? AlertTriangle : tone === 'success' ? CheckCircle2 : Activity;
 
   // Label:
-  //   - 異常: 「異常: NT$X 為平均 NT$Y 的 3.2 倍」
-  //   - 正常: 「今日全平台 AI 用量: NT$X (基準 NT$Y/天)」
-  //   - 基準不足: 「今日全平台 AI 用量: NT$X (基準資料不足)」
+  //   - anomaly: "Anomaly: NT$X is 3.2× the average NT$Y"
+  //   - normal: "Today's platform AI usage: NT$X (baseline NT$Y/day)"
+  //   - insufficient baseline: "Today's platform AI usage: NT$X (baseline data insufficient)"
   let label: string;
   if (anomaly.isAnomaly) {
     label = `異常: NT$${todayTwd.toLocaleString()} 為平均 NT$${avgTwd.toLocaleString()} 的 ${ratio.toFixed(1)} 倍`;
@@ -282,12 +283,12 @@ function PlatformCostChip({ anomaly }: { anomaly: AnomalyFlag }) {
 /* ─────────────────────────── CostBarChart14d ─────────────────────────── */
 
 /**
- * 14 日 CSS bar chart — copy /merchant/page.tsx:276-297 pattern, 拉到 14 天.
+ * 14-day CSS bar chart — copies /merchant/page.tsx:276-297 pattern, extended to 14 days.
  *
- * 為什麼不上 Recharts/D3:
- *   - 1 個 bar chart 不值得 50KB JS bundle
- *   - server component 100% SSR friendly
- *   - 視覺一致跟 merchant 端 7-day chart 對齊
+ * Why not Recharts/D3:
+ *   - one bar chart isn't worth a 50KB JS bundle
+ *   - server component, 100% SSR friendly
+ *   - visually consistent with the merchant-side 7-day chart
  */
 function CostBarChart14d({ series }: { series: CostTimeseriesPoint[] }) {
   const maxCents = Math.max(...series.map((p) => p.cents), 1);

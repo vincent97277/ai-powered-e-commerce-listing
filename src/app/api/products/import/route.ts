@@ -1,17 +1,17 @@
 /**
- * POST /api/products/import — IG/蝦皮 一鍵 import (V1 #65, RA14)
+ * POST /api/products/import — IG / Shopee one-click import (V1 #65, RA14)
  *
  * Body: { url: string, type: 'ig' | 'shopee' }
- * 流程:
+ * Flow:
  *   1. resolve cookie → tenantId
- *   2. assertNotSuspended (停權商家擋)
- *   3. url-guard.assertSafeUrl (hostname allowlist, 擋 SSRF)
- *   4. idempotency dedup: 同 (tenantId, sourceUrl) 5 分鐘內 status='pending' 已存在 → 回該 session
+ *   2. assertNotSuspended (block suspended merchants)
+ *   3. url-guard.assertSafeUrl (hostname allowlist, blocks SSRF)
+ *   4. Idempotency dedup: if a (tenantId, sourceUrl) pending session from the last 5 min exists → return it
  *   5. INSERT import_sessions row (status='pending')
  *   6. inngest.send('product.import.batch', { sessionId, tenantId, ... })
  *   7. return 202 { sessionId, redirectTo: `/merchant/products/import/{sessionId}` }
  *
- * 立刻回應 (< 1 秒), 真正的 fetch + parse + dispatch 在 inngest worker 做 (#66)
+ * Returns immediately (< 1s); the actual fetch + parse + dispatch happens in the inngest worker (#66)
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   try {
     const merchant = await resolveMerchantFromCookie();
 
-    // 停權商家擋
+    // Block suspended merchants
     try {
       await assertNotSuspended(merchant.tenantId);
     } catch (err) {
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     }
     const sourceUrl = safeUrl.toString();
 
-    // type 跟 hostname 對齊 (避免商家貼 IG URL 但選 type=蝦皮)
+    // type must match hostname (prevent merchant pasting an IG URL while picking type=Shopee)
     if (body.type === 'ig' && !safeUrl.hostname.includes('instagram.com')) {
       return NextResponse.json({ success: false, error: 'URL 不是 IG' }, { status: 400 });
     }
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'URL 不是 蝦皮' }, { status: 400 });
     }
 
-    // Idempotency dedup: 5 分鐘內同 (tenant, sourceUrl) 未完成的 session 回它
+    // Idempotency dedup: within 5 min, return any existing in-flight session for the same (tenant, sourceUrl)
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
     const sessionId = await withTenantTx(merchant.tenantId, async (tx) => {
       const existing = await tx

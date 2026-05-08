@@ -39,7 +39,7 @@ export function normalizeCaption(raw: string | undefined | null): string | undef
 /** Parse NT$ price string → integer NTD (not cents)
  * Priority order:
  *   1. NT$ 1200 / NT$1,200 / $1200 / ¥1200 (currency-tagged)
- *   2. 1200 元 / 1,200 元 (元 suffix)
+ *   2. NTD with "yuan" suffix (1200 + suffix / 1,200 + suffix)
  *   3. Bare digits (risky, easy to misread) → not accepted
  */
 export function parsePrice(raw: string | undefined | null): number | undefined {
@@ -53,7 +53,7 @@ export function parsePrice(raw: string | undefined | null): number | undefined {
     if (Number.isFinite(n) && n > 0 && n <= 1_000_000) return Math.floor(n);
   }
 
-  // 2. suffix: 元
+  // 2. suffix: "yuan" character
   const suffixMatch = text.match(/(\d+)\s*元/);
   if (suffixMatch) {
     const n = Number(suffixMatch[1]);

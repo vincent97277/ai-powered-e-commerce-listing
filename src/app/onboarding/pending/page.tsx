@@ -1,12 +1,14 @@
 /**
- * /onboarding/pending — 商家註冊送出後的等待頁 (V1.7 D1)
+ * /onboarding/pending — waiting page after a merchant submits the signup (V1.7 D1)
  *
- * 為什麼有這頁:
- *   V1.7 D1 把「自助註冊」改成「先送出, 等 admin approve」, 不再立刻 set cookie 進後台.
- *   送出後 server action redirect 到這頁, 顯示「審核中」訊息.
- *   也是 honeypot fake-success 的 fallback message page (見 onboarding form 的 pendingFake).
+ * Why this page exists:
+ *   V1.7 D1 changed "self-signup" to "submit first, wait for admin approval"; it no longer sets a
+ *   cookie and lands the user in the backend immediately. After submit, the server action redirects
+ *   here and shows the "under review" message.
+ *   Also serves as the fallback message page for the honeypot fake-success path (see pendingFake in
+ *   the onboarding form).
  *
- * 純 server component, 沒任何 cookie / DB query — 只是個靜態說明頁.
+ * Pure server component, no cookie / DB query — just a static info page.
  */
 import Link from 'next/link';
 import { Clock } from 'lucide-react';

@@ -1,15 +1,15 @@
 /**
- * /admin — 平台 admin overview (V1 #49, RA5 / V1.6 A1)
- * - 4 平台 KPI: 商家總數 / 平台 GMV / 7 天新進駐 / 需關注
- * - 商家排行 (URL-synced search + filter + pagination + sort, 全在 AdminToolbar)
- * - 全用 dbAdmin (跨商家視角)
+ * /admin — platform admin overview (V1 #49, RA5 / V1.6 A1)
+ * - 4 platform KPIs: total merchants / platform GMV / new joins in 7 days / needs attention
+ * - Merchant ranking (URL-synced search + filter + pagination + sort, all in AdminToolbar)
+ * - Uses dbAdmin everywhere (cross-merchant view)
  *
- * V1.6 A1 變更:
- *   - SortDropdown 砍掉, 改用 AdminToolbar (search + status + attn + sort)
- *   - WHERE clause 動態 (q ILIKE / status / attn EXISTS)
+ * V1.6 A1 changes:
+ *   - SortDropdown removed, replaced by AdminToolbar (search + status + attn + sort)
+ *   - Dynamic WHERE clause (q ILIKE / status / attn EXISTS)
  *   - LIMIT/OFFSET pagination (20 per page)
- *   - 過濾後 0 筆 → EmptyState; query throw → ErrorState
- *   - page 越界 → redirect 回 last page (或 /admin if total=0)
+ *   - Zero rows after filter → EmptyState; query throw → ErrorState
+ *   - Out-of-bounds page → redirect to last page (or /admin if total=0)
  */
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -78,7 +78,7 @@ export default async function AdminOverviewPage({
     : 'gmv';
   const requestedPage = Math.max(1, Number.parseInt(params.page ?? '1', 10) || 1);
 
-  // ─── 平台 KPI (4 numbers) — KPI 不受 filter 影響, 永遠看全平台 ───
+  // ─── Platform KPI (4 numbers) — KPIs are not affected by filters, always show platform-wide ───
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   const [merchantStats] = await dbAdmin
@@ -111,12 +111,12 @@ export default async function AdminOverviewPage({
   const needsAttentionCount =
     Number((needsAttention.rows[0] as { n: number } | undefined)?.n ?? 0);
 
-  // ─── 商家排行 — 動態 WHERE ───
-  // 用 sql`` template 安全注入 (drizzle escape)
+  // ─── Merchant ranking — dynamic WHERE ───
+  // Use sql`` template for safe injection (drizzle escape)
   const whereClauses = [sql`1=1`];
 
   if (q.length > 0) {
-    // 安全: drizzle sql`` 會把 ${q} 當 parameter 綁, ILIKE pattern 用 || concat
+    // Safe: drizzle sql`` binds ${q} as a parameter; ILIKE pattern uses || concat
     whereClauses.push(sql`(m.name ILIKE ${'%' + q + '%'} OR m.slug ILIKE ${'%' + q + '%'})`);
   }
   if (statusKey === 'active') {
@@ -125,8 +125,8 @@ export default async function AdminOverviewPage({
     whereClauses.push(sql`m.suspended_at IS NOT NULL`);
   }
   if (attn) {
-    // needs-attention = 該商家有任何 health issue (no_photo / short_title / zero_stock / zero_price)
-    // 跟 health-checks.ts 對齊 (V1.5 B1)
+    // needs-attention = the merchant has any health issue (no_photo / short_title / zero_stock / zero_price)
+    // Aligned with health-checks.ts (V1.5 B1)
     whereClauses.push(sql`EXISTS (
       SELECT 1 FROM ${products} p
       WHERE p.tenant_id = m.id
@@ -144,7 +144,7 @@ export default async function AdminOverviewPage({
   // Combine WHERE clauses
   const whereSql = sql.join(whereClauses, sql` AND `);
 
-  // Filtered count first — 拿來決定 totalPages
+  // Filtered count first — used to compute totalPages
   let filteredTotal = 0;
   let queryError: Error | null = null;
   let rankings: Array<RankingRow & { gmvCents: number }> = [];
@@ -158,7 +158,7 @@ export default async function AdminOverviewPage({
 
     const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
 
-    // 越界 redirect (server-side, 用 last page)
+    // Out-of-bounds redirect (server-side, to last page)
     if (filteredTotal > 0 && requestedPage > totalPages) {
       const sp = new URLSearchParams();
       if (q) sp.set('q', q);
@@ -171,7 +171,7 @@ export default async function AdminOverviewPage({
 
     const offset = (requestedPage - 1) * PAGE_SIZE;
 
-    // ORDER BY by sortKey — sql.raw 不能用 (注入), 用 if/else 切 SQL fragment
+    // ORDER BY by sortKey — sql.raw isn't safe (injection); switch SQL fragment via if/else
     const orderBySql =
       sortKey === 'orders'
         ? sql`order_count DESC NULLS LAST, m.created_at DESC`
@@ -205,7 +205,7 @@ export default async function AdminOverviewPage({
       gmvCents: Number(r.gmv_cents),
     }));
   } catch (err) {
-    // redirect() throws an internal Next.js NEXT_REDIRECT error — 不能當真 error
+    // redirect() throws an internal Next.js NEXT_REDIRECT error — must not be treated as a real error
     if (
       err instanceof Error &&
       'digest' in err &&

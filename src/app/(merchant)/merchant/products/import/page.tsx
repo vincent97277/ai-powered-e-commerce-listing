@@ -1,6 +1,6 @@
 /**
- * /merchant/products/import — IG/蝦皮 一鍵 import 入口 (V1 #68)
- * 商家貼連結 + 選類型 → POST /api/products/import → redirect 到 progress 頁
+ * /merchant/products/import — IG/Shopee one-click import entry (V1 #68)
+ * Merchant pastes link + selects kind → POST /api/products/import → redirect to progress page
  */
 import { ImportForm } from './ImportForm';
 

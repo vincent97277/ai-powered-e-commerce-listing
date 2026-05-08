@@ -1,12 +1,12 @@
 /**
- * RLS e2e test — 驗證 multi-tenant 隔離真的 work
- * 對應 engineering-handoff-specs §1.2 + Task #B6
+ * RLS e2e test — verify multi-tenant isolation actually works
+ * Maps to engineering-handoff-specs §1.2 + Task #B6
  *
- * 跑法: pnpm vitest run tests/rls.e2e.test.ts
+ * Run: pnpm vitest run tests/rls.e2e.test.ts
  *
- * 前置條件:
- * - Neon DB 已建好兩條 connection (DATABASE_URL_USER + DATABASE_URL_ADMIN)
- * - Migration 0000 + 0001 都已跑
+ * Preconditions:
+ * - Neon DB has both connections set up (DATABASE_URL_USER + DATABASE_URL_ADMIN)
+ * - Migrations 0000 + 0001 have been run
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { dbAdmin, dbUser } from '@/db';
@@ -21,12 +21,12 @@ import {
 import { sql, eq } from 'drizzle-orm';
 import { expectRejectsMatching } from './_helpers/db-error';
 
-// 用 99..., aa... 避免跟 demo merchant (11..., 22...) 撞
+// Use 99..., aa... to avoid colliding with demo merchant (11..., 22...)
 const TENANT_A = '99999999-9999-9999-9999-999999999999';
 const TENANT_B = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
 beforeAll(async () => {
-  // 用 dbAdmin (BYPASSRLS) seed 兩個 tenant + 一筆 product 各自
+  // Use dbAdmin (BYPASSRLS) to seed two tenants + one product each
   await dbAdmin
     .insert(merchants)
     .values([
@@ -73,7 +73,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Cleanup (cascade 帶走 orders / order_status_history / import_sessions)
+  // Cleanup (cascade takes orders / order_status_history / import_sessions)
   await dbAdmin.delete(products).where(eq(products.tenantId, TENANT_A));
   await dbAdmin.delete(products).where(eq(products.tenantId, TENANT_B));
   await dbAdmin.delete(orders).where(eq(orders.tenantId, TENANT_A));
@@ -88,8 +88,8 @@ afterAll(async () => {
 
 describe('RLS multi-tenant isolation', () => {
   /**
-   * T1: 沒設 tenant context (web_anon role) → 業務表回 0 rows
-   * 這是 fail-closed 驗證 — RLS policy 比對 NULL → 條件 false → 沒結果
+   * T1: no tenant context set (web_anon role) → business tables return 0 rows
+   * Fail-closed verification — RLS policy compares NULL → condition false → no results
    */
   it('T1: missing tenant context returns zero rows', async () => {
     const rows = await dbUser.execute(sql`SELECT * FROM products`);
@@ -97,8 +97,8 @@ describe('RLS multi-tenant isolation', () => {
   });
 
   /**
-   * T2: 設 tenant A 的 id → 看得到 A 的，看不到 B 的
-   * 同時驗證 INSERT 別人 tenant_id 會被 WITH CHECK 擋下
+   * T2: set tenant A's id → can read A's rows, not B's
+   * Also verifies INSERT with another tenant_id is blocked by WITH CHECK
    */
   it('T2: tenant A cannot read tenant B rows + WITH CHECK blocks cross-tenant insert', async () => {
     const result = await dbUser.transaction(async (tx) => {
@@ -109,7 +109,7 @@ describe('RLS multi-tenant isolation', () => {
     expect(titles).toContain('A-item');
     expect(titles).not.toContain('B-item');
 
-    // WITH CHECK：嘗試插 tenant B 的資料但 context 是 A → 應該被拒
+    // WITH CHECK: try to insert tenant B's data while context is A → should be rejected
     await expectRejectsMatching(
       dbUser.transaction(async (tx) => {
         await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
@@ -129,13 +129,13 @@ describe('RLS multi-tenant isolation', () => {
   });
 
   /**
-   * T3: web_anon 無法升權繞過 RLS
-   * - SET ROLE platform_admin 應失敗 (沒被 GRANT)
-   * - SET SESSION AUTHORIZATION postgres 應失敗 (非 superuser)
-   * - 確認當前 connection 沒掛 BYPASSRLS attribute
+   * T3: web_anon cannot escalate to bypass RLS
+   * - SET ROLE platform_admin should fail (not GRANTed)
+   * - SET SESSION AUTHORIZATION postgres should fail (not superuser)
+   * - confirm current connection has no BYPASSRLS attribute
    */
   it('T3: web_anon cannot escalate to bypass RLS', async () => {
-    // 嘗試切到 BYPASSRLS role 應失敗 (web_anon 沒被 GRANT 到 web_admin)
+    // Switching to BYPASSRLS role should fail (web_anon not GRANTed into web_admin)
     await expectRejectsMatching(
       dbUser.execute(sql`SET ROLE web_admin`),
       /permission denied|must be member|does not exist|不存在/i,
@@ -160,10 +160,10 @@ describe('RLS multi-tenant isolation', () => {
 
   /**
    * V1 #73 / RA7: order_status_history RLS via JOIN
-   * 商家 A 寫一筆 history → 商家 B 看不到
+   * Merchant A writes a history row → merchant B cannot see it
    */
   it('T4: order_status_history isolation via JOIN orders', async () => {
-    // 用 dbAdmin seed 一個 A 的 order + history row
+    // Use dbAdmin to seed an order + history row for A
     const orderA = '11111111-2222-3333-4444-555555555555';
     await dbAdmin.delete(orders).where(eq(orders.id, orderA));
     await dbAdmin.insert(orders).values({
@@ -180,14 +180,14 @@ describe('RLS multi-tenant isolation', () => {
       changedBy: 'merchant',
     });
 
-    // 商家 A 看得到
+    // Merchant A can see it
     const seenByA = await dbUser.transaction(async (tx) => {
       await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
       return await tx.execute(sql`SELECT count(*)::int AS n FROM order_status_history`);
     });
     expect(Number((seenByA.rows[0] as { n: number }).n)).toBeGreaterThanOrEqual(1);
 
-    // 商家 B 看不到
+    // Merchant B cannot see it
     const seenByB = await dbUser.transaction(async (tx) => {
       await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_B}, true)`);
       return await tx.execute(sql`SELECT count(*)::int AS n FROM order_status_history`);
@@ -196,11 +196,11 @@ describe('RLS multi-tenant isolation', () => {
   });
 
   /**
-   * V1 #73 / RA7: order_status_history WITH CHECK 拒跨 tenant insert
-   * 商家 A 試 insert history 指向 B 的 order → 拒
+   * V1 #73 / RA7: order_status_history WITH CHECK rejects cross-tenant insert
+   * Merchant A tries to insert history pointing at B's order → rejected
    */
   it('T5: order_status_history WITH CHECK blocks cross-tenant insert', async () => {
-    // 先建一個 B 的 order
+    // First create an order for B
     const orderB = 'bbbbbbbb-1111-2222-3333-444444444444';
     await dbAdmin.delete(orders).where(eq(orders.id, orderB));
     await dbAdmin.insert(orders).values({
@@ -214,7 +214,7 @@ describe('RLS multi-tenant isolation', () => {
     await expectRejectsMatching(
       dbUser.transaction(async (tx) => {
         await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
-        // 商家 A 試圖寫一筆 history 指向 B 的 order
+        // Merchant A tries to write a history row pointing at B's order
         await tx.execute(sql`
           INSERT INTO order_status_history (order_id, from_status, to_status, changed_by)
           VALUES (${orderB}::uuid, 'pending', 'paid', 'merchant')
@@ -225,10 +225,10 @@ describe('RLS multi-tenant isolation', () => {
   });
 
   /**
-   * V1 #73 / RA18: import_sessions isolation (RLS via merchant_id 直接比對)
+   * V1 #73 / RA18: import_sessions isolation (RLS via direct merchant_id comparison)
    */
   it('T6: import_sessions isolation', async () => {
-    // 商家 A 建 session
+    // Merchant A creates a session
     await dbAdmin
       .insert(importSessions)
       .values({
@@ -251,7 +251,7 @@ describe('RLS multi-tenant isolation', () => {
   });
 
   /**
-   * V1 #73: import_sessions WITH CHECK 拒商家 A 寫 B 的 session
+   * V1 #73: import_sessions WITH CHECK rejects merchant A writing B's session
    */
   it('T7: import_sessions WITH CHECK blocks cross-tenant insert', async () => {
     await expectRejectsMatching(
@@ -267,8 +267,8 @@ describe('RLS multi-tenant isolation', () => {
   });
 
   /**
-   * V1 #73: admin_action_history 對 web_anon 全 deny (defense-in-depth)
-   * 即使 set tenant context 也讀不到 (RA2 enforcement)
+   * V1 #73: admin_action_history fully denied to web_anon (defense-in-depth)
+   * Even with tenant context set, cannot read (RA2 enforcement)
    */
   it('T8: admin_action_history deny-all to web_anon', async () => {
     await expectRejectsMatching(

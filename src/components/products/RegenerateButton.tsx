@@ -26,7 +26,7 @@ export function RegenerateButton({ productId }: { productId: string }) {
     });
   };
 
-  // hover slow spin / click fast spin / pressed: 凹陷 1px (translateY)
+  // hover slow spin / click fast spin / pressed: 1px sink (translateY)
   const iconAnimate = pending || spin
     ? { rotate: 360 }
     : hover

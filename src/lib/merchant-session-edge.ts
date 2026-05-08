@@ -1,16 +1,17 @@
 /**
- * V2 merchant-session 純 crypto helpers (Edge-runtime safe, 不 import drizzle/pg).
+ * V2 merchant-session pure crypto helpers (Edge-runtime safe, no drizzle/pg imports).
  *
- * middleware.ts 只能跑 Edge runtime → 不能 import dbAdmin → 只做 HMAC 簽章 check.
- * 真正的 row liveness (DB exists + not expired + not revoked) 在 server component
- * (e.g. `(merchant)/layout.tsx` task 105) 用 validateMerchantSession 做.
+ * middleware.ts only runs in Edge runtime → can't import dbAdmin → HMAC signature check only.
+ * Actual row liveness (DB exists + not expired + not revoked) is enforced in server components
+ * (e.g. `(merchant)/layout.tsx` task 105) via validateMerchantSession.
  *
- * 跟 admin-session-edge 同 shape: secret 是參數 (middleware 已從 process.env 撈過再 pass 進來).
+ * Same shape as admin-session-edge: secret is a parameter (middleware reads it from
+ * process.env and passes it in).
  */
 
 export const MERCHANT_SESSION_COOKIE = 'merchant-session';
 
-/** 用 Web Crypto API (Edge-compat) 算 HMAC-SHA256, 回 hex string */
+/** Compute HMAC-SHA256 via Web Crypto API (Edge-compat); returns a hex string. */
 async function hmacSha256(secret: string, data: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -26,7 +27,7 @@ async function hmacSha256(secret: string, data: string): Promise<string> {
     .join('');
 }
 
-/** Constant-time hex string compare (Edge-compat 自己 loop, timingSafeEqual 在 Edge 沒) */
+/** Constant-time hex string compare (Edge-compat hand-rolled loop; timingSafeEqual unavailable in Edge). */
 function timingSafeHexEq(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -37,9 +38,10 @@ function timingSafeHexEq(a: string, b: string): boolean {
 }
 
 /**
- * 驗 cookie value 簽章 (HMAC). 不查 DB.
- * 回 sessionId 或 null. 使用者已 revoked / DB row 過期等情境會在後續 layout-level
- * `validateMerchantSession()` 擋下 — middleware 只擋掉「沒 cookie / 簽章爛掉」.
+ * Verify cookie value signature (HMAC). No DB lookup.
+ * Returns sessionId or null. Cases like user revoked / DB row expired are caught later
+ * by layout-level `validateMerchantSession()` — middleware only blocks "missing cookie /
+ * busted signature".
  */
 export async function verifyCookieSignatureEdge(
   cookieValue: string | undefined,

@@ -1,19 +1,19 @@
 /**
- * withTenantTx — 整合 §1.1 spec 的 RLS tenant context helper
- * 1. 用 transaction 包住，確保 set_config 只影響當前連線
- * 2. UUID format guard 防止 SQL injection (tenant_id 來自 cookie)
- * 3. is_local=true → set_config 在 transaction 結束時自動 reset
+ * withTenantTx — RLS tenant context helper, implements the §1.1 spec.
+ * 1. Wraps in a transaction so set_config only affects the current connection.
+ * 2. UUID format guard against SQL injection (tenant_id originates from cookie).
+ * 3. is_local=true → set_config auto-resets at transaction end.
  */
 import { sql } from 'drizzle-orm';
 import { dbUser } from '@/db';
 
-/** UUID v4 格式檢查 — 任何非 UUID 字串直接拒絕 */
+/** UUID v4 format check — any non-UUID string is rejected outright. */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * 在 RLS context 下執行 transaction
- * @param tenantId - 從 cookie 解析出的 merchant.id (UUID)
- * @param fn       - transaction callback，收到 tx 物件
+ * Run a transaction inside RLS context.
+ * @param tenantId - merchant.id (UUID) resolved from cookie
+ * @param fn       - transaction callback receiving the tx object
  */
 export async function withTenantTx<T>(
   tenantId: string,
@@ -24,7 +24,7 @@ export async function withTenantTx<T>(
   }
 
   return dbUser.transaction(async (tx) => {
-    // is_local=true → 僅當前 transaction 生效，COMMIT/ROLLBACK 後自動清除
+    // is_local=true → only effective within current transaction; auto-cleared on COMMIT/ROLLBACK
     await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
     return fn(tx);
   });

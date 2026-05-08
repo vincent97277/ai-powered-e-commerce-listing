@@ -1,20 +1,21 @@
 /**
  * scripts/seed-merchant-auth.ts — V2 per-merchant auth backfill
  *
- * Why: 0008_v2_merchant_auth.sql 只加 schema (email + password_hash columns),
- * 沒在 migration 內 backfill — 不想把 bcrypt cost / hash 格式寫死在 SQL.
- * 真正的 hash 由這支 script 在 application layer 產, 跟 task 103 用同一個 lib.
+ * Why: 0008_v2_merchant_auth.sql only adds schema (email + password_hash columns)
+ * and intentionally does not backfill in the migration — we don't want to hardcode
+ * bcrypt cost / hash format in SQL. The real hash is produced by this script in the
+ * application layer, sharing the same lib as task 103.
  *
  * V2.2.2 hardening:
  *   - --mode flag for dev (single shared password) vs prod (random per-merchant
  *     passwords + suspendedAt set)
- *   - 預設 mode 在 NODE_ENV=production 是 prod-random-suspended; 否則 dev-shared
- *   - prod mode 一律印警告 "demo merchants are SUSPENDED, run admin approval to
- *     activate" — 沒有 admin approve 的話 storefront 看不到, login 也擋掉
- *   - dev mode 跟以前一樣, demo1234 共用密碼方便測試
+ *   - Default mode is prod-random-suspended when NODE_ENV=production; otherwise dev-shared.
+ *   - prod mode always prints a warning: "demo merchants are SUSPENDED, run admin approval to
+ *     activate" — without admin approval, the storefront stays hidden and login is blocked.
+ *   - dev mode unchanged: shared demo1234 password for easy testing.
  *
- * 用法:
- *   # local dev (預設) — demo1234 共用密碼, 不 suspend
+ * Usage:
+ *   # local dev (default) — shared demo1234 password, no suspend
  *   pnpm tsx scripts/seed-merchant-auth.ts
  *
  *   # production — random passwords, all suspended pending admin approval
@@ -24,15 +25,15 @@
  *   # dev mode forced even with NODE_ENV=production (escape hatch)
  *   pnpm tsx scripts/seed-merchant-auth.ts --mode=dev
  *
- * Idempotent: 已經有 email 的 merchant 跳過, 不會覆蓋.
+ * Idempotent: merchants that already have an email are skipped, never overwritten.
  *
- * 安全注意 (從 V2.2.2 review):
- *   - "demo1234" 共用密碼直接 seed 到 prod 是 backdoor (anyone reading docs can
- *     login as any merchant). prod mode 改成 random + suspended.
- *   - prod mode 印出的密碼僅 stdout, 用完即丟 — 建議 redirect 到 sealed file:
+ * Security notes (from V2.2.2 review):
+ *   - Seeding "demo1234" as a shared password into prod is a backdoor (anyone reading docs
+ *     can login as any merchant). prod mode switches to random + suspended.
+ *   - Passwords printed in prod mode are stdout-only, ephemeral — recommend redirecting to a sealed file:
  *       NODE_ENV=production pnpm tsx scripts/seed-merchant-auth.ts > /tmp/creds.txt
  *       chmod 600 /tmp/creds.txt
- *   - 此 script 用 dbAdmin (BYPASSRLS) 直接 UPDATE merchants. Console 跑.
+ *   - This script uses dbAdmin (BYPASSRLS) to UPDATE merchants directly. Run from console.
  */
 
 import { config } from 'dotenv';
@@ -41,7 +42,7 @@ import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { eq, isNull } from 'drizzle-orm';
 
-// 必須在 import @/db 之前 load .env.local — 否則 lazy init 抓不到 DATABASE_URL_*
+// Must load .env.local before importing @/db — otherwise lazy init can't pick up DATABASE_URL_*
 config({ path: resolve(process.cwd(), '.env.local') });
 
 type Mode = 'dev' | 'prod';
@@ -141,7 +142,7 @@ async function main() {
         .set({
           email,
           passwordHash,
-          // Storefront 看不到 + login 擋掉, 直到 admin 在後台手動 approve
+          // Storefront stays hidden + login blocked until an admin manually approves in the dashboard
           suspendedAt: now,
           suspendedReason: SUSPENDED_REASON,
         })

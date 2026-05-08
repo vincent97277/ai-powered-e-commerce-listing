@@ -1,21 +1,21 @@
 'use server';
 
 /**
- * 商家自助註冊 server action — V1.7 D1 hardening
+ * Merchant self-signup server action — V1.7 D1 hardening
  *
- * V1 簡化版 → V1.7 D1 升級:
- *   - 沒 email 驗證 / 沒 captcha / 沒 user account: 仍然不做 (V2)
- *   - 多了:
- *     1. Honeypot 欄位 hp_url — bot 填了 → fake-success (浪費 bot 時間, 不建商家)
- *     2. IP rate limit: 1 success per IP / 24h (DB-backed, onboarding_attempts 表)
- *     3. Reserved slug list: admin/api/store/... 直接拒
- *     4. 不立刻 set cookie / 不直接進後台 — approved_at = NULL → /onboarding/pending
- *     5. 所有分支都 log 一行 onboarding_attempts → admin 看 abuse pattern
+ * V1 simplified → V1.7 D1 upgrade:
+ *   - No email verification / no captcha / no user account: still not doing those (V2)
+ *   - Added:
+ *     1. Honeypot field hp_url — if a bot fills it → fake-success (waste bot's time, no merchant created)
+ *     2. IP rate limit: 1 success per IP / 24h (DB-backed, onboarding_attempts table)
+ *     3. Reserved slug list: admin/api/store/... rejected outright
+ *     4. No immediate cookie set / no direct entry to backend — approved_at = NULL → /onboarding/pending
+ *     5. Every branch logs one onboarding_attempts row → admin can see abuse patterns
  *
  * Security note:
- *   - 即使 bot 觸發 honeypot, server 仍回 'pending' 訊息 (不告訴 bot 被擋)
- *   - rate_limited / reserved_slug / invalid_slug 都用 generic 的友善文案
- *   - 不 leak 出「這個 IP 已經註冊過了」的具體 detail
+ *   - Even when the bot trips the honeypot, server still returns a 'pending' message (don't tell the bot it got blocked)
+ *   - rate_limited / reserved_slug / invalid_slug all use generic friendly copy
+ *   - Do not leak specifics like "this IP has already signed up"
  */
 
 import { redirect } from 'next/navigation';
@@ -40,13 +40,13 @@ const PASSWORD_MAX = 128;
 
 export type CreateMerchantState = {
   error?: string;
-  /** Set when 走 honeypot fake-success path (form 收到後顯示 generic「審核中」訊息但不真的 redirect) */
+  /** Set when going down the honeypot fake-success path (form shows a generic "under review" message but no real redirect) */
   pendingFake?: boolean;
 };
 
-// V2.1 — 主題改由 brand voice keyword 比對決定 (見 src/lib/themes/presets.ts +
-// src/lib/themes/match.ts). 無命中 fallback modern-minimal. 取代了原本 3 個 hardcode +
-// random 的 THEME_PICKS array (V1 onboarding bootstrap 用).
+// V2.1 — theme is now picked by brand voice keyword matching (see src/lib/themes/presets.ts +
+// src/lib/themes/match.ts). On no match, falls back to modern-minimal. Replaced the original
+// 3-hardcoded + random THEME_PICKS array (used by V1 onboarding bootstrap).
 
 export async function createMerchantAction(
   _prev: CreateMerchantState,
@@ -66,9 +66,9 @@ export async function createMerchantAction(
   const ip = extractIp(h);
 
   // ─── 1. Honeypot ───
-  // Bot 填了任何隱藏欄位 → 假裝成功, 不真的建商家.
-  // 不 redirect — 因為 redirect 一旦過去, attacker 就知道 endpoint 是真的能用的.
-  // 回 pendingFake = true, page 會顯示 generic 「審核中」 訊息.
+  // If a bot fills any hidden field → pretend success, do not actually create the merchant.
+  // No redirect — once a redirect happens, an attacker knows the endpoint is real and usable.
+  // Return pendingFake = true; the page shows a generic "under review" message.
   if (honeypot.length > 0) {
     await logAttempt({ ip, slug: slug || '(empty)', result: 'honeypot' });
     return { pendingFake: true };
@@ -98,8 +98,9 @@ export async function createMerchantAction(
   }
 
   // ─── 4b. V2 task 104 — Email + password validation ───
-  // (放 reserved 後, slug 認過才檢查; 失敗都 log 'invalid_slug' 是 schema 限制 — 這個 enum
-  //  V1.7 D1 沒留 'invalid_credentials', 不為了這個 migrate enum, 借用 invalid_slug log.)
+  // (Placed after the reserved check; slug must pass first. All failures log 'invalid_slug' due to
+  //  schema limitation — V1.7 D1 didn't reserve an 'invalid_credentials' enum, and we won't migrate
+  //  the enum just for this; we reuse invalid_slug.)
   if (!EMAIL_REGEX.test(email) || email.length > 254) {
     await logAttempt({ ip, slug, result: 'invalid_slug' });
     return { error: 'Email 格式不正確' };
@@ -114,9 +115,9 @@ export async function createMerchantAction(
   }
 
   // ─── 5. Insert merchant — approved_at = NULL (pending admin) ───
-  // bcrypt cost=10 (mirror loginMerchant 的 fake-hash cost). hash 在 try 外避免 try block 太大.
+  // bcrypt cost=10 (mirror loginMerchant's fake-hash cost). Hash outside the try to keep the try block small.
   const passwordHash = await bcryptHash(password, 10);
-  // V2.1: brand voice → theme keyword match. fallback = modern-minimal (中性, 任何商品都不違和).
+  // V2.1: brand voice → theme keyword match. Fallback = modern-minimal (neutral, works with any product).
   const matchedTheme = pickThemeForVoice(brandVoice);
 
   try {
@@ -129,16 +130,16 @@ export async function createMerchantAction(
         passwordHash,
         brandVoice: brandVoice.slice(0, 200),
         themeVars: matchedTheme.themeVars,
-        // approvedAt 預設 null = pending; 留空不寫.
+        // approvedAt defaults to null = pending; leave blank, don't set.
       })
       .returning({ id: merchants.id, slug: merchants.slug });
   } catch (err) {
-    // pg unique violation: SQLSTATE 23505. drizzle 把 message 漏出來時通常含
-    // "duplicate key value violates unique constraint <name>". 我們用 constraint 名稱
-    // 區分 slug vs email duplicate (不同訊息, 給使用者明確 hint).
+    // pg unique violation: SQLSTATE 23505. When drizzle leaks the message it usually contains
+    // "duplicate key value violates unique constraint <name>". We use the constraint name
+    // to distinguish slug vs email duplicate (different message, gives the user a clear hint).
     const msg = err instanceof Error ? err.message.toLowerCase() : '';
     if (msg.includes('duplicate') || msg.includes('unique')) {
-      // email constraint 名稱 = merchants_email_unique_idx (schema 0008)
+      // email constraint name = merchants_email_unique_idx (schema 0008)
       if (msg.includes('email')) {
         await logAttempt({ ip, slug, result: 'duplicate_slug' });
         return { error: '此 email 已註冊, 換一個試試' };
@@ -151,10 +152,10 @@ export async function createMerchantAction(
   }
 
   // ─── 6. Success: log + redirect to pending ───
-  // 注意: 不 set cookie / 不 auto-login. Admin 必須先 approve (V1.7 flow), 通過後商家
-  // 才能用 email + password 從 /merchant/login 進後台 (V2 task 104 flow).
+  // Note: no cookie set / no auto-login. Admin must approve first (V1.7 flow); only after approval
+  // can the merchant use email + password from /merchant/login to enter the backend (V2 task 104 flow).
   await logAttempt({ ip, slug, result: 'success' });
 
-  // redirect 必須在 try 外面 (Next.js redirect 用 throw 機制)
+  // redirect must be outside try (Next.js redirect uses a throw mechanism)
   redirect('/onboarding/pending');
 }

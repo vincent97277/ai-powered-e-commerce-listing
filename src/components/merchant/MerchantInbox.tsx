@@ -1,17 +1,18 @@
 /**
- * MerchantInbox — 商家 dashboard 統一行動清單 (V1.6 Track B5)
+ * MerchantInbox — unified merchant dashboard action list (V1.6 Track B5)
  *
- * 取代 V1 #72 PendingCallout + V1.5 B1 HealthCallout, 把 7 種 signal type 攤平
- * 顯示在一個容器裡, 依 severity P1→P5 分組.
+ * Replaces V1 #72 PendingCallout + V1.5 B1 HealthCallout. Flattens the 7 signal
+ * types into a single container, grouped by severity P1→P5.
  *
- * 設計決定:
- *   - 不做 escalate-all-to-red (V1.5 B1 那個 count > 10 就整個變紅), 改 per-chip 顏色.
- *   - 不做 scorecard, 不做 collapse — chip family 直接攤平.
- *   - Per-group cap = 5 chips. 超過 → "+N more →" 連去 first non-shown chip 的 filterUrl.
+ * Design decisions:
+ *   - No escalate-all-to-red (V1.5 B1 turned the whole thing red when count > 10);
+ *     use per-chip color instead.
+ *   - No scorecard, no collapse — chip family flattened directly.
+ *   - Per-group cap = 5 chips. Overflow → "+N more →" links to the first non-shown chip's filterUrl.
  *   - items=[] → return null (preserve V1 hide-when-zero behavior).
- *   - Mobile: chip min-h-[44px] 觸控目標 + 標題/chip 自動 wrap.
+ *   - Mobile: chip min-h-[44px] touch target + title/chip auto-wrap.
  *
- * Server component, 沒 client 互動.
+ * Server component, no client interaction.
  */
 import Link from 'next/link';
 import {
@@ -61,7 +62,7 @@ const GROUP_LABEL: Record<InboxSeverity, string> = {
 
 const SEVERITY_ORDER: InboxSeverity[] = ['P1', 'P2', 'P3', 'P4', 'P5'];
 
-/** 每個 group 最多顯示 chip 數 — 超過用 "+N more" link 收掉 */
+/** Max chips shown per group — overflow collapses into a "+N more" link */
 const GROUP_CHIP_CAP = 5;
 
 export function MerchantInbox({ items }: { items: InboxItem[] }) {
@@ -69,7 +70,7 @@ export function MerchantInbox({ items }: { items: InboxItem[] }) {
     return null;
   }
 
-  // 依 severity 分組 (items 已 sort 好 by severity asc → count desc)
+  // Group by severity (items already sorted by severity asc → count desc)
   const grouped = new Map<InboxSeverity, InboxItem[]>();
   for (const item of items) {
     const arr = grouped.get(item.severity) ?? [];

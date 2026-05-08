@@ -7,7 +7,7 @@
  *   - inline    small inline spinner with optional label — for buttons / chips
  *
  * Brand-aware skeleton: uses `--brand-primary` at 8% mix (not shadcn `bg-muted`).
- * a11y: role="status" + aria-busy="true" + sr-only "載入中..." text.
+ * a11y: role="status" + aria-busy="true" + sr-only "Loading..." text.
  *
  * Server component, no client interaction.
  */

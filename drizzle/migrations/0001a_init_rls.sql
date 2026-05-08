@@ -1,11 +1,11 @@
 -- ============================================================
 -- 0001_init_rls.sql — RLS + GRANT + POLICY
--- 前置條件:
---   1. 0000_*_initial.sql 已建好 7 張表 (drizzle-kit generate)
---   2. db/init/01-roles.sql 已建好 web_anon + web_admin role
+-- Prereqs:
+--   1. 0000_*_initial.sql has created the 7 tables (drizzle-kit generate)
+--   2. db/init/01-roles.sql has created the web_anon + web_admin roles
 -- ============================================================
 
--- ─── 1. GRANT 業務表權限給 web_anon (web_admin 是 BYPASSRLS) ───
+-- ─── 1. GRANT business-table privileges to web_anon (web_admin is BYPASSRLS) ───
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON products, orders, order_items, merchant_users
   TO web_anon, web_admin;
@@ -16,7 +16,7 @@ GRANT ALL ON merchants TO web_admin;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO web_admin;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO web_anon, web_admin;
 
--- 未來新表自動繼承權限
+-- Future tables inherit privileges automatically
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO web_anon, web_admin;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
@@ -33,7 +33,7 @@ ALTER TABLE merchant_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE merchant_users FORCE  ROW LEVEL SECURITY;
 
 -- ─── 3. POLICY — tenant_id = current_setting('app.tenant_id') ───
--- nullif 確保未設 GUC 時回 NULL → false → 0 rows (fail-closed)
+-- nullif ensures unset GUC returns NULL → false → 0 rows (fail-closed)
 CREATE POLICY tenant_isolation ON products
   FOR ALL TO web_anon
   USING      (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
@@ -49,7 +49,7 @@ CREATE POLICY tenant_isolation ON merchant_users
   USING      (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
   WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
 
--- order_items: 用 EXISTS 檢查 parent order
+-- order_items: use EXISTS to check parent order
 CREATE POLICY tenant_isolation ON order_items
   FOR ALL TO web_anon
   USING (

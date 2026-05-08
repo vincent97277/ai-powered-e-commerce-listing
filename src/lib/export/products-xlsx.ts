@@ -1,8 +1,9 @@
 /**
  * Products Excel (xlsx) export (V1.5 Track B2)
  *
- * 9-column header:
- *   商品編號 / 標題 / 描述 / 分類 / 變體 (JSON) / 價格 / 庫存 / 圖片 URL / 建立時間
+ * 9-column header (CJK header strings preserved in COLUMNS below):
+ *   product id / title / description / category / variants (JSON) / price / stock /
+ *   image URL / created at
  *
  * Design:
  *   - exceljs (Apache-2.0, MIT compatible)

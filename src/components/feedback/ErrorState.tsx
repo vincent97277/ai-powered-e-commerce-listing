@@ -1,14 +1,14 @@
 /**
  * ErrorState — error state primitive (V1.6 Track B4)
  *
- * 用法 (server component):
+ * Usage (server component):
  *   <ErrorState error="載不到資料" retryHref="/admin" />
  *   <ErrorState error={err} supportHref="mailto:support@catalogify.com" />
  *
  * Server component — uses retryHref (a Link) instead of retry callback to stay server-only.
  * If a parent needs an onClick retry, wrap with their own client component.
  *
- * Title: 「出了點狀況」 (friendly TW phrasing).
+ * Title: "something went wrong" (friendly TW phrasing — see component body).
  * Body: error message only — stack trace is NOT shown to keep UX civilian-grade.
  * a11y: role="alert" — assistive tech announces immediately.
  */

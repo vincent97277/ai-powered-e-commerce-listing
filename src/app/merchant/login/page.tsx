@@ -1,11 +1,12 @@
 /**
- * /merchant/login — V2 商家登入頁 (task 104)
+ * /merchant/login — V2 merchant login page (task 104)
  *
- * Mirrors /admin/login structure. Linear-tone (.platform wrapper) — 黑白高對比 + 細邊框.
- * 真實商家進來時 brand theme 還沒 resolve (沒 cookie / 沒 layout); 用 platform palette 是
- * 故意的 (品牌中性, 跟 admin login 一致).
+ * Mirrors /admin/login structure. Linear-tone (.platform wrapper) — high B/W contrast + thin borders.
+ * When a real merchant lands here the brand theme isn't resolved yet (no cookie / no layout); using
+ * the platform palette is intentional (brand-neutral, consistent with admin login).
  *
- * `?next=...` 由 LoginForm 用 hidden input 帶到 server action; server action 再驗 internal-only.
+ * `?next=...` is carried by LoginForm via a hidden input to the server action; the server action
+ * re-validates internal-only.
  */
 import { LoginForm } from './LoginForm';
 
@@ -18,7 +19,7 @@ export default async function MerchantLoginPage({
 }) {
   const params = await searchParams;
   const rawNext = params.next ?? '/merchant';
-  // Internal-only guard (再做一次 — 即使有人改 hidden input, server action 仍會驗)
+  // Internal-only guard (re-checked here — even if someone tampers with the hidden input, the server action still validates)
   const next = rawNext.startsWith('/merchant') ? rawNext : '/merchant';
 
   return (

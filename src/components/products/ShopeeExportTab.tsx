@@ -6,8 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { ProductOutput } from '@/lib/types';
 
 /**
- * 蝦皮 CSV 匯出 — 簡化 7 欄 (demo 展示用)
- * 完整 18 欄真實規格在 shopee-tw-mass-upload-sample.csv
+ * Shopee CSV export — simplified 7 columns (for demo)
+ * Full 18-column real spec is in shopee-tw-mass-upload-sample.csv
  */
 export function ShopeeExportTab({ product }: { product: ProductOutput }) {
   const handleDownload = () => {
@@ -22,7 +22,7 @@ export function ShopeeExportTab({ product }: { product: ProductOutput }) {
       product.seo_tags.join('|'),
     ];
     const csv = [headers.join(','), row.map((c) => `"${c}"`).join(',')].join('\n');
-    // BOM 確保 Excel 開啟中文不亂碼
+    // BOM ensures Excel opens Chinese without garbled chars
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

@@ -3,11 +3,11 @@
  * Coverage:
  *   - hostname allowlist (source vs image)
  *   - https only
- *   - user-info trick (https://www.instagram.com@evil.com/) 拒
- *   - localhost / .local / .internal 拒
- *   - private IPv4 (127, 10, 172.16, 192.168, 169.254, 0.0.0.0/8) 拒
- *   - private IPv6 (::1, fe80, fc00, IPv4-mapped) 拒
- *   - public IG / 蝦皮 hostname 過
+ *   - user-info trick (https://www.instagram.com@evil.com/) rejected
+ *   - localhost / .local / .internal rejected
+ *   - private IPv4 (127, 10, 172.16, 192.168, 169.254, 0.0.0.0/8) rejected
+ *   - private IPv6 (::1, fe80, fc00, IPv4-mapped) rejected
+ *   - public IG / Shopee hostnames pass
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -39,7 +39,7 @@ describe('assertSafeUrl — source kind (shop URL)', () => {
   });
 
   it('拒 user-info trick (https://www.instagram.com@evil.com/)', () => {
-    // 這是 SSRF 經典繞過: hostname 應為 evil.com, 不是 IG
+    // Classic SSRF bypass: hostname should be evil.com, not IG
     expect(() =>
       assertSafeUrl('https://www.instagram.com@evil.com/foo', 'source'),
     ).toThrow(ImportSourceUnavailableError);
@@ -78,7 +78,7 @@ describe('assertSafeUrl — image kind (CDN URL)', () => {
   });
 
   it('拒 image kind 對 source-only host', () => {
-    // shopee.tw 在 source 但不在 image (只有 cf.shopee.tw 跟 down* 在 image)
+    // shopee.tw is in source but not in image (only cf.shopee.tw and down* are in image)
     expect(() => assertSafeUrl('https://shopee.tw/img.jpg', 'image')).toThrow();
   });
 });
@@ -97,16 +97,16 @@ describe('assertNotPrivateHost — DNS rebinding 防禦', () => {
   });
 
   it('允許 公開 IG hostname (DNS resolve OK)', async () => {
-    // 這個會做真 DNS lookup, 須 internet. CI 環境若沒網可能 fail
-    // 用 try/catch 區分 DNS 錯 vs 內網錯
+    // This does a real DNS lookup, requires internet. Can fail in CI without network
+    // Use try/catch to distinguish DNS errors vs private-network errors
     try {
       await assertNotPrivateHost('www.instagram.com');
-      // 過 = 沒網內 IP, 對
+      // pass = no private IP, correct
     } catch (err) {
-      // 若是 DNS 錯, 跳過 (網路問題)
+      // If DNS error, skip (network issue)
       const msg = err instanceof Error ? err.message : '';
       if (!msg.includes('無法解析') && !msg.includes('內網')) throw err;
-      if (msg.includes('內網')) throw err; // 真錯, 不該過
+      if (msg.includes('內網')) throw err; // real error, should not pass
     }
   });
 });

@@ -1,14 +1,15 @@
 /**
- * Admin session 純 crypto helpers (Edge-runtime safe, 不 import drizzle/pg)
+ * Admin session pure crypto helpers (Edge-runtime safe, no drizzle/pg imports)
  *
- * middleware.ts 只能跑 Edge runtime, 不能查 DB
- * 所以 middleware 只做 HMAC 簽章 check (pure crypto)
- * 真正的 session 存活檢查 (admin_sessions row 存在 + 未過期) 在 server component 內做
+ * middleware.ts only runs in Edge runtime — can't hit DB.
+ * So middleware does HMAC signature check only (pure crypto).
+ * Actual session liveness check (admin_sessions row exists + not expired) is done in
+ * server components.
  */
 
 export const ADMIN_SESSION_COOKIE = 'admin-session';
 
-/** 用 Web Crypto API (Edge-compat) 算 HMAC-SHA256 */
+/** Compute HMAC-SHA256 via Web Crypto API (Edge-compat). */
 async function hmacSha256(secret: string, data: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -24,7 +25,7 @@ async function hmacSha256(secret: string, data: string): Promise<string> {
     .join('');
 }
 
-/** Constant-time hex string compare (Edge-compat, 自己 loop) */
+/** Constant-time hex string compare (Edge-compat, hand-rolled loop). */
 function timingSafeHexEq(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -35,8 +36,8 @@ function timingSafeHexEq(a: string, b: string): boolean {
 }
 
 /**
- * 驗 cookie value 簽章 (HMAC). 不查 DB.
- * 回 sessionId 或 null
+ * Verify cookie value signature (HMAC). No DB lookup.
+ * Returns sessionId or null.
  */
 export async function verifyCookieSignatureEdge(
   cookieValue: string | undefined,

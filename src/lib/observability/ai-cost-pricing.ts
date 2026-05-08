@@ -1,19 +1,19 @@
 /**
  * AI cost pricing — sole source of truth for AI cost math
  *
- * 為什麼獨立成檔 (V1.6 Track A9 prep):
- *   - ai-cost.ts (per-tenant daily cap enforcement) 與 ai-cost-platform.ts (platform-wide
- *     dashboard aggregation, A9) 都要套同一組 pricing + USD/TWD 換算
- *   - 若兩邊各自寫死 USD_TO_TWD = 30 / PRICING constants, 任何一邊調整都會 silently drift
- *     → 造成 daily cap 守的數字 ≠ dashboard 顯示的數字
- *   - 集中放這, 兩個 consumer 都 import. 改動單點, 全平台一致
+ * Why a separate file (V1.6 Track A9 prep):
+ *   - ai-cost.ts (per-tenant daily cap enforcement) and ai-cost-platform.ts (platform-wide
+ *     dashboard aggregation, A9) both apply the same pricing + USD/TWD conversion.
+ *   - If both sides hardcoded USD_TO_TWD = 30 / PRICING constants independently, any change
+ *     would silently drift → the number guarded by daily cap ≠ the number shown on dashboard.
+ *   - Centralized here; both consumers import. Single point of change, platform-wide consistency.
  *
- * 不放任何 query / IO 相關 code, 純 pricing math, 方便 unit test (cost-cap.test.ts 已涵蓋).
+ * No query / IO code — pure pricing math, easy to unit-test (covered by cost-cap.test.ts).
  */
 
 /* ─────────────────────────── Pricing constants ─────────────────────────── */
 
-/** 每 1M token 的價格 (USD) — gpt-4o-2024-11-20 */
+/** Price per 1M tokens (USD) — gpt-4o-2024-11-20 */
 export const PRICING = {
   inputPerMillion: 2.5,
   outputPerMillion: 10,
@@ -34,16 +34,17 @@ export const PRICING = {
 } as const;
 
 /**
- * USD → TWD 換算率 (寫死 ≈ 30, V2 再上動態匯率)
- * 影響: tokenCost 回傳的 cents 是「NT$ cents」, 對齊 merchants.dailyAiCostCentsCap 單位
+ * USD → TWD conversion rate (hardcoded ≈ 30; dynamic FX in V2).
+ * Impact: tokenCost returns cents in "NT$ cents" — aligned with merchants.dailyAiCostCentsCap unit.
  */
 export const USD_TO_TWD = 30;
 
 /**
- * 算單筆 session 的成本 (NT$ cents, float — 不在這 round, 加總後再 round 避免累積誤差)
+ * Compute a single session's cost (NT$ cents, float — don't round here; round only after
+ * summation to avoid accumulated error).
  *
- * 單位: 1 cent = NT$0.01. 5000 cents = NT$50.
- *   舉例: 1540 input + 79 output tokens = $0.00465 USD ≈ NT$0.14 ≈ 14 cents
+ * Units: 1 cent = NT$0.01. 5000 cents = NT$50.
+ *   e.g. 1540 input + 79 output tokens = $0.00465 USD ≈ NT$0.14 ≈ 14 cents
  *
  * V2.6.2: optional cachedInputTokens param. When OpenAI returns a usage
  * report with cached input tokens (gpt-4o auto-caches system prompts

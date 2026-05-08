@@ -1,8 +1,8 @@
 /**
- * GET /api/products/import/[sessionId] — 進度查詢 (V1 #68)
+ * GET /api/products/import/[sessionId] — progress query (V1 #68)
  *
- * 回 import_sessions row 狀態, 給 client polling UI 用 (2s interval)
- * 走 RLS — 商家只能看自己的 session
+ * Returns the import_sessions row status for the client polling UI (2s interval)
+ * Goes through RLS — merchants can only see their own session
  */
 import { NextResponse, type NextRequest } from 'next/server';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';

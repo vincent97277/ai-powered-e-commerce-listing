@@ -1,10 +1,10 @@
 /**
- * Storefront layout — 注入該商家的 brand theme + 共用 header
+ * Storefront layout — injects the merchant's brand theme + shared header
  *
- * V1.7 D1: layout 層不擋 unapproved/suspended 商家進來 (theme/header 仍可 render),
- *   讓 page.tsx (root + product detail + cart) 各自處理. 因為 cart/checkout
- *   也應該在 unapproved/suspended 狀態下被擋, 但那些 page 自己會 query meta
- *   再決定. layout 只負責注入 theme.
+ * V1.7 D1: layout level does not block unapproved/suspended merchants (theme/header still render);
+ *   page.tsx (root + product detail + cart) each handle it. cart/checkout should also be blocked
+ *   in unapproved/suspended states, but those pages query meta themselves and decide.
+ *   The layout only injects the theme.
  *
  * V1.9 T2 (I): adds a 32px platform footer at bottom of every storefront page,
  *   wrapped in `.platform` so brand vars switch to Linear warm palette locally —
@@ -35,13 +35,13 @@ export default async function StoreLayout({
   const { slug } = await params;
   const meta = await resolveStorefrontMeta(slug);
   if (!meta) {
-    // V1 #52: 如 slug 不存在但 match 某商家 previousSlug → 301 redirect
+    // V1 #52: if slug doesn't exist but matches some merchant's previousSlug → 301 redirect
     const newSlug = await resolveSlugRedirect(slug);
     if (newSlug) redirect(`/store/${newSlug}`);
     notFound();
   }
 
-  // 拉商家 theme_vars
+  // Fetch merchant theme_vars
   const [m] = await dbAdmin
     .select({ themeVars: merchants.themeVars, name: merchants.name })
     .from(merchants)

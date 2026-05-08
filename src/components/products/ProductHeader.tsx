@@ -15,7 +15,7 @@ export function ProductHeader({ title, status, productId }: { title: string; sta
       }}
     >
       <div className="min-w-0 flex-1 space-y-4">
-        {/* Status badge — 用品牌色 */}
+        {/* Status badge — uses brand color */}
         <div className="flex items-center gap-3">
           <Badge
             className="inline-flex items-center gap-1.5 border px-3 py-1 text-xs font-medium tracking-wide"

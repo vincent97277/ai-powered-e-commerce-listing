@@ -80,7 +80,7 @@ export default function CartPage({ params }: { params: Promise<{ slug: string }>
           </div>
         ) : (
           <div className="grid gap-8 lg:grid-cols-[1fr,360px]">
-            {/* 左: 商品清單 */}
+            {/* Left: product list */}
             <div className="space-y-3">
               {cart.items.map((it) => (
                 <motion.div
@@ -145,7 +145,7 @@ export default function CartPage({ params }: { params: Promise<{ slug: string }>
               ))}
             </div>
 
-            {/* 右: 結帳區 */}
+            {/* Right: checkout area */}
             <div
               className="space-y-5 self-start border p-6"
               style={{

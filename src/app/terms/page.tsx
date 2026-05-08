@@ -1,5 +1,5 @@
 /**
- * /terms — 服務條款 (V1 #60, 約 500 字)
+ * /terms — Terms of service (V1 #60, ~500 words)
  */
 import { LegalPageShell } from '@/components/platform/LegalPageShell';
 

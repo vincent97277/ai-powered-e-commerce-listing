@@ -21,10 +21,10 @@ export function useDemoMode() {
   return { mode, toggle };
 }
 
-// 估算「真實成本」(GPT-4o vision + text generation)
+// Estimate "real cost" (GPT-4o vision + text generation)
 // vision: ~1100 input tokens (image), text out: ~600 tokens
 // 4o input $2.5/M, output $10/M → 2.5 * 1100 / 1e6 + 10 * 600 / 1e6 ≈ $0.00875
-// 用台幣 32 匯率 ≈ NT$ 0.28，demo 可以說「跑一張 < NT$ 0.3」
+// At a TWD 32 rate ≈ NT$ 0.28 — demo can claim "< NT$ 0.3 per image"
 const REAL_COST_USD = 0.00275 + 0.006; // = 0.00875
 const REAL_COST_TWD = (REAL_COST_USD * 32).toFixed(2);
 
@@ -38,7 +38,7 @@ export function DemoModeToggle() {
   const sawHint = useRef(false);
 
   const handleClick = () => {
-    // 5 連點彩蛋 A
+    // 5-tap easter egg A
     tapCount.current += 1;
     if (tapTimer.current) clearTimeout(tapTimer.current);
     tapTimer.current = setTimeout(() => {
@@ -47,7 +47,7 @@ export function DemoModeToggle() {
     if (tapCount.current >= 5) {
       tapCount.current = 0;
       setShowSecret(true);
-      return; // 不切 mode
+      return; // Don't toggle mode
     }
 
     toggle();
@@ -57,7 +57,7 @@ export function DemoModeToggle() {
     setEmoji(next === 'off' ? '👻' : '🎭');
     setTimeout(() => setEmoji(null), 900);
 
-    // 第一次按出現 hint toast (Easter-egg-y)
+    // Show hint toast on first tap (Easter-egg-y)
     if (!sawHint.current && typeof window !== 'undefined') {
       const k = 'whimsy-demo-hint';
       if (!localStorage.getItem(k)) {
@@ -108,7 +108,7 @@ export function DemoModeToggle() {
         </motion.div>
       </div>
 
-      {/* 彩蛋 A: 真實成本 secret panel */}
+      {/* Easter egg A: real-cost secret panel */}
       <AnimatePresence>
         {showSecret && (
           <motion.div

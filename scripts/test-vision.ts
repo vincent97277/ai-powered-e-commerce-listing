@@ -1,24 +1,24 @@
 /**
- * scripts/test-vision.ts — Build day 09:00 第一件事
+ * scripts/test-vision.ts — Build day 09:00 first task
  *
- * 目的：在不依賴 Inngest / DB / R2 的情況下，純跑一次 GPT-4o vision +
- * Zod 驗證，確認：
- *   1. OPENAI_API_KEY 有效
- *   2. SYSTEM_PROMPT_TEMPLATE 沒打錯字
- *   3. productSchema 不會把模型輸出擋掉
+ * Purpose: run a single GPT-4o vision + Zod-validation pass without Inngest / DB / R2,
+ * to confirm:
+ *   1. OPENAI_API_KEY is valid
+ *   2. SYSTEM_PROMPT_TEMPLATE has no typos
+ *   3. productSchema does not reject the model's output
  *
- * 用法：
+ * Usage:
  *   pnpm tsx scripts/test-vision.ts ./tests/fixtures/sample-teacup.jpg
  *
- * 預期輸出：
- *   - 印出 7 個欄位的 JSON
- *   - confidence > 0.5（如果是清楚的商品照）
+ * Expected output:
+ *   - Prints JSON with 7 fields
+ *   - confidence > 0.5 (for a clear product photo)
  *
- * 失敗排查：
- *   - "OPENAI_API_KEY missing" → 檢查 .env.local
- *   - "no_object_generated"    → 模型沒吐 JSON，看 system prompt 對不對
- *   - "ZodError"               → 模型吐了但被禁字 / 長度檢查擋掉，看
- *                                error.issues 是哪一條 rule fail
+ * Troubleshooting:
+ *   - "OPENAI_API_KEY missing" → check .env.local
+ *   - "no_object_generated"    → model returned no JSON; verify the system prompt
+ *   - "ZodError"               → model responded but was rejected by banned-word /
+ *                                length checks; inspect error.issues for the failing rule
  */
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -43,7 +43,7 @@ async function main() {
     process.exit(1);
   }
 
-  // 把本地檔案讀成 base64 data URI（GPT-4o vision 接受 data: scheme）
+  // Read the local file as a base64 data URI (GPT-4o vision accepts the data: scheme)
   const buf = readFileSync(imagePath);
   const ext = imagePath.split('.').pop()?.toLowerCase() ?? 'jpeg';
   const mime =
@@ -56,7 +56,7 @@ async function main() {
   const t0 = Date.now();
   const result = await callVisionWithRetry({
     imageUrl: dataUri,
-    brandVoice: '台灣文青質感、親切但不浮誇、偏好天然材質', // smoke test 用的固定 brand_voice
+    brandVoice: '台灣文青質感、親切但不浮誇、偏好天然材質', // fixed brand_voice used by the smoke test
     maxRetries: 2,
   });
   const elapsed = Date.now() - t0;

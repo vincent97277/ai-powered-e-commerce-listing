@@ -1,18 +1,20 @@
 /**
  * Suspend guard (V1 #53)
- * 在 merchant 寫入動作開頭呼叫, 商家被平台停權時拒絕寫入
+ * Call at the head of any merchant write action — refuses writes when the
+ * merchant has been suspended by the platform.
  *
- * V1 哪些動作擋:
- *   - 上架新商品 (/api/products/generate, products/new)
- *   - 改商品 (products/[id]/actions)
- *   - 改設定 / brand voice (settings/actions)
- *   - IG/蝦皮 import (#65 會用)
+ * V1 actions blocked:
+ *   - Listing new products (/api/products/generate, products/new)
+ *   - Editing products (products/[id]/actions)
+ *   - Changing settings / brand voice (settings/actions)
+ *   - IG/Shopee import (used by #65)
  *
- * V1 哪些不擋 (in-flight 訂單必須能完成):
- *   - 訂單 status flip (#55 actions, RA: 設計決定)
+ * V1 actions NOT blocked (in-flight orders must still complete):
+ *   - Order status flip (#55 actions, RA: design call)
  *
- * 用 dbAdmin 因為這個 helper 會被 server actions / API routes 從不同 context 呼叫,
- * 不一定有 RLS context. 純 read 操作, 沒 cross-tenant write 風險.
+ * Uses dbAdmin because this helper is called from server actions / API routes
+ * across different contexts that may not have RLS context. Pure read op, no
+ * cross-tenant write risk.
  */
 import { dbAdmin } from '@/db/admin-only';
 import { merchants } from '@/db/schema';
@@ -26,8 +28,8 @@ export class MerchantSuspendedError extends Error {
 }
 
 /**
- * 檢查 merchant 是否被停權. 是的話 throw MerchantSuspendedError.
- * 商家不存在也算 throw (防無效 tenantId 寫入).
+ * Check whether the merchant is suspended; if so, throw MerchantSuspendedError.
+ * Non-existent merchant also throws (guards against invalid tenantId writes).
  */
 export async function assertNotSuspended(tenantId: string): Promise<void> {
   const [row] = await dbAdmin

@@ -8,7 +8,7 @@
  *   - createAdminSession → validateAdminSession DB roundtrip
  *   - Expired session rejection
  *   - revokeAdminSession kills session
- *   - HTTP 五條 scenario (middleware level — 用 fetch dev server)
+ *   - HTTP 5 scenarios (middleware level — fetch against dev server)
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -25,14 +25,14 @@ import { adminSessions } from '@/db/schema';
 import { eq, lt, sql } from 'drizzle-orm';
 import { verifyCookieSignatureEdge } from '@/lib/admin-session-edge';
 
-// 確保 ADMIN_PASSWORD / SECRET 都有 (從 .env.local 載)
+// Ensure ADMIN_PASSWORD / SECRET both present (loaded from .env.local)
 beforeAll(() => {
   if (!process.env.ADMIN_PASSWORD || !process.env.ADMIN_SESSION_SECRET) {
     throw new Error('admin-auth e2e 需要 ADMIN_PASSWORD + ADMIN_SESSION_SECRET');
   }
 });
 
-// 清測試 sessions
+// Clean up test sessions
 afterAll(async () => {
   await dbAdmin.delete(adminSessions).where(sql`ip = 'test-suite'`);
 });
@@ -59,7 +59,7 @@ describe('admin auth — pure crypto', () => {
   it('verifyCookieSignature 拒篡改 HMAC', () => {
     const sid = '22222222-2222-2222-2222-222222222222';
     const cookie = signSessionCookie(sid);
-    // 改最後 1 byte
+    // Modify the last byte
     const tampered = cookie.slice(0, -2) + (cookie.endsWith('00') ? '11' : '00');
     expect(verifyCookieSignature(tampered)).toBe(null);
   });
@@ -98,7 +98,7 @@ describe('admin auth — DB-coupled session lifecycle', () => {
   });
 
   it('validateAdminSession 拒未存在 session (DB row 缺)', async () => {
-    // 簽一個 cookie 但不寫入 DB
+    // Sign a cookie but don't write to DB
     const fake = signSessionCookie('99999999-9999-9999-9999-999999999999');
     const validated = await validateAdminSession(fake);
     expect(validated).toBe(null);
@@ -106,7 +106,7 @@ describe('admin auth — DB-coupled session lifecycle', () => {
 
   it('validateAdminSession 拒過期 session', async () => {
     const { cookieValue, sessionId } = await createAdminSession({ ip: 'test-suite' });
-    // 手動把 expiresAt 改成過去
+    // Manually set expiresAt to the past
     await dbAdmin
       .update(adminSessions)
       .set({ expiresAt: new Date(Date.now() - 60_000) })
@@ -129,12 +129,12 @@ describe('admin auth — DB-coupled session lifecycle', () => {
 describe('admin auth — HTTP integration (middleware /admin gate)', () => {
   const BASE = 'http://localhost:3000';
 
-  // dev server 必須先跑 (bun run dev). 跑不到就 skip
+  // Dev server must be running first (bun run dev). Skip if unreachable.
   beforeAll(async () => {
     try {
       await fetch(`${BASE}/`);
     } catch {
-      console.warn('skip middleware HTTP tests: dev server 沒跑 (bun run dev)');
+      console.warn('skip middleware HTTP tests: dev server not running (bun run dev)');
     }
   });
 
@@ -170,9 +170,9 @@ describe('admin auth — HTTP integration (middleware /admin gate)', () => {
   });
 
   it('GET /admin 帶簽好的 cookie 但 DB row 不存在 → layout 檔住 → 307 redirect (V1.6 E11)', async () => {
-    // 簽 HMAC 合法但 DB 沒對應 admin_sessions row 的 cookie.
-    // middleware 純 crypto check 會放行, 但 (admin)/layout.tsx 的 validateAdminSession
-    // 查 DB 找不到 row → redirect to /admin/login. 這是 E11 修補的核心保證.
+    // Sign a cookie with valid HMAC but no matching admin_sessions row in DB.
+    // Middleware's pure crypto check lets it through, but (admin)/layout.tsx's validateAdminSession
+    // finds no DB row → redirect to /admin/login. Core guarantee fixed by E11.
     const sid = '44444444-4444-4444-4444-444444444444';
     const cookie = signSessionCookie(sid);
     const r = await tryFetch('/admin', {
@@ -185,20 +185,20 @@ describe('admin auth — HTTP integration (middleware /admin gate)', () => {
   });
 
   it('V1.6 E11: revoked session — HMAC 對但 DB row 沒了 → layout redirect to /admin/login', async () => {
-    // 1. 建合法 session (DB row 寫入 + 簽好 HMAC cookie)
+    // 1. Create a valid session (DB row written + HMAC-signed cookie)
     const { cookieValue, sessionId } = await createAdminSession({ ip: 'test-suite' });
 
-    // 2. middleware HMAC 過, layout DB check 也過 → 應該不是 307
+    // 2. Middleware HMAC passes, layout DB check passes → should not be 307
     const before = await tryFetch('/admin', {
       headers: { cookie: `${ADMIN_SESSION_COOKIE}=${cookieValue}` },
     });
-    if (!before) return; // dev server 沒跑就跳過 HTTP 部分
+    if (!before) return; // Skip HTTP portion if dev server not running
     expect(before.status).not.toBe(307);
 
-    // 3. Revoke (DELETE row) — cookie HMAC 還是合法, 但 DB row 不見
+    // 3. Revoke (DELETE row) — cookie HMAC still valid, but DB row gone
     await revokeAdminSession(sessionId);
 
-    // 4. 再打一次: middleware 仍過 (純 crypto), 但 layout 的 validateAdminSession 會回 null → redirect
+    // 4. Hit again: middleware still passes (pure crypto), but layout's validateAdminSession returns null → redirect
     const after = await tryFetch('/admin', {
       headers: { cookie: `${ADMIN_SESSION_COOKIE}=${cookieValue}` },
     });

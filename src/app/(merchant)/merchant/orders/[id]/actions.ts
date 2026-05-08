@@ -1,23 +1,23 @@
 'use server';
 
 /**
- * 訂單 status flip server actions (V1 #55)
+ * Order status flip server actions (V1 #55)
  *
- * 規則:
+ * Rules:
  *   - pending → paid
- *   - paid → shipped (要 trackingNumber + carrier)
+ *   - paid → shipped (requires trackingNumber + carrier)
  *   - shipped → completed
- *   - 任何 → refunded (要 reason, 不可逆)
- *   - 不允許往回切 (e.g. shipped → paid)
+ *   - any → refunded (requires reason, irreversible)
+ *   - No backwards transitions (e.g. shipped → paid)
  *
- * 每次切狀態:
- *   - 寫入 order_status_history (audit trail)
- *   - optimistic concurrency: WHERE status = expectedFromStatus, rowCount=1 才算成功
+ * On every status flip:
+ *   - Write order_status_history (audit trail)
+ *   - Optimistic concurrency: WHERE status = expectedFromStatus, only counts as success if rowCount=1
  *   - revalidatePath
  *
- * Refund rate limit: 每商家每小時最多 5 件 → refunded (RA: Security C4 緩解)
+ * Refund rate limit: at most 5 → refunded per merchant per hour (RA: Security C4 mitigation)
  *
- * NOT 擋 suspended merchant — in-flight 訂單必須能完成流程
+ * Does NOT block suspended merchants — in-flight orders must be able to complete their flow
  */
 import { revalidatePath } from 'next/cache';
 import { withTenantTx } from '@/lib/db/with-tenant';
@@ -31,26 +31,26 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   pending: ['paid', 'refunded'],
   paid: ['shipped', 'refunded'],
   shipped: ['completed', 'refunded'],
-  completed: ['refunded'], // 完成後仍可退
+  completed: ['refunded'], // refundable even after completion
   failed: ['refunded'],
   refunded: [], // dead-end
 };
 
-const REFUND_RATE_LIMIT = 5; // 5 件 / 小時 / merchant
+const REFUND_RATE_LIMIT = 5; // 5 / hour / merchant
 
 async function getTenantId(): Promise<string> {
   const m = await resolveMerchantFromCookie();
   return m.tenantId;
 }
 
-/** 驗 transition 合法 */
+/** Verify the transition is allowed */
 function canTransition(from: string, to: string): boolean {
   return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
 /**
- * 通用 status flip with optimistic concurrency check
- * 失敗 ({ success: false }) 時 status 沒變
+ * Generic status flip with optimistic concurrency check.
+ * On failure ({ success: false }), status is unchanged.
  */
 async function flipStatus(opts: {
   orderId: string;
@@ -79,11 +79,11 @@ async function flipStatus(opts: {
         .returning({ id: orders.id });
 
       if (updateRes.length !== 1) {
-        // 已被別的 tab 改過狀態 (stale)
+        // Status already changed by another tab (stale)
         throw new Error('訂單狀態已被改過, 請重新整理頁面');
       }
 
-      // 寫 audit log
+      // Write audit log
       await tx.insert(orderStatusHistory).values({
         orderId: opts.orderId,
         fromStatus: opts.fromStatus,
@@ -106,12 +106,12 @@ async function flipStatus(opts: {
   }
 }
 
-/** 待付款 → 已付款 */
+/** pending → paid */
 export async function markPaid(orderId: string): Promise<ActionResult> {
   return flipStatus({ orderId, fromStatus: 'pending', toStatus: 'paid' });
 }
 
-/** 已付款 → 已出貨 (要 trackingNumber + carrier) */
+/** paid → shipped (requires trackingNumber + carrier) */
 export async function markShipped(
   orderId: string,
   trackingNumber: string,
@@ -129,14 +129,14 @@ export async function markShipped(
   });
 }
 
-/** 已出貨 → 已完成 */
+/** shipped → completed */
 export async function markCompleted(orderId: string): Promise<ActionResult> {
   return flipStatus({ orderId, fromStatus: 'shipped', toStatus: 'completed' });
 }
 
 /**
- * 任何 → 已退款 (含 reason, 不可逆)
- * Rate limit: 5 件 / 小時 / merchant (RA: Security C4 緩解)
+ * any → refunded (with reason, irreversible)
+ * Rate limit: 5 / hour / merchant (RA: Security C4 mitigation)
  */
 export async function markRefunded(
   orderId: string,
@@ -149,7 +149,7 @@ export async function markRefunded(
 
   const tenantId = await getTenantId();
 
-  // Rate limit: 過去 1 小時內已 refunded 的訂單數
+  // Rate limit: number of orders refunded in the past hour
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const recentRefunds = await withTenantTx(tenantId, async (tx) => {
     return await tx
@@ -184,7 +184,7 @@ export async function updateInternalNoteForm(orderId: string, formData: FormData
   await updateInternalNote(orderId, String(formData.get('note') ?? ''));
 }
 
-/** 更新內部備註 (商家私用) */
+/** Update internal note (merchant-private) */
 export async function updateInternalNote(
   orderId: string,
   note: string,

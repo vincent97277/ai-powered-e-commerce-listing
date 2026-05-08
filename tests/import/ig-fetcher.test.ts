@@ -19,7 +19,7 @@ describe('parseIgHtml', () => {
     expect(items[0].imageUrl).toContain('scontent.cdninstagram.com');
     expect(items[0].price).toBe(1200);
     expect(items[1].price).toBe(980);
-    expect(items[2].price).toBeUndefined(); // 沒 offers
+    expect(items[2].price).toBeUndefined(); // no offers
   });
 
   it('IG single post (og:* only, no JSON-LD) → 1 item fallback', () => {
@@ -28,7 +28,7 @@ describe('parseIgHtml', () => {
     expect(items).toHaveLength(1);
     expect(items[0].title).toBe('手工陶瓷馬克杯 / 質感拉坯');
     expect(items[0].sourceUrl).toBe('https://www.instagram.com/p/single-cup/');
-    expect(items[0].price).toBe(680); // 從 description 抓出
+    expect(items[0].price).toBe(680); // extracted from description
   });
 
   it('IG private account → throw', () => {

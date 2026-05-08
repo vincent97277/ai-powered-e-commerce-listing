@@ -58,13 +58,13 @@ Every read or write that should be RLS-scoped goes through this exact 25-line fi
 import { sql } from 'drizzle-orm';
 import { dbUser } from '@/db';
 
-/** UUID v4 格式檢查 — 任何非 UUID 字串直接拒絕 */
+/** UUID v4 format check — any non-UUID string is rejected outright. */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * 在 RLS context 下執行 transaction
- * @param tenantId - 從 cookie 解析出的 merchant.id (UUID)
- * @param fn       - transaction callback，收到 tx 物件
+ * Run a transaction inside RLS context.
+ * @param tenantId - merchant.id (UUID) resolved from cookie
+ * @param fn       - transaction callback receiving the tx object
  */
 export async function withTenantTx<T>(
   tenantId: string,
@@ -75,7 +75,7 @@ export async function withTenantTx<T>(
   }
 
   return dbUser.transaction(async (tx) => {
-    // is_local=true → 僅當前 transaction 生效，COMMIT/ROLLBACK 後自動清除
+    // is_local=true → only effective within current transaction; auto-cleared on COMMIT/ROLLBACK
     await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
     return fn(tx);
   });
@@ -158,7 +158,7 @@ It's possible to write all of the above and have someone drop the WITH CHECK in 
     expect(titles).toContain('A-item');
     expect(titles).not.toContain('B-item');
 
-    // WITH CHECK：嘗試插 tenant B 的資料但 context 是 A → 應該被拒
+    // WITH CHECK: try to insert tenant B's data while context is A → should be rejected
     await expectRejectsMatching(
       dbUser.transaction(async (tx) => {
         await tx.execute(sql`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`);
@@ -189,7 +189,7 @@ This one matters because it's the failure mode that's invisible without a test. 
 <!-- src: tests/rls.e2e.test.ts:137-142 -->
 ```ts
   it('T3: web_anon cannot escalate to bypass RLS', async () => {
-    // 嘗試切到 BYPASSRLS role 應失敗 (web_anon 沒被 GRANT 到 web_admin)
+    // Switching to BYPASSRLS role should fail (web_anon not GRANTed into web_admin)
     await expectRejectsMatching(
       dbUser.execute(sql`SET ROLE web_admin`),
       /permission denied|must be member|does not exist|不存在/i,

@@ -4,7 +4,7 @@
  * ThemeProvider — applies merchant theme vars to :root (V2 task 105 simplified)
  *
  * V1.7 D2 had a switcher with `setCurrentId` that wrote `demo-merchant-id` cookie
- * client-side. V2 per-merchant auth removed the switcher (一次只進一家店). The
+ * client-side. V2 per-merchant auth removed the switcher (one store at a time). The
  * `merchants` array now contains exactly one merchant — current logged-in one —
  * passed from (merchant)/layout.tsx. Provider is now mostly an effect that
  * paints CSS vars + a no-op Ctx for backwards-compat with consumers that read
@@ -24,11 +24,11 @@ export type MerchantInfo = {
 };
 
 type Ctx = {
-  /** 當前 merchant id (cookie 值) */
+  /** Current merchant id (cookie value) */
   currentId: string;
-  /** 當前 merchant — V2: 永遠只有一個 (logged-in) */
+  /** Current merchant — V2: always exactly one (logged-in) */
   merchants: MerchantInfo[];
-  /** 取當前 merchant 完整 meta */
+  /** Full meta for current merchant */
   current: MerchantInfo;
 };
 
@@ -63,16 +63,17 @@ export function ThemeProvider({
     merchants.find((m) => m.id === initialMerchantId) ?? merchants[0] ?? FALLBACK_MERCHANT;
 
   // V2.1 — depend on serialized themeVars values, not the `current` object reference.
-  // 為什麼: settings save → router.refresh() 走完 layout 拿到新 themeVars 後, `current`
-  // 是新 object ref (find() 在新 array 上跑) — 但 V2.1 加 preset dropdown 後 form
-  // 一次改 5 個欄位, 多次 re-render 之間 ref 一直變. 用 JSON 序列化 deps 確保只在
-  // 真實 value 變動時才呼叫 setProperty, 避免 thrash + 確保 save → refresh 後立刻套用.
+  // Why: after settings save → router.refresh() finishes the layout pass with new themeVars,
+  // `current` is a new object ref (find() runs on a new array) — but with the V2.1 preset
+  // dropdown, the form changes 5 fields at once, and the ref keeps changing across re-renders.
+  // Serializing deps via JSON ensures setProperty only fires when real values change — avoids
+  // thrash and guarantees save → refresh applies immediately.
   const themeKey = JSON.stringify(current.themeVars ?? FALLBACK_THEME);
   useEffect(() => {
     const theme = current.themeVars ?? FALLBACK_THEME;
     const root = document.documentElement;
     Object.entries(theme).forEach(([k, v]) => root.style.setProperty(k, v));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- themeKey 已經 capture themeVars 全部欄位
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- themeKey already captures every themeVars field
   }, [themeKey]);
 
   return (

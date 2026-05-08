@@ -27,7 +27,7 @@ export function UploadDropzone({
     [onFile]
   );
 
-  // 點擊上傳鍵時，附近浮現 +1
+  // On click, float a +1 near the click point
   const spawnFloat = (e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -39,7 +39,7 @@ export function UploadDropzone({
 
   return (
     <motion.div
-      // 上傳完成 morph：照片飛入時整個 Card 縮一下再彈回
+      // Upload-complete morph: shrink Card briefly then bounce back as photo flies in
       animate={preview ? { scale: [1, 0.96, 1] } : {}}
       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
       className="relative"
@@ -166,7 +166,7 @@ export function UploadDropzone({
           )}
         </AnimatePresence>
 
-        {/* +1 浮動符號 (點擊回饋) */}
+        {/* +1 float marker (click feedback) */}
         <AnimatePresence>
           {floats.map((f) => (
             <motion.span

@@ -1,5 +1,5 @@
 /**
- * /privacy — 隱私權政策 (V1 #60, 約 500 字, 台灣個資法模板)
+ * /privacy — Privacy policy (V1 #60, ~500 words, Taiwan PDPA template)
  */
 import { LegalPageShell } from '@/components/platform/LegalPageShell';
 

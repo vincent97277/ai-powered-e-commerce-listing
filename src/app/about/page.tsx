@@ -1,6 +1,6 @@
 /**
- * /about — 關於 Catalogify (V1 #60)
- * 約 200 字
+ * /about — About Catalogify (V1 #60)
+ * ~200 words
  */
 import { LegalPageShell } from '@/components/platform/LegalPageShell';
 

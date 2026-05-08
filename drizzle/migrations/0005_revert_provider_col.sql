@@ -1,8 +1,8 @@
 -- ============================================================
 -- 0005_revert_provider_col.sql — Revert V1.5 Track A1 (Gemini swap)
--- 目的: 商家實測 Gemini 不可用, V1.5 收回 OpenAI-only。
---       把 0004 加的 import_sessions.provider 欄位拔掉。
--- 設計: DROP COLUMN IF EXISTS → idempotent, 重跑 OK
+-- Purpose: merchant testing showed Gemini unusable; V1.5 reverts to OpenAI-only.
+--          Remove the import_sessions.provider column added in 0004.
+-- Design: DROP COLUMN IF EXISTS — idempotent, safe to rerun.
 -- ============================================================
 
 ALTER TABLE import_sessions DROP COLUMN IF EXISTS provider;

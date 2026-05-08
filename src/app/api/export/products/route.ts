@@ -1,11 +1,11 @@
 /**
  * GET /api/export/products?format=xlsx|shopee_csv&filter=
  *
- * V1.5 Track B2: 商品 Excel + 蝦皮 CSV 匯出 (統一收口)
- *   - withTenantTx (RLS-safe) 撈當前商家所有商品
- *   - filter 對齊 /merchant/products: low-stock | no_photo | short_title | zero_stock | zero_price
+ * V1.5 Track B2: product Excel + Shopee CSV export (single chokepoint)
+ *   - withTenantTx (RLS-safe) fetches the current merchant's products
+ *   - filter aligned with /merchant/products: low-stock | no_photo | short_title | zero_stock | zero_price
  *   - format=xlsx → exceljs Buffer
- *   - format=shopee_csv → 蝦皮 21 欄 CSV (UTF-8 BOM)
+ *   - format=shopee_csv → Shopee 21-column CSV (UTF-8 BOM)
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
@@ -17,7 +17,7 @@ import { generateProductsXlsx } from '@/lib/export/products-xlsx';
 import { generateShopeeCsv } from '@/lib/export/shopee-csv';
 
 /**
- * V1.5 review H2: Content-Disposition 防注入 helper (跟 orders route 同 pattern)
+ * V1.5 review H2: Content-Disposition injection-defense helper (same pattern as orders route)
  */
 function buildContentDisposition(filename: string): string {
   const safe = filename.replace(/[\r\n"]/g, '_');
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   try {
     const merchant = await resolveMerchantFromCookie();
 
-    // V1.5 review H1: 停權商家不可匯出 (對齊 /api/products/generate 的 suspend guard)
+    // V1.5 review H1: suspended merchants cannot export (aligned with /api/products/generate's suspend guard)
     try {
       await assertNotSuspended(merchant.tenantId);
     } catch (err) {
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     const filterParam = url.searchParams.get('filter');
 
     const items: Product[] = await withTenantTx(merchant.tenantId, async (tx) => {
-      // merchants 表沒 RLS, web_anon 有 SELECT → 透過 dbUser 讀自己 row 拿 threshold
+      // merchants table has no RLS; web_anon has SELECT → read own row via dbUser to get threshold
       let threshold = 5;
       if (filterParam === 'low-stock') {
         const [row] = await tx
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
         whereClause = lte(products.stockQuantity, threshold);
       } else if (isHealthFilter(filterParam)) {
         if (filterParam === 'no_photo') {
-          // V1.5 review M4: fixture demo 圖也算 no_photo (跟 health-checks.ts / 列表頁對齊)
+          // V1.5 review M4: fixture demo images count as no_photo too (aligned with health-checks.ts / list page)
           whereClause = sql`${products.r2Key} IS NULL OR ${products.r2Key} = '' OR ${products.r2Key} LIKE '%/fixtures/%'`;
         } else if (filterParam === 'short_title') {
           whereClause = sql`length(${products.title}) < 8`;
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
 
     const today = new Date().toISOString().slice(0, 10);
 
-    // V1.5 review M2: silent truncate signal — 讓 client 知道有沒有滿格 5000
+    // V1.5 review M2: silent truncate signal — lets client know whether the 5000-row cap was hit
     const truncated = items.length === 5000 ? '1' : '0';
     const truncationHeaders = {
       'X-Export-Row-Count': String(items.length),

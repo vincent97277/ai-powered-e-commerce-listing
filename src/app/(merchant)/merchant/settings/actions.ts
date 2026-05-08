@@ -26,7 +26,7 @@ export async function updateMerchantAction(
   try {
     const current = await resolveMerchantFromCookie();
 
-    // V1 #53: 停權商家不可改設定
+    // V1 #53: suspended merchants can't change settings
     try {
       await assertNotSuspended(current.tenantId);
     } catch (err) {
@@ -81,7 +81,7 @@ export async function updateMerchantAction(
       throw err;
     }
 
-    // 失效 cache: 舊 slug 跟新 slug 都要 invalidate
+    // Invalidate cache: both old slug and new slug must be invalidated
     if (patch.slug && patch.slug !== oldSlug) {
       invalidateSlug(oldSlug, patch.slug);
     }

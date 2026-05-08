@@ -1,5 +1,5 @@
 /**
- * 商家設定頁 — 改店名、slug、品牌語氣、主題顏色
+ * Merchant settings page — change store name, slug, brand voice, theme colors
  */
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
 import { withTenantTx } from '@/lib/db/with-tenant';
@@ -14,16 +14,16 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   const current = await resolveMerchantFromCookie();
 
-  // 撈完整 merchant (含 themeVars). V2.6.2 Tier 1 #4: 走 withTenantTx 維持
-  // 一致性 — 所有 tenant-scoped query 都過同一條路。merchants 表本身沒 RLS
-  // policy (storefronts 跨查 theme/name), 但走 withTenantTx 不會改變查詢結果,
-  // 只是讓「直接 import dbUser」永遠不需要在 user-facing route 出現。
-  // 寫入路徑 (settings/actions.ts) 仍走 dbAdmin (web_anon 沒 UPDATE grant)。
+  // Fetch full merchant (incl. themeVars). V2.6.2 Tier 1 #4: route through withTenantTx for
+  // consistency — all tenant-scoped queries take the same path. The merchants table itself has
+  // no RLS policy (storefronts cross-query theme/name), but going through withTenantTx doesn't
+  // change query results — it just keeps "direct import of dbUser" out of user-facing routes.
+  // Write path (settings/actions.ts) still goes through dbAdmin (web_anon has no UPDATE grant).
   const [m] = await withTenantTx(current.tenantId, async (tx) =>
     tx.select().from(merchants).where(eq(merchants.id, current.tenantId)).limit(1),
   );
 
-  // V1.5 A2: 今日 AI 用量 (server-side, 跟 form 一起 SSR)
+  // V1.5 A2: today's AI usage (server-side, SSR'd with the form)
   const { usedCents, capCents } = await getDailyCostSnapshot(current.tenantId);
 
   return (

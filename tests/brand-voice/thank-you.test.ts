@@ -2,7 +2,7 @@
  * V1.9 T3 O2 — getThankYouMessage heuristic mapping smoke tests.
  *
  * Free-text brandVoice → 4 voice tones via keyword detection.
- * Default = warm (老闆口吻 most natural).
+ * Default = warm (shop-owner voice, most natural).
  */
 import { describe, it, expect } from 'vitest';
 import { getThankYouMessage, __TEST } from '@/lib/brand-voice/thank-you';

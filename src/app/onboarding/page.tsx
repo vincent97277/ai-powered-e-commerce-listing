@@ -21,7 +21,7 @@ export default function OnboardingPage() {
       className="relative min-h-screen overflow-hidden"
       style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}
     >
-      {/* 背景光暈 */}
+      {/* Background glow */}
       <div
         aria-hidden
         className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-[600px] w-[1100px] -translate-x-1/2 opacity-40 blur-3xl"
@@ -72,9 +72,9 @@ export default function OnboardingPage() {
             }}
           >
             {/*
-              V1.7 D1 honeypot. 真實使用者看不到 (off-screen + tabIndex=-1 + aria-hidden);
-              spam bot 通常 fill all fields → server action 看到非空就走 fake-success 分支.
-              欄位名故意取「網站」這類 bot 喜歡填的東西.
+              V1.7 D1 honeypot. Real users can't see it (off-screen + tabIndex=-1 + aria-hidden);
+              spam bots usually fill all fields → server action sees non-empty and takes the fake-success branch.
+              The field name is intentionally something bots love to fill (like "website").
             */}
             <input
               type="text"
@@ -160,7 +160,7 @@ export default function OnboardingPage() {
               </p>
             </div>
 
-            {/* V2 task 104 — 商家登入帳密. approve 通過後用這組從 /merchant/login 進後台. */}
+            {/* V2 task 104 — merchant login credentials. After approval, use these to enter the backend from /merchant/login. */}
             <div className="space-y-2">
               <Label htmlFor="email" className="t-caption" style={{ color: 'var(--brand-primary)' }}>
                 登入 email
@@ -239,8 +239,8 @@ export default function OnboardingPage() {
             )}
 
             {state.pendingFake && (
-              // Honeypot 觸發後的 fake-success message — 對 bot 看起來跟真的成功一樣,
-              // 但其實沒建商家. 真實使用者也不該看到這個分支 (除非他們手動填了 hidden input).
+              // Fake-success message after honeypot trips — looks identical to real success to a bot,
+              // but no merchant was created. Real users shouldn't see this branch either (unless they manually fill the hidden input).
               <div
                 className="border p-3 text-sm"
                 style={{

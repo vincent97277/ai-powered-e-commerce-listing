@@ -1,6 +1,6 @@
 -- ============================================================
 -- Rollback for 0001_confused_stone_men.sql
--- 反向順序: indexes 先 drop, 再 columns
+-- Reverse order: drop indexes first, then columns
 -- ============================================================
 
 DROP INDEX IF EXISTS "products_tenant_import_dedup_unique";

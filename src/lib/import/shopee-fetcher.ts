@@ -1,8 +1,8 @@
 /**
- * 蝦皮 fetcher (V1 #64)
+ * Shopee fetcher (V1 #64)
  *
- * 蝦皮商品頁有結構化的 JSON-LD (schema.org Product), 直接 parse。
- * 店面頁 URL pattern: shopee.tw/shop/{shopid} | shopee.tw/{seller}.{shopid}
+ * Shopee product pages ship structured JSON-LD (schema.org Product) — parse directly.
+ * Storefront URL patterns: shopee.tw/shop/{shopid} | shopee.tw/{seller}.{shopid}
  *
  * Pure function: HTML → NormalizedItem[]
  */

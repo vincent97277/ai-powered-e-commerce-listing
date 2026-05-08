@@ -1,11 +1,11 @@
 /**
  * PartialState — partial-failure state primitive (V1.6 Track B4)
  *
- * 用法:
- *   <PartialState failedSections={['銷售圖表', '近期訂單']} />
+ * Usage:
+ *   <PartialState failedSections={['Sales chart', 'Recent orders']} />
  *
- * 1 個 widget 失敗時, 整個 page 仍然 functional, 但要主動告知 user 哪些 section 沒載到.
- * Yellow/amber AlertTriangle (var(--warning)).
+ * When a single widget fails, the page is still functional, but proactively tell
+ * the user which sections didn't load. Yellow/amber AlertTriangle (var(--warning)).
  *
  * a11y:
  *   role="status" + aria-live="polite" — non-blocking heads-up

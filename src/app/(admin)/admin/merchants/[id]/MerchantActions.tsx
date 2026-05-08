@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * MerchantActions — admin actions UI (V1 #50, logic 在 #51 actions.ts)
- * Linear-tone: minimal chrome, dialog confirm 用 native dialog (V1 不引入 shadcn dialog wrap)
+ * MerchantActions — admin actions UI (V1 #50, logic in #51 actions.ts)
+ * Linear-tone: minimal chrome, confirmation dialogs use native dialog (V1 does not pull in the shadcn dialog wrapper)
  */
 import { useState, useTransition } from 'react';
 import {
@@ -22,7 +22,7 @@ export function MerchantActions({
   merchantId: string;
   currentSlug: string;
   isSuspended: boolean;
-  /** V1.7 D1: approved_at IS NULL → 顯示「核可」按鈕 (高 priority, 排第一) */
+  /** V1.7 D1: approved_at IS NULL → show the "Approve" button (high priority, listed first) */
   isPendingApproval: boolean;
 }) {
   const [pending, start] = useTransition();

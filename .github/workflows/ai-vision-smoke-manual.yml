@@ -122,7 +122,7 @@ jobs:
         # Verbatim from LOCAL_SETUP.md step 4 — these IDs match
         # DEMO_MERCHANT_AKAMI_ID / DEMO_MERCHANT_AFEN_ID env vars and the
         # smoke test logs in as akami. ON CONFLICT DO NOTHING is idempotent.
-        # approved_at must be set or storefronts show 「暫停營業中」 and
+        # approved_at must be set or storefronts show "Suspended" and
         # the merchant flow rejects the upload.
         env:
           PGPASSWORD: ci_owner_pass

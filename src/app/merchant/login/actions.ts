@@ -10,11 +10,11 @@
  *   4. on success: set merchant-session cookie (only)
  *   5. redirect(next)
  *
- * V2 task 105 移除過渡用 demo-merchant-id cookie — 全部 consumers 已透過
- * resolveMerchantFromCookie() 讀 merchant-session cookie.
+ * V2 task 105 removed the transitional demo-merchant-id cookie — all consumers now read the
+ * merchant-session cookie via resolveMerchantFromCookie().
  *
- * Error messages from loginMerchant are already i18n (繁中) and intentionally generic
- * for credential failures (no username enumeration). Status errors (suspended / pending)
+ * Error messages from loginMerchant are already i18n (Traditional Chinese) and intentionally
+ * generic for credential failures (no username enumeration). Status errors (suspended / pending)
  * surface only post-credential.
  */
 import { cookies, headers } from 'next/headers';
@@ -37,7 +37,7 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
   }
 
   // Internal-only redirect — block /evil.com / //evil.com / http://... etc.
-  // 必須 startsWith '/merchant' AND NOT '//' (protocol-relative).
+  // Must startsWith '/merchant' AND NOT '//' (protocol-relative).
   let nextPath = '/merchant';
   if (typeof next === 'string' && next.startsWith('/merchant') && !next.startsWith('//')) {
     nextPath = next;
