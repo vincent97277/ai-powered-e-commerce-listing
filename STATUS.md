@@ -18,9 +18,8 @@ Version-by-version progression for `rls-ai-shop`. This replaces the older `V1_ST
 - **V2.4 (2026-05-06)** Doc consolidation — README trimmed to entry surface, "Why interesting" promoted above the fold, security 30-sec synthesis added, Tests table moved to ARCHITECTURE §7, BUILD_DAY archived. CLAUDE.md hard rules #4/#6 fixed; common-errors cookbook added.
 - **V2.5 (2026-05-06)** Agent-routing observational note codified in DECISIONS.md (B-minus per 4-voice consensus), with built-in 2026-08-01 expiry clause if not referenced by then.
 - **V2.6 (2026-05-06)** **First distribution-first sprint.** Vercel Analytics with PII `beforeSend` filter (35 unit tests), ESLint allowlist narrowed from `(merchant)/**` + `(storefront)/**` glob to 3 exact-file exceptions (closes Codex CRITICAL doc-drift bug), 2 user-facing `dbAdmin` → `dbUser` refactors, `ai_usage_events` cross-tenant deny test, blog post `docs/blog/compile-time-tenant-isolation.md` with source-anchored snippets, blog drift checker T4. **90-day sunset gate at 2026-08-06 (issue #27)** — `< 50 unique non-operator visitors AND < 2 inbound contacts → V2.7 = archive`. 260 → 275 tests.
-- **V2.6.x Tier 1 (2026-05-07)** Backlog cleanup — dbUser compile-time enforcement (fail-closed sister of V2.6 PR2's dbAdmin work; prevents the "switch-to-dbAdmin-to-debug-zero-rows" leak), `workflow_dispatch` GH Action so operator can run AI vision smoke from GH UI without local Docker/dev/Inngest setup (~$0.02/run, manual trigger), `generateObject` → `generateText + Output.object` AI SDK v6 deprecation migration (verified post-merge against real OpenAI, `tokens_in > 0` assertion fired in 36.8s). 275 → 304 tests (drift-checker reconciled badge).
-
----
+- **V2.6.x Tier 1 (2026-05-07)** Backlog cleanup — dbUser compile-time enforcement (fail-closed sister of V2.6 PR2's dbAdmin work; prevents the "switch-to-dbAdmin-to-debug-zero-rows" leak), `workflow_dispatch` GH Action so operator can run AI vision smoke from GH UI without local Docker/dev/Inngest setup (~$0.02/run, manual trigger), `generateObject` → `generateText + Output.object` AI SDK v6 deprecation migration (verified post-merge against real OpenAI, `tokens_in > 0` assertion fired in 36.8s). 275 → 304 tests (drift-checker reconciled badge). **V2.6 release tag cut (`v2.6` → `ebde79d`)** covering V2.4 → V2.6.x Tier 1.
+- **V2.6.x Rename (2026-05-08)** Product-name unification `demo-sass-2` → `rls-ai-shop` matching the V2.6 RLS-template thesis. Three-PR sweep: PR #50 product name (package.json / Inngest client id / xlsx metadata / docs), PR #51 surrounding identifiers (Vercel domain forward-looking refs / Docker container + volume / local DB name / CI DB name / GH repo URL refs), PR #52 dead-URL footnotes preserving V2.2-era CHANGELOG entries verbatim. Operator UI follow-ups completed same day: Vercel project + new domain `rls-ai-shop.vercel.app`, GH repo rename, Inngest dashboard new app sync (Event/Signing keys reused — environment-scoped), local brew-postgres `ALTER DATABASE`. Prod Neon DB stayed `neondb` (always was — DEPLOY.md `demo_sass_2` was prescriptive, never live state). End-to-end verified via manual smoke (run 25533410568, 38.3s, $0.02 OpenAI).
 
 ## Summary table
 
@@ -56,8 +55,12 @@ Version-by-version progression for `rls-ai-shop`. This replaces the older `V1_ST
 | V2.6.x #4 | 2026-05-07 | dbUser ESLint ban + 2 merchant page refactors via `withTenantTx` + blog snippet sync | 275 | — | (PR #45) |
 | V2.6.x #7 | 2026-05-07 | `workflow_dispatch` GH Action for AI vision smoke (manual operator trigger, ~$0.02/run) | 275 | — | (PR #46) |
 | V2.6.x #5 | 2026-05-07 | `generateObject` → `generateText + Output.object` AI SDK v6 deprecation migration | 275 | — | (PR #47) |
+| V2.6.x docs | 2026-05-07 | Tier 1 backlog wrap-up (STATUS / CHANGELOG / test badge) + dbAdmin/dbUser narrative refresh | 304 | — | (PRs #48, #49) |
+| **V2.6 release tag** | **2026-05-07** | **Tag `v2.6` → `ebde79d` covering V2.4 → V2.6.x Tier 1. GH release published (`Latest`).** | | | |
+| V2.6.x rename | 2026-05-08 | `demo-sass-2` → `rls-ai-shop` product unification. PR #50 product name, PR #51 surrounding ids (Vercel domain / Docker / DB), PR #52 dead-URL footnotes | 304 | — | (PRs #50, #51, #52) |
+| **V2.6.x rename complete** | **2026-05-08** | **Operator UI sweeps done same day: Vercel + GH + Inngest + local brew-postgres `ALTER DATABASE`. Verified via run 25533410568 (38.3s, $0.02).** | | | |
 
-Bottom line: **300+ vitest tests, GitHub Actions CI on every PR, public URL live.**
+Bottom line: **300+ vitest tests, GitHub Actions CI on every PR, public URL live at `rls-ai-shop.vercel.app`.**
 
 ---
 
