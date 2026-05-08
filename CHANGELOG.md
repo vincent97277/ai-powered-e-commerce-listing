@@ -10,6 +10,32 @@ Format: every entry is one Git commit with SHA + date + subject + bullet expansi
 
 ---
 
+## V2.6.x homepage merchant card productCount fix — 2026-05-08 (PR #57) — `56bf4bc`
+
+**fix(home): merchant card productCount 對不起來 — qualify subquery cols + filter is_published**
+
+User-reported bug: 首頁的店鋪卡片，商品數量對不起來. Two compounded bugs:
+
+1. **Drizzle subquery interpolation always returned 0.** `${products.tenantId}` in a `sql` template tag interpolates BARE column name `"tenant_id"`, not `"products"."tenant_id"`. Same for `${merchants.id}` → bare `"id"`. Postgres resolves bare `"id"` to the inner subquery scope (products.id), not the outer merchants.id. Result: `WHERE products.tenant_id = products.id` — always false → all subquery counts return 0. Verified with Drizzle `.toSQL()`. Same bug in the GMV subquery → orderBy GMV was a silent no-op (always tied at 0, fell through to createdAt DESC). Pre-V1 bug, dormant because demo merchants typically had 0 published products in early states.
+2. **productCount included drafts (didn't match storefront).** Storefront filters `WHERE is_published = true` (`src/app/(storefront)/store/[slug]/page.tsx:63`). Homepage card counted ALL products. So even after fixing #1, "5 件商品" on a card would still mismatch the 2 products visible on the storefront.
+
+Fix in `src/lib/platform/featured-merchants.ts`:
+- Subqueries rewritten with literal qualified names (`products.tenant_id = merchants.id`, `orders.tenant_id = merchants.id`) instead of Drizzle's unqualified column interpolation
+- Added `AND products.is_published = true` to the productCount subquery
+- `getPlatformStats` updated: inner-join merchants + filter `is_published` + filter active/approved tenants. Without the join, the hero "件商品" stat would inflate by counting products on suspended/unapproved merchants.
+- Removed unused `orders` import (subqueries are now literal SQL)
+
+Tests in `tests/platform/featured-merchants.test.ts` (3 cases):
+- `getFeaturedMerchants` counts only `is_published = true` (3 published + 2 drafts → expect 3, not 5)
+- `getRecentMerchants` same contract
+- `getPlatformStats`: +1 published → +1 delta; +1 unpublished → 0 delta
+
+Verified live on prod (akami: 2 件商品 matches storefront's 2 published, afen: 0 件商品 — just approved, no products yet). 327 tests pass (was 324, +3 from this PR).
+
+Memory note saved: `feedback_drizzle_subquery_bare_columns.md` documents the Drizzle quirk + workaround pattern (literal qualified names in correlated subqueries).
+
+---
+
 ## V2.6.x dead-URL footnote — 2026-05-08 (PR #52) — `5bfef9f`
 
 **docs: footnote dead URL refs in CHANGELOG / STATUS V2.2 entries**
