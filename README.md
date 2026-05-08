@@ -1,6 +1,6 @@
 # rls-ai-shop
 
-> A multi-merchant e-commerce platform for Taiwan's independent stores. AI photo→listing in ~7 seconds, multi-tenant Postgres RLS, and a platform-admin observability suite — built as a portfolio project that started life as a hackathon and got pushed thirteen versions deeper to exercise real production patterns (cloud deploy, per-merchant auth, R2 storage, security hardening).
+> A multi-merchant e-commerce platform for Taiwan's independent stores. AI photo→listing in ~7 seconds, multi-tenant Postgres RLS, and a platform-admin observability suite — built as a portfolio project that started life as a hackathon and was iterated through V2.6 to exercise real production patterns (cloud deploy, per-merchant auth, R2 storage, compile-time tenant isolation, security hardening).
 
 [![Live demo](https://img.shields.io/badge/demo-live-success?style=flat-square)](https://rls-ai-shop.vercel.app)
 [![Tests](https://img.shields.io/badge/tests-304%20passing-brightgreen)](#tests)
@@ -94,7 +94,7 @@ Deeper diagrams (data model, AI pipeline sequence, security layers) live in [ARC
 
 ## Project status
 
-V1 hackathon → V2.0 per-merchant auth → V2.2 cloud deploy → V2.3 OSS readiness · 260+ tests · live at the URL above. Per-version detail: [STATUS.md](./STATUS.md).
+V1 hackathon → V2.0 per-merchant auth → V2.2 cloud deploy → V2.3 OSS readiness → V2.6 distribution sprint (RLS template positioning, AI SDK v6 migration, dbAdmin/dbUser ESLint containment, product rename to `rls-ai-shop`) · 304 tests · live at the URL above. Per-version detail: [STATUS.md](./STATUS.md). 90-day sunset gate decision @ 2026-08-06 (issue #27).
 
 ## Where to next
 

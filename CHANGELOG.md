@@ -10,6 +10,58 @@ Format: every entry is one Git commit with SHA + date + subject + bullet expansi
 
 ---
 
+## V2.6.x dead-URL footnote — 2026-05-08 (PR #52) — `5bfef9f`
+
+**docs: footnote dead URL refs in CHANGELOG / STATUS V2.2 entries**
+
+- Phase 2 operator action retired `demo-sass-2.vercel.app` without a Vercel alias on 2026-05-08, so the 5 V2.2-era CHANGELOG / STATUS entries referencing that URL are now dead links.
+- Two-line "URL note" paragraph added to the top of CHANGELOG.md and STATUS.md naming the rename, the cutover date, and instructing readers to mentally substitute `rls-ai-shop.vercel.app`. Historical entries themselves are preserved verbatim because rewriting the URLs would misstate what the deploy URL actually was on 2026-05-05.
+
+---
+
+## V2.6.x rename phase 1 — 2026-05-08 (PR #51) — `af1f55e`
+
+**chore: rename phase 1 — vercel domain, docker, DB names, repo URL**
+
+Follow-up to PR #50's product-name rename. Sweeps the surrounding identifiers that were intentionally deferred so the rename could be bisected if it broke something. PR #50 was clean → proceed.
+
+- **Vercel domain refs (forward-looking surfaces only)**: `demo-sass-2.vercel.app` → `rls-ai-shop.vercel.app` in README badges + Live: line + hero link, DEPLOY.md prescriptive examples, `.github/workflows/post-deploy-smoke.yml` (workflow_dispatch default + TARGET + SMOKE_BASE_URL), `.github/ISSUE_TEMPLATE/bug.md`, `playwright.config.ts` PROD_URL fallback, `scripts/capture-hero.ts` BASE fallback, `src/lib/observability/analytics-filter.ts` comment, `tests/observability/analytics-filter.test.ts` 5 fixture URLs, CLAUDE.md "Live at https://..." line. CHANGELOG/STATUS V2.2 historical refs intentionally NOT rewritten (PR #52 footnote handles those).
+- **Docker container + volume**: `docker-compose.yml` `container_name` + `volumes.name` + LOCAL_SETUP.md `docker exec` examples (5 occurrences) → `rls-ai-shop-postgres` / `rls-ai-shop-pg-data`.
+- **DB names**: `demo_sass_2` → `rls_ai_shop` and `demo_sass_2_ci` → `rls_ai_shop_ci` across `docker-compose.yml` POSTGRES_DB + healthcheck, `.env.local.example` DATABASE_URL paths (×3), `.github/workflows/ci.yml` and `ai-vision-smoke-manual.yml` POSTGRES_DB + DATABASE_URL_* + healthcheck + `psql -d`, `tests/db/migrate-runner.test.ts` OWNER_URL fallback, LOCAL_SETUP.md psql examples, ARCHITECTURE.md mermaid `(demo_sass_2)`, DEPLOY.md prescriptive Neon DSN examples (5 occurrences).
+- **GitHub repo URL**: `vincent97277/ai-powered-e-commerce-listing` → `vincent97277/rls-ai-shop` in `docs/blog/compile-time-tenant-isolation.md` reference repo link + README walkthrough release asset URL.
+- 17 files, 53 lines. Tests stay 304 because no test count change; existing local dev DB unaffected (operator's `.env.local` still pointed at old DB until Phase 2 step 6).
+
+---
+
+## V2.6.x rename — 2026-05-08 (PR #50) — `0005d57`
+
+**chore: rename project demo-sass-2 → rls-ai-shop**
+
+V2.6.x post-release rename. The `demo-sass-2` identifier was a hackathon placeholder that drifted into the canonical name across docs, package.json, Inngest client id, and xlsx export metadata. V2.6 sprint reframed positioning around RLS-driven multi-tenancy + AI photo→listing, so the product name now matches the thesis: rls + ai + shop.
+
+- `package.json` `name` field → `rls-ai-shop`
+- `src/inngest/client.ts` `id` → `rls-ai-shop` (changes Inngest dashboard app grouping; existing event history stays under old grouping)
+- `src/lib/export/{products,orders}-xlsx.ts` `workbook.creator` (xlsx metadata)
+- All docs renamed (10 .md files): README / STATUS / CHANGELOG / ARCHITECTURE / CLAUDE / DEPLOY / LOCAL_SETUP / .github/CONTRIBUTING.md / blog / BUILD_DAY
+- 14 files, 32 lines.
+- KEPT (intentional): `demo-sass-2.vercel.app` URL (production domain — operator UI rename), `demo-sass-2-postgres` / `demo-sass-2-pg-data` (local Docker — would orphan operator's volume), `demo_sass_2` DB names (different snake_case pattern), `vincent97277/ai-powered-e-commerce-listing` repo URL (operator UI rename).
+
+---
+
+## V2.6.x docs refresh — 2026-05-07 (PR #49) — `ebde79d`
+
+**docs(v2.6.x): refresh dbAdmin/dbUser narrative + AI vision smoke pointer**
+
+V2.6.x Tier 1 #4 widened the ESLint rule from "ban dbAdmin" to "ban dbAdmin AND dbUser" outside the allowlist. The standing docs still told operators / agents that dbUser was the default-allowed import, which is now wrong (CI fails the build). This PR refreshes the 5 docs that still claimed the old contract.
+
+- CLAUDE.md hard-rule #5: now says "Don't import dbAdmin OR dbUser" with the sister failure mode framing (0 rows → switch to dbAdmin to debug → THAT is the leak). Cookbook step 2 rewritten to use `await withTenantTx(...)` directly.
+- ARCHITECTURE.md §4.3: rule body excerpt updated to show `importNames: ['dbAdmin', 'dbUser']` with new message string. Added `with-tenant.ts` + `api/health` to the allowlist excerpt. Surrounding prose reframes "dbUser is the default for user-facing reads" → "withTenantTx is the default; dbUser is the wrapper's internal handle".
+- DECISIONS.md Security/RLS section: same shift. withTenantTx promoted to lead bullet, dbUser bullet now describes the V2.6.x ban + reasoning.
+- LOCAL_SETUP.md: pnpm lint comment + troubleshooting + reference table all mention "dbAdmin + dbUser". Added a new "AI vision automated smoke" section covering `pnpm test:smoke:ai-local` + the V2.6.x Tier 1 #7 `workflow_dispatch` mirror.
+- README.md "Why this is interesting" #4 bullet: rewrote the lint-rule framing to cover both bans + name V2.6.x Tier 1 #4 explicitly.
+
+---
+
 ## V2.6.x Tier 1 #5 — 2026-05-07 (PR #47) — `f401b80`
 
 **refactor(ai): migrate generateObject → generateText + Output.object**
