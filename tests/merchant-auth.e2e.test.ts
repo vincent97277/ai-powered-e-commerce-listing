@@ -5,13 +5,13 @@
  *  - pure crypto: signSessionCookie / verifyCookieSignature roundtrip + tampering + edge variant
  *  - DB-coupled: loginMerchant happy path / wrong creds / suspended / pending
  *  - validateMerchantSession: valid / bad HMAC / expired / revoked
- *  - revokeMerchantSession: 設 revoked_at
- *  - HTTP middleware: /merchant 重導 /merchant/login, /merchant/login + /merchant/signup 200
- *  - HTTP middleware: missing MERCHANT_SESSION_SECRET → 503 (skipped — 測 process env unset
- *    需要重啟 dev server, 不適合在單元測試做; 留給 task 106 manual smoke)
+ *  - revokeMerchantSession: sets revoked_at
+ *  - HTTP middleware: /merchant redirects to /merchant/login, /merchant/login + /merchant/signup 200
+ *  - HTTP middleware: missing MERCHANT_SESSION_SECRET → 503 (skipped — testing process env unset
+ *    requires restarting dev server, not suitable for unit test; left to task 106 manual smoke)
  *
- * 自建 test merchants (akami_test_103, akami_test_103_suspended, akami_test_103_pending),
- * afterAll 清理. 不依賴 seed state.
+ * Builds its own test merchants (akami_test_103, akami_test_103_suspended, akami_test_103_pending),
+ * afterAll cleans up. Does not depend on seed state.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { hash as bcryptHash } from 'bcryptjs';
@@ -28,14 +28,14 @@ import { verifyCookieSignatureEdge } from '@/lib/merchant-session-edge';
 import { dbAdmin } from '@/db/admin-only';
 import { merchantSessions, merchants } from '@/db/schema';
 
-// 確保 MERCHANT_SESSION_SECRET 有 (從 .env.local 載)
+// Ensure MERCHANT_SESSION_SECRET is set (loaded from .env.local)
 beforeAll(() => {
   if (!process.env.MERCHANT_SESSION_SECRET || process.env.MERCHANT_SESSION_SECRET.length < 32) {
     throw new Error('merchant-auth e2e 需要 MERCHANT_SESSION_SECRET ≥32 字元 in .env.local');
   }
 });
 
-// ─── 測試用 merchant 帳號 (隔離, 不污染 seed) ───
+// ─── Test merchant accounts (isolated, do not pollute seed) ───
 const TEST_PREFIX = 't103_';
 const TEST_PASSWORD = 'test-password-103';
 const ACTIVE = {
@@ -58,10 +58,10 @@ let pendingMerchantId = '';
 beforeAll(async () => {
   const passwordHash = await bcryptHash(TEST_PASSWORD, 10);
 
-  // 清舊的 (避免上次 test crash 留 garbage)
+  // Clean leftovers (avoid garbage from previous test crashes)
   await dbAdmin.delete(merchants).where(sql`slug LIKE ${TEST_PREFIX + '%'}`);
 
-  // 建 3 個 test merchants
+  // Create 3 test merchants
   const [a] = await dbAdmin
     .insert(merchants)
     .values({
@@ -97,15 +97,15 @@ beforeAll(async () => {
       name: `Test Pending ${TEST_PREFIX}`,
       email: PENDING.email,
       passwordHash,
-      // approvedAt 不設 → pending
+      // approvedAt unset → pending
     })
     .returning({ id: merchants.id });
   pendingMerchantId = p!.id;
 });
 
-// 清測試 sessions + merchants
+// Clean up test sessions + merchants
 afterAll(async () => {
-  // session FK ON DELETE CASCADE 但保險刪 ip='test-suite' 那批 (login API 沒帶 ip 也清)
+  // session FK ON DELETE CASCADE, but extra-cleanup the ip='test-suite' batch (login API without ip also cleared)
   await dbAdmin.delete(merchantSessions).where(sql`ip = 'test-suite'`);
   await dbAdmin.delete(merchants).where(sql`slug LIKE ${TEST_PREFIX + '%'}`);
 });
@@ -188,7 +188,7 @@ describe('merchant auth — loginMerchant', () => {
     });
     expect(res.success).toBe(false);
     if (!res.success) {
-      // 訊息必須跟 wrong-password 一樣 — 不能透露 "此 email 不存在"
+      // Message must match wrong-password — must not reveal "this email does not exist"
       expect(res.error).toContain('帳號或密碼不正確');
     }
   });
@@ -212,7 +212,7 @@ describe('merchant auth — loginMerchant', () => {
   });
 
   it('suspended/pending wrong password: 不洩漏 status, 顯示 "帳號或密碼不正確"', async () => {
-    // 安全 invariant: post-credential check — 帳密錯就走 generic error, 不會說 "已停權"
+    // Security invariant: post-credential check — wrong password gets generic error, never reveals "suspended"
     const res1 = await loginMerchant(SUSPENDED.email, 'wrong-pw', { ip: 'test-suite' });
     expect(res1.success).toBe(false);
     if (!res1.success) expect(res1.error).toContain('帳號或密碼不正確');
@@ -267,7 +267,7 @@ describe('merchant auth — DB-coupled session lifecycle', () => {
 
     await revokeMerchantSession(login.sessionId);
 
-    // Cookie HMAC 還是合法, row 還在 (revoked_at 設了), 但必須擋下
+    // Cookie HMAC still valid, row still exists (revoked_at set), but must be blocked
     expect(await validateMerchantSession(login.cookieValue)).toBe(null);
   });
 
@@ -303,7 +303,7 @@ describe('merchant auth — HTTP integration (middleware /merchant gate)', () =>
       await fetch(`${BASE}/`);
       devServerUp = true;
     } catch {
-      console.warn('skip middleware HTTP tests: dev server 沒跑 (bun run dev)');
+      console.warn('skip middleware HTTP tests: dev server not running (bun run dev)');
     }
   });
 
@@ -328,7 +328,7 @@ describe('merchant auth — HTTP integration (middleware /merchant gate)', () =>
   it('GET /merchant/login 不擋 → 200 (or 404 if route 還沒做, 但不應該是 307)', async () => {
     const r = await tryFetch('/merchant/login');
     if (!r) return;
-    // route 還沒 ship (task 104 才做) → Next.js 回 404. 重點是「沒被 middleware 攔截 redirect」
+    // Route not shipped yet (built in task 104) → Next.js returns 404. Key is "not redirected by middleware"
     expect(r.status).not.toBe(307);
   });
 
@@ -347,16 +347,16 @@ describe('merchant auth — HTTP integration (middleware /merchant gate)', () =>
   });
 
   it('GET /merchant 帶簽好的 cookie (DB row 不在) → layout E11 redirect 到 /merchant/login (task 105)', async () => {
-    // V2 task 103 invariant: middleware 只做純 crypto, DB row liveness 在 layout.
-    // V2 task 105 finalize: (merchant)/layout.tsx 跟 resolveMerchantFromCookie() 都 wired
-    //   E11 defense-in-depth — HMAC 合法但 session row 不存在/已 revoked → redirect.
+    // V2 task 103 invariant: middleware does pure crypto only; DB row liveness is in layout.
+    // V2 task 105 finalize: (merchant)/layout.tsx and resolveMerchantFromCookie() are both wired.
+    //   E11 defense-in-depth — HMAC valid but session row missing/revoked → redirect.
     const sid = '55555555-5555-5555-5555-aaaaaaaaaaa5';
     const cookie = signSessionCookie(sid);
     const r = await tryFetch('/merchant', {
       headers: { cookie: `${MERCHANT_SESSION_COOKIE}=${cookie}` },
     });
     if (!r) return;
-    // middleware 放 (HMAC 對) → layout validateMerchantSession() 撞 DB → row 沒有 → redirect.
+    // Middleware passes (HMAC OK) → layout validateMerchantSession() hits DB → no row → redirect.
     expect(r.status).toBe(307);
     const location = r.headers.get('location') ?? '';
     expect(location).toContain('/merchant/login');
@@ -365,16 +365,16 @@ describe('merchant auth — HTTP integration (middleware /merchant gate)', () =>
   it('GET /merchant-switcher → 404 (V2 task 105 移除整個 route)', async () => {
     const r = await tryFetch('/merchant-switcher');
     if (!r) return;
-    // task 105: route 整個刪掉, middleware 也不再 match — 自然 404, by design.
-    // 點到舊 link 不會 5xx, 不會無限 redirect, 就是普通 not-found.
+    // task 105: route fully deleted, middleware no longer matches — naturally 404, by design.
+    // Clicking old links produces no 5xx and no infinite redirect, just plain not-found.
     expect(r.status).toBe(404);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // V2 task 104 — login + logout + onboarding HTTP smoke
-// 這層測 server actions / route handler 真的 wired up 跟 cookie / DB 互動正確.
-// 跑前提: dev server up + .env.local 完整. dev server 沒跑就全部 silently skip.
+// This layer tests that server actions / route handlers are truly wired and correctly interact with cookies / DB.
+// Preconditions: dev server up + .env.local complete. If dev server is down, silently skip all.
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('merchant auth — task 104 HTTP (login + logout + onboarding)', () => {
@@ -386,15 +386,15 @@ describe('merchant auth — task 104 HTTP (login + logout + onboarding)', () => 
       await fetch(`${BASE}/`);
       devServerUp = true;
     } catch {
-      console.warn('skip task 104 HTTP tests: dev server 沒跑 (bun run dev)');
+      console.warn('skip task 104 HTTP tests: dev server not running (bun run dev)');
     }
   });
 
   /**
-   * Server action POST 用 multipart/form-data + Next-Action header.
-   * 直接用 native FormData submission 對 /merchant/login 不會 work (server actions
-   * 走 Next.js RSC 協定). 所以這層測「中介行為 (HTTP layer 是否可達)」, 不直接調 action.
-   * 真正 action logic 已被 lib-level loginMerchant tests cover.
+   * Server action POSTs use multipart/form-data + Next-Action header.
+   * Native FormData submission against /merchant/login does not work (server actions
+   * use the Next.js RSC protocol). So this layer tests "intermediate behavior (HTTP layer reachability)",
+   * not the action itself. Real action logic is covered by lib-level loginMerchant tests.
    */
   async function tryGet(path: string, init?: RequestInit) {
     if (!devServerUp) return null;
@@ -424,11 +424,11 @@ describe('merchant auth — task 104 HTTP (login + logout + onboarding)', () => 
     if (!r) return;
     expect(r.status).toBe(200);
     const body = await r.text();
-    // 確認 V2 task 104 新欄位 + V1.7 D1 honeypot 都還在
+    // Confirm V2 task 104 new fields + V1.7 D1 honeypot still present
     expect(body).toContain('登入 email');
     expect(body).toContain('密碼');
     expect(body).toContain('再輸入一次密碼');
-    expect(body).toContain('hp_url'); // honeypot 還在
+    expect(body).toContain('hp_url'); // honeypot still present
   });
 
   it('GET /merchant/logout → 405 Method Not Allowed (登出必須 POST 防 prefetch)', async () => {
@@ -447,11 +447,11 @@ describe('merchant auth — task 104 HTTP (login + logout + onboarding)', () => 
 
   it('POST /merchant/logout 帶合法 session cookie → 303 + DB row revoked', async () => {
     if (!devServerUp) return;
-    // 1. 直接 lib-level login 拿一個合法 cookie
+    // 1. Get a valid cookie via direct lib-level login
     const login = await loginMerchant(ACTIVE.email, TEST_PASSWORD, { ip: 'test-suite' });
     if (!login.success) throw new Error('setup login failed');
 
-    // 2. POST /merchant/logout 帶 cookie
+    // 2. POST /merchant/logout with cookie
     const r = await tryGet('/merchant/logout', {
       method: 'POST',
       headers: { cookie: `${MERCHANT_SESSION_COOKIE}=${login.cookieValue}` },
@@ -461,7 +461,7 @@ describe('merchant auth — task 104 HTTP (login + logout + onboarding)', () => 
     const location = r.headers.get('location') ?? '';
     expect(location).toContain('/merchant/login');
 
-    // 3. 驗 DB row revoked_at 被設
+    // 3. Verify DB row revoked_at is set
     const [row] = await dbAdmin
       .select({ revokedAt: merchantSessions.revokedAt })
       .from(merchantSessions)
@@ -470,18 +470,18 @@ describe('merchant auth — task 104 HTTP (login + logout + onboarding)', () => 
     expect(row).toBeDefined();
     expect(row!.revokedAt).not.toBeNull();
 
-    // 4. 驗 set-cookie clear 了 (max-age=0 or expires=epoch)
+    // 4. Verify set-cookie was cleared (max-age=0 or expires=epoch)
     const setCookie = r.headers.get('set-cookie') ?? '';
     expect(setCookie.toLowerCase()).toContain('merchant-session=');
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// V2 task 104 — onboarding email + password integration (lib-level, 不過 HTTP)
-// 直接驗 DB invariant: 註冊後 email + password_hash 寫入 + approved_at = NULL +
-// 重複 email 撞 unique index.
-// 不直接 call createMerchantAction (next/headers 在 vitest node 環境不能用),
-// 模擬 action 內部 INSERT path — 跟 onboarding/security.test.ts 同 pattern.
+// V2 task 104 — onboarding email + password integration (lib-level, no HTTP)
+// Verify DB invariant: after signup email + password_hash written + approved_at = NULL +
+// duplicate email hits unique index.
+// Don't call createMerchantAction directly (next/headers unavailable in vitest node env);
+// simulate the INSERT path inside the action — same pattern as onboarding/security.test.ts.
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('merchant auth — task 104 onboarding integration', () => {
@@ -515,7 +515,7 @@ describe('merchant auth — task 104 onboarding integration', () => {
 
     expect(row).toBeDefined();
     expect(row!.email).toBe(ONB_EMAIL_A);
-    expect(row!.passwordHash).toMatch(/^\$2[aby]\$/); // bcrypt 格式
+    expect(row!.passwordHash).toMatch(/^\$2[aby]\$/); // bcrypt format
     expect(row!.approvedAt).toBeNull(); // pending admin approval
   });
 
@@ -523,7 +523,7 @@ describe('merchant auth — task 104 onboarding integration', () => {
     const { hash: bcryptHash } = await import('bcryptjs');
     const passwordHash = await bcryptHash('test-password-104', 10);
 
-    // 第二筆 → unique violation 應該爆
+    // 2nd row → unique violation should fire
     await expect(
       dbAdmin.insert(merchants).values({
         slug: `${ONB_PREFIX}newshop_dup`,
@@ -535,7 +535,7 @@ describe('merchant auth — task 104 onboarding integration', () => {
   });
 
   it('註冊後 approve → loginMerchant 對該 email 成功', async () => {
-    // 把上面建的 newshop approve 掉
+    // Approve the newshop created above
     await dbAdmin
       .update(merchants)
       .set({ approvedAt: new Date(), approvedByAdmin: 'test-suite' })

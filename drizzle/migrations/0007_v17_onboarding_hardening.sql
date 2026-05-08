@@ -2,24 +2,26 @@
 -- 0007_v17_onboarding_hardening.sql — V1.7 D1 onboarding security hardening
 --
 -- Why:
---   /onboarding 之前 V1 簡化版本: 沒 email 驗證 / 沒 captcha / 沒 IP rate limit /
---   沒 reserved slug / 直接 set cookie 進後台. Codex 在 V1.5 + V1.6 review 兩次
---   flag 為最大 security debt.
+--   /onboarding's prior V1 simplified version had no email verification,
+--   no captcha, no IP rate limit, no reserved slug list, and set cookies
+--   directly into the merchant dashboard. Codex flagged it as the largest
+--   security debt in both V1.5 and V1.6 reviews.
 --
---   V1.7 D1 不引入第三方 (Resend / hCaptcha) 的前提下做到「safe by default」:
---     1. Admin approval queue: 新商家 approved_at=NULL → admin 必須核可才能跑
---     2. Reserved slug list: 在 application layer 擋 (admin/api/store/...)
---     3. IP rate limit (DB-backed, 不引 Redis): 1 success per IP / 24h
---     4. Honeypot: hidden 欄位被 bot 填 → fake-success, 浪費 bot 時間
+--   V1.7 D1 achieves "safe by default" without pulling in third parties
+--   (Resend / hCaptcha):
+--     1. Admin approval queue: new merchants get approved_at=NULL → admin must approve before they run.
+--     2. Reserved slug list: blocked in the application layer (admin/api/store/...).
+--     3. IP rate limit (DB-backed, no Redis): 1 success per IP / 24h.
+--     4. Honeypot: hidden field filled by a bot → fake success, wasting bot time.
 --
--- 本 migration 涵蓋 1 + 3 (schema 部分):
---   - merchants 加 approved_at + approved_by_admin
---   - 既有商家 backfill approved_at = created_at, approved_by_admin = 'legacy'
---   - 新表 onboarding_attempts 追 IP + slug + 結果 (admin observability)
+-- This migration covers items 1 + 3 (schema portion):
+--   - merchants gets approved_at + approved_by_admin
+--   - Existing merchants are backfilled: approved_at = created_at, approved_by_admin = 'legacy'
+--   - New table onboarding_attempts tracks IP + slug + result (admin observability)
 --
--- RLS pattern (對齊 0001/0003/0006):
---   - onboarding_attempts 只給 web_admin (cross-tenant observability), web_anon 不 GRANT
---   - ENABLE RLS, 沒 policy = deny-all-to-non-superuser (web_admin BYPASSRLS 自動穿透)
+-- RLS pattern (aligned with 0001/0003/0006):
+--   - onboarding_attempts is granted to web_admin only (cross-tenant observability); web_anon not granted.
+--   - ENABLE RLS, no policy = deny-all-to-non-superuser (web_admin BYPASSRLS passes through).
 -- ============================================================
 
 -- ─── 1. merchants approval columns ───
@@ -30,14 +32,14 @@ ALTER TABLE merchants
   ADD COLUMN IF NOT EXISTS approved_by_admin text;
   -- nullable, V1 admin session id (uuid) or 'legacy' for V1/V1.6 backfill or 'system' for seed
 
--- Backfill: 既有商家 (V1 demo + V1.6 之前自助註冊) 全部視同已核可,
--- 不然 storefront 會立刻 404 / suspended.
+-- Backfill: existing merchants (V1 demo + pre-V1.6 self-signup) are all treated as approved,
+-- otherwise the storefront would immediately 404 / show suspended.
 UPDATE merchants
    SET approved_at = created_at,
        approved_by_admin = 'legacy'
  WHERE approved_at IS NULL;
 
--- 給 admin queue 用: 篩 unapproved merchants 速度
+-- For admin queue: speeds up filtering unapproved merchants
 CREATE INDEX IF NOT EXISTS merchants_pending_approval_idx
   ON merchants (created_at DESC)
   WHERE approved_at IS NULL;
@@ -61,4 +63,4 @@ ALTER TABLE onboarding_attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE onboarding_attempts FORCE  ROW LEVEL SECURITY;
 
 GRANT SELECT, INSERT ON onboarding_attempts TO web_admin;
--- 故意不 GRANT to web_anon; 配合 RLS ENABLE 即等於 deny-all.
+-- Deliberately NOT granted to web_anon; combined with RLS ENABLE this equals deny-all.

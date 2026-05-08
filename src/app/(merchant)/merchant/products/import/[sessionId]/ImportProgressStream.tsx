@@ -3,7 +3,7 @@
 /**
  * Polling-based progress UI (V1 #68)
  * 2s interval, stop when status in completed/failed
- * 重用 GenerationStream 視覺語言 (cursor blink, gradual fill)
+ * Reuse GenerationStream's visual language (cursor blink, gradual fill)
  */
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -66,7 +66,7 @@ export function ImportProgressStream({
       }
     };
     const interval = setInterval(tick, 2000);
-    tick(); // 立刻來一次
+    tick(); // fire one immediately
     return () => clearInterval(interval);
   }, [sessionId, state.status]);
 

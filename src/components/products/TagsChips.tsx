@@ -28,7 +28,7 @@ export function TagsChips({ tags }: { tags: string[] }) {
 
       <div className="flex flex-wrap gap-2">
         {tags.map((t, i) => {
-          // 偶數 index → outlined / 奇數 → filled (兩種 variant 交錯)
+          // Even index → outlined / odd → filled (alternating variants)
           const isFilled = i % 2 === 1;
           const isActive = activeIndex === i;
 

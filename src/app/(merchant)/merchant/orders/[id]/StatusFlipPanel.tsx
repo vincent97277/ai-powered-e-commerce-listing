@@ -2,9 +2,9 @@
 
 /**
  * Status flip UI (V1 #55)
- * - 依當前狀態顯示對應 transition button
- * - shipped 要填 trackingNumber + carrier
- * - refunded 要填 reason + confirm dialog (不可逆警告)
+ * - Renders the right transition button based on current status
+ * - shipped requires trackingNumber + carrier
+ * - refunded requires reason + confirm dialog (irreversible warning)
  */
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
@@ -71,7 +71,7 @@ export function StatusFlipPanel({
     });
   }
 
-  // Refunded 是 dead-end, 不顯示 panel
+  // Refunded is a dead-end; don't show the panel
   if (currentStatus === 'refunded') {
     return (
       <div
@@ -148,7 +148,7 @@ export function StatusFlipPanel({
         </button>
       )}
 
-      {/* 退款 button (always available, except refunded) */}
+      {/* Refund button (always available, except refunded) */}
       <button
         type="button"
         onClick={() => setShowRefund(true)}

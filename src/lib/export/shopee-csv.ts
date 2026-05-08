@@ -2,10 +2,12 @@
  * Shopee bulk-upload CSV export (V1.5 Track B2)
  *
  * Aligned with shopee-tw-mass-upload-sample.csv (Taiwan mall, 21 columns):
- *   分類代碼, 商品名稱, 商品描述, 主商品貨號, 商品規格識別碼,
- *   規格名稱1, 規格選項1, 規格圖片, 規格名稱2, 規格選項2,
- *   價格, 庫存, 商品選項貨號, 主商品圖片, 重量,
- *   長度, 寬度, 高度, 7-11取貨付款, 全家取貨付款, 黑貓宅配, 郵局, 較長備貨天數
+ *   category code, product name, product description, main SKU, spec group id,
+ *   spec name 1, spec option 1, spec image, spec name 2, spec option 2,
+ *   price, stock, option SKU, main product image, weight,
+ *   length, width, height, 7-11 COD, FamilyMart COD, T-cat home delivery, post,
+ *   longer prep days
+ * (Exact CJK header strings preserved in SHOPEE_HEADERS below — Shopee parser is positional.)
  *
  * Strategy:
  *   - Pure function generateShopeeCsv(products) -> string (with UTF-8 BOM)

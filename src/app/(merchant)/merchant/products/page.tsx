@@ -1,5 +1,5 @@
 /**
- * 商家商品列表 — 看自己所有商品 (透過 RLS, 只看到自己的)
+ * Merchant product list — see all your own products (via RLS, only see your own)
  */
 import Link from 'next/link';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
@@ -13,7 +13,7 @@ import { StatusChip } from '@/components/ui/StatusChip';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { imageUrlFor } from '@/lib/storage/public-url-client';
 
-/** V1.5 B1: 健康度 filter 種類 (對齊 src/lib/merchant/health-checks.ts). */
+/** V1.5 B1: health filter kinds (aligned with src/lib/merchant/health-checks.ts). */
 const HEALTH_FILTERS = ['no_photo', 'short_title', 'zero_stock', 'zero_price'] as const;
 type HealthFilter = (typeof HEALTH_FILTERS)[number];
 
@@ -61,9 +61,10 @@ export default async function MerchantProductsList({
 
   const merchant = await resolveMerchantFromCookie();
 
-  // 取 lowStockThreshold from merchants. V2.6.2 Tier 1 #4: 走 withTenantTx
-  // 維持「所有 tenant-scoped query 過同一條路」一致性。merchants 表本身沒
-  // RLS policy 但走包裝層讓 user-facing route 永遠不需要直接 import dbUser。
+  // Fetch lowStockThreshold from merchants. V2.6.2 Tier 1 #4: go through withTenantTx
+  // to keep "all tenant-scoped queries on the same path" consistency. The merchants
+  // table itself has no RLS policy but the wrapper means user-facing routes never
+  // need to import dbUser directly.
   const [merchantRow] = await withTenantTx(merchant.tenantId, async (tx) =>
     tx
       .select({ lowStockThreshold: merchants.lowStockThreshold })
@@ -95,7 +96,7 @@ export default async function MerchantProductsList({
     if (lowStockOnly) {
       whereClause = lte(products.stockQuantity, threshold);
     } else if (healthFilter === 'no_photo') {
-      // V1.5 review M4: fixture demo 圖也算 no_photo (跟 health-checks.ts 對齊)
+      // V1.5 review M4: fixture demo images also count as no_photo (aligned with health-checks.ts)
       whereClause = sql`${products.r2Key} IS NULL OR ${products.r2Key} = '' OR ${products.r2Key} LIKE '%/fixtures/%'`;
     } else if (healthFilter === 'short_title') {
       whereClause = sql`length(${products.title}) < 8`;

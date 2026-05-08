@@ -1,6 +1,6 @@
 /**
- * Per-merchant theme — 5 個 CSS vars 注入到 :root
- * 切 merchant 時整頁 transition (見 globals.css 的 * { transition: ... })
+ * Per-merchant theme — 5 CSS vars injected into :root.
+ * Switching merchants triggers a whole-page transition (see globals.css `* { transition: ... }`).
  */
 export type MerchantId = 'akami' | 'afen';
 
@@ -14,17 +14,17 @@ export type BrandTheme = {
 
 export const THEMES: Record<MerchantId, BrandTheme> = {
   akami: {
-    '--brand-primary': '#8B7355',     // 深棕
-    '--brand-bg': '#FAF8F5',          // 米白
-    '--brand-text': '#2C2416',        // 深咖
-    '--brand-radius': '2px',          // 極簡
+    '--brand-primary': '#8B7355',     // dark brown
+    '--brand-bg': '#FAF8F5',          // off-white
+    '--brand-text': '#2C2416',        // dark coffee
+    '--brand-radius': '2px',          // minimalist
     '--brand-font-heading': "'Noto Serif TC', serif",
   },
   afen: {
-    '--brand-primary': '#E63946',     // 台味紅
-    '--brand-bg': '#FFF8E7',          // 奶油
-    '--brand-text': '#1D3557',        // 深藍
-    '--brand-radius': '12px',         // 圓潤
+    '--brand-primary': '#E63946',     // Taiwanese red
+    '--brand-bg': '#FFF8E7',          // cream
+    '--brand-text': '#1D3557',        // dark blue
+    '--brand-radius': '12px',         // rounded
     '--brand-font-heading': "'Noto Sans TC', sans-serif",
   },
 };

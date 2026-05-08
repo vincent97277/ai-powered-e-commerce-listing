@@ -3,8 +3,8 @@
 /**
  * Admin actions: suspend / activate / rename_slug (V1 #51, RA19)
  *                approve_merchant (V1.7 D1)
- * 全部 dbAdmin.transaction 包 update + audit insert (atomic)
- * 失敗 → returning {error}, UI toast
+ * All wrap update + audit insert in dbAdmin.transaction (atomic)
+ * Failure → returns {error}, UI toast
  */
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
@@ -113,11 +113,12 @@ export async function activateMerchant(merchantId: string): Promise<ActionResult
  * V1.7 D1: Approve merchant — set approved_at = now() + log adminActionHistory.
  * Only operates if approvedAt IS NULL (idempotent guard).
  *
- * adminSessionId 從 admin-session cookie 取出 (中介 layer 已驗過 cookie 簽章 + DB row 存在,
- * 這裡再 validate 一次防止 layout cache 失效到這個 action 之間 attacker 拿到舊 cookie).
+ * adminSessionId is extracted from the admin-session cookie (middleware/layout already verified
+ * the cookie signature + DB row exists; we re-validate here to defend against an attacker grabbing
+ * an old cookie in the gap between layout cache invalidation and this action).
  */
 export async function approveMerchant(merchantId: string): Promise<ActionResult> {
-  // 二次驗 admin session — defense in depth
+  // Second admin session validation — defense in depth
   const c = await cookies();
   const cookieValue = c.get(ADMIN_SESSION_COOKIE)?.value;
   const adminSessionId = await validateAdminSession(cookieValue);
@@ -158,7 +159,7 @@ export async function approveMerchant(merchantId: string): Promise<ActionResult>
     });
 
     if (merchantSlug) {
-      // 對外可見 — flush slug cache + storefront page
+      // Now publicly visible — flush slug cache + storefront page
       invalidateSlug(merchantSlug, merchantSlug);
       revalidatePath(`/store/${merchantSlug}`);
     }
@@ -196,7 +197,7 @@ export async function renameSlug(
       oldSlug = m.slug;
       if (slug === m.slug) throw new Error('新 slug 跟現在的一樣');
 
-      // collision check: 新 slug 不能 match 任何商家的 slug 或 previousSlug
+      // collision check: new slug must not match any merchant's slug or previousSlug
       const [existing] = await tx
         .select({ id: merchants.id })
         .from(merchants)
@@ -210,7 +211,7 @@ export async function renameSlug(
         .update(merchants)
         .set({
           slug,
-          previousSlug: m.slug, // 1 層 history
+          previousSlug: m.slug, // 1 level of history
           updatedAt: new Date(),
         })
         .where(eq(merchants.id, merchantId));

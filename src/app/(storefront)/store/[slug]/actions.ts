@@ -1,11 +1,11 @@
 'use server';
 
 /**
- * Storefront 顧客結帳 — V1 假金流版
- * 顧客送出表單 → 寫 orders + order_items → 回傳 order id 給 client redirect
+ * Storefront customer checkout — V1 mock-payment version
+ * Customer submits form → writes orders + order_items → returns order id for client redirect
  *
- * 顧客身分: email 字串 (不 auth)
- * 金流: 完全 mock，order status 直接設 'paid'
+ * Customer identity: email string (no auth)
+ * Payment: fully mocked, order status hard-coded to 'paid'
  */
 import { resolveStorefrontMeta } from '@/lib/tenant/resolver';
 import { withTenantTx } from '@/lib/db/with-tenant';
@@ -37,7 +37,7 @@ export async function placeOrderAction(opts: {
 
   try {
     const orderId = await withTenantTx(meta.tenantId, async (tx) => {
-      // 撈商品真實價格 (不能信前端傳來的)
+      // Fetch real product prices (don't trust the client-supplied values)
       const rows = await tx
         .select({ id: products.id, priceCents: products.priceCents, title: products.title, isPublished: products.isPublished })
         .from(products)
@@ -58,18 +58,18 @@ export async function placeOrderAction(opts: {
         return sum + p.priceCents * i.quantity;
       }, 0);
 
-      // 建 order
+      // Create order
       const [insertedOrder] = await tx
         .insert(orders)
         .values({
           tenantId: meta.tenantId,
           customerEmail: opts.customerEmail,
           totalCents,
-          status: 'paid', // mock — 假裝信用卡刷過
+          status: 'paid', // mock — pretend the credit card cleared
         })
         .returning({ id: orders.id });
 
-      // 建 order_items
+      // Create order_items
       await tx.insert(orderItems).values(
         validItems.map((i) => ({
           tenantId: meta.tenantId,

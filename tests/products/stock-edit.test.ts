@@ -1,11 +1,10 @@
 /**
  * V1.9.1 Bug 1 — updateProductAction stockQuantity validation + DB write
  *
- * 直接 call updateProductAction 不行 (next/headers cookies() 在純 vitest node
- * 環境下會 throw, 同 onboarding/security.test.ts 描述). 折衷: 將 validation
- * 規則 + DB write 用相同邏輯複製到 test, 這樣 schema-level 行為 + tx 寫入路徑
- * 都被覆蓋. server action wrapper 本身只多一層 cookie resolve + suspend guard,
- * 已被其他 test 蓋過.
+ * Cannot call updateProductAction directly (next/headers cookies() throws in pure vitest node env,
+ * same as onboarding/security.test.ts described). Compromise: replicate the validation rules + DB write
+ * with the same logic in the test; this covers schema-level behavior + tx write paths. The server-action
+ * wrapper itself only adds a cookie-resolve layer + suspend guard, already covered by other tests.
  *
  * 4 cases:
  *   1. valid stockQuantity (e.g. 25) → success + DB updated
@@ -33,8 +32,8 @@ const aiMeta = {
 };
 
 /**
- * 重現 updateProductAction 的 validation + DB write logic (without cookie resolve).
- * 跟 src/app/(merchant)/merchant/products/[id]/actions.ts 的 updateProductAction 對齊.
+ * Reproduces updateProductAction's validation + DB write logic (without cookie resolve).
+ * Aligned with the updateProductAction in src/app/(merchant)/merchant/products/[id]/actions.ts.
  */
 async function updateProductValidated(
   tenantId: string,

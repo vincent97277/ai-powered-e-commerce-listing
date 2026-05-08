@@ -1,17 +1,18 @@
 /**
- * 商家後台 layout (V2 task 105)
+ * Merchant backend layout (V2 task 105)
  *
- * Per-merchant auth: 一次只進一家店. 從 merchant-session cookie 解出當前 merchant,
- * ThemeProvider 只收這一家的 themeVars (不再撈 top 10, 沒有 switcher 概念).
+ * Per-merchant auth: one shop session at a time. Resolves current merchant from the
+ * merchant-session cookie; ThemeProvider only receives this one merchant's themeVars
+ * (no top-10 fetch, no switcher concept).
  *
  * Auth flow:
- *   1. middleware 已驗 HMAC (Edge runtime)
- *   2. 這裡 validateMerchantSession() 做 DB row liveness + revoked + expires (E11 defense-in-depth)
- *   3. session 失效 → redirect /merchant/login (跟 resolveMerchantFromCookie 同步進)
- *   4. row 撈到 → render header + banner (suspended / pending approval)
+ *   1. middleware already verified HMAC (Edge runtime)
+ *   2. validateMerchantSession() here checks DB row liveness + revoked + expires (E11 defense-in-depth)
+ *   3. session invalid → redirect /merchant/login (in sync with resolveMerchantFromCookie)
+ *   4. row found → render header + banner (suspended / pending approval)
  *
- * 注意: 不能直接呼叫 resolveMerchantFromCookie() 因為這裡需要 themeVars + suspended/pending
- *      狀態, 所以重複一次 query (cheap, 同 DB row, 一次 round trip).
+ * Note: can't just call resolveMerchantFromCookie() because we need themeVars + suspended/pending
+ *       state here, so we duplicate the query (cheap, same DB row, one round trip).
  */
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -44,7 +45,7 @@ export default async function MerchantLayout({ children }: { children: React.Rea
     redirect('/merchant/login?next=/merchant');
   }
 
-  // 撈當前 merchant 完整 row (theme + banner state). 一次 query 夠.
+  // Fetch the current merchant's full row (theme + banner state). One query is enough.
   const [currentRow] = await dbAdmin
     .select({
       id: merchantsTable.id,
@@ -59,7 +60,7 @@ export default async function MerchantLayout({ children }: { children: React.Rea
     .where(eq(merchantsTable.id, session.merchantId))
     .limit(1);
 
-  // Row 被刪 (admin 操作 / 資料漂移) → force re-login.
+  // Row deleted (admin action / data drift) → force re-login.
   if (!currentRow) {
     redirect('/merchant/login?next=/merchant');
   }
@@ -75,8 +76,9 @@ export default async function MerchantLayout({ children }: { children: React.Rea
 
   const isSuspended = currentRow.suspendedAt != null;
   const suspendedReason = currentRow.suspendedReason ?? null;
-  // approved_at IS NULL → 還在等 admin 核可. 注意 resolveMerchantFromCookie 會 redirect 掉
-  // pending merchant; 但 layout 比 resolveMerchantFromCookie 早跑, banner 可能短暫顯示 — 無傷.
+  // approved_at IS NULL → still waiting for admin approval. Note: resolveMerchantFromCookie
+  // redirects pending merchants away; but layout runs before resolveMerchantFromCookie, so the
+  // banner may flash briefly — harmless.
   const isPendingApproval = currentRow.approvedAt == null;
   const currentName = currentRow.name;
 
@@ -125,8 +127,8 @@ export default async function MerchantLayout({ children }: { children: React.Rea
           </div>
         </RainbowLogo>
         {/*
-          V2 task 105 — 沒有 MerchantSwitcher. Per-merchant auth = 一次只進一家店.
-          header 只顯示當前商家名 + 登出按鈕. form POST → /merchant/logout 純 server-rendered.
+          V2 task 105 — no MerchantSwitcher. Per-merchant auth = one shop session at a time.
+          Header just shows the current merchant name + logout button. form POST → /merchant/logout, pure server-rendered.
         */}
         <div className="flex items-center gap-3">
           <span

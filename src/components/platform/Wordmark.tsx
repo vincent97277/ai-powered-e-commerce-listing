@@ -3,7 +3,7 @@
  *
  * Replaces the rotated zinc-square placeholder used in 3 spots (homepage hero
  * kicker, legal page header, footer). Pairs an Inter 700 wordmark with a
- * stacked-rectangle glyph representing market stalls — primary stall in 柿色
+ * stacked-rectangle glyph representing market stalls — primary stall in persimmon
  * (--platform-accent), shadow stall in --brand-text @ 18% opacity.
  *
  * Usage:
@@ -47,7 +47,7 @@ export function Wordmark({ size = 'md', showGlyph = true, className = '' }: Prop
               opacity: 0.18,
             }}
           />
-          {/* Primary rect (柿色) */}
+          {/* Primary rect (persimmon) */}
           <span
             className="absolute"
             style={{

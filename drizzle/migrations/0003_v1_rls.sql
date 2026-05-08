@@ -1,12 +1,12 @@
 -- ============================================================
 -- 0003_v1_rls.sql — RLS for V1 new tables (#38, #39, #40, #41)
--- 前置條件: 0002_low_wonder_man.sql 已 CREATE TABLE
--- Pattern: nullif(...) fail-closed (跟 0001_init_rls.sql 同)
+-- Prereq: 0002_low_wonder_man.sql has CREATE TABLE'd them
+-- Pattern: nullif(...) fail-closed (same as 0001_init_rls.sql)
 -- ============================================================
 
--- ─── 1. GRANT 給 web_anon (web_admin 是 BYPASSRLS, 已 ALTER DEFAULT) ───
--- order_status_history / import_sessions: web_anon 走 RLS
--- admin_action_history / admin_sessions: 純 admin 表, 拿掉 web_anon 寫權限
+-- ─── 1. GRANT to web_anon (web_admin is BYPASSRLS, already ALTER DEFAULT) ───
+-- order_status_history / import_sessions: web_anon goes through RLS
+-- admin_action_history / admin_sessions: admin-only tables; revoke web_anon writes
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON order_status_history, import_sessions
   TO web_anon, web_admin;
@@ -14,14 +14,14 @@ GRANT SELECT, INSERT, UPDATE, DELETE
 REVOKE ALL ON admin_action_history, admin_sessions FROM web_anon;
 GRANT ALL ON admin_action_history, admin_sessions TO web_admin;
 
--- ─── 2. ENABLE + FORCE RLS (4 張新表全開) ───
+-- ─── 2. ENABLE + FORCE RLS (all 4 new tables) ───
 ALTER TABLE order_status_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_status_history FORCE  ROW LEVEL SECURITY;
 
 ALTER TABLE import_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE import_sessions FORCE  ROW LEVEL SECURITY;
 
--- admin_action_history / admin_sessions: ENABLE 但無 policy = deny-all (RA2 defense-in-depth)
+-- admin_action_history / admin_sessions: ENABLE but no policy = deny-all (RA2 defense-in-depth)
 ALTER TABLE admin_action_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_action_history FORCE  ROW LEVEL SECURITY;
 
@@ -30,8 +30,8 @@ ALTER TABLE admin_sessions FORCE  ROW LEVEL SECURITY;
 
 -- ─── 3. POLICY ───
 
--- order_status_history: RLS 走 JOIN orders.tenant_id (ENG D3, RA7)
--- USING + WITH CHECK 同條件 (防止 INSERT 寫到別人的 order)
+-- order_status_history: RLS via JOIN to orders.tenant_id (ENG D3, RA7)
+-- USING + WITH CHECK use the same condition (prevents INSERT into someone else's order)
 CREATE POLICY tenant_isolation_via_orders ON order_status_history
   FOR ALL TO web_anon
   USING (
@@ -49,11 +49,11 @@ CREATE POLICY tenant_isolation_via_orders ON order_status_history
     )
   );
 
--- import_sessions: merchant_id IS tenant_id (RA18, 不冗餘存 tenant_id)
+-- import_sessions: merchant_id IS tenant_id (RA18, no redundant tenant_id column)
 CREATE POLICY tenant_isolation ON import_sessions
   FOR ALL TO web_anon
   USING      (merchant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
   WITH CHECK (merchant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
 
--- admin_action_history / admin_sessions: 沒有 policy = web_anon 全部 deny
--- web_admin BYPASSRLS, 不受影響
+-- admin_action_history / admin_sessions: no policy = web_anon fully denied
+-- web_admin BYPASSRLS, unaffected

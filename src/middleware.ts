@@ -1,21 +1,24 @@
 /**
  * V1 + V2 middleware (Edge runtime — pure crypto only, no DB)
  *
- * - /admin/* (排除 /admin/login) — 驗 admin-session cookie HMAC, 缺/壞 redirect 到 /admin/login
- *   (V1 #43, RA11) DB 層 session 存活檢查在 (admin)/layout.tsx (V1.6 E11 defense-in-depth)
+ * - /admin/* (excluding /admin/login) — verifies admin-session cookie HMAC; missing/bad
+ *   redirects to /admin/login (V1 #43, RA11). DB-layer session liveness check lives in
+ *   (admin)/layout.tsx (V1.6 E11 defense-in-depth).
  *
- * - /merchant/* (排除 /merchant/login + /merchant/signup + /merchant/logout) — 驗
- *   merchant-session cookie HMAC, 缺/壞 redirect 到 /merchant/login?next=... (V2 task 103).
- *   DB row liveness + revoked + suspended/approved 在 (merchant)/layout.tsx 跟
- *   resolveMerchantFromCookie() (E11 defense-in-depth, V2 task 105).
+ * - /merchant/* (excluding /merchant/login + /merchant/signup + /merchant/logout) —
+ *   verifies merchant-session cookie HMAC; missing/bad redirects to /merchant/login?next=...
+ *   (V2 task 103). DB row liveness + revoked + suspended/approved checks in
+ *   (merchant)/layout.tsx and resolveMerchantFromCookie() (E11 defense-in-depth, V2 task 105).
  *
- * - /onboarding/* — 註冊流程, 不需登入, 直接放行 (但 matcher 沒列, 這裡是雙保險文件)
+ * - /onboarding/* — signup flow, no auth required, pass-through (not in matcher; this
+ *   comment is documentation belt-and-suspenders).
  *
- * V2 task 105: 完全移除 legacy demo-merchant-id cookie 處理 — 所有 consumers 已
- *   改走 merchant-session. /merchant-switcher route 也已刪除 (per-merchant auth 沒
- *   切換概念, 一次登一家). 訪 /merchant-switcher 會 404 — 這 OK.
+ * V2 task 105: legacy demo-merchant-id cookie handling fully removed — all consumers
+ *   now go through merchant-session. /merchant-switcher route also deleted (per-merchant
+ *   auth has no switcher concept; one login per merchant). Visiting /merchant-switcher
+ *   returns 404 — this is OK.
  *
- * env 缺 (admin/merchant 任一 secret) → 503. matches admin pattern.
+ * Missing env (admin/merchant secret) → 503. Matches admin pattern.
  */
 import { NextResponse, type NextRequest } from 'next/server';
 import { ADMIN_SESSION_COOKIE, verifyCookieSignatureEdge as verifyAdminEdge } from '@/lib/admin-session-edge';
@@ -29,12 +32,12 @@ export async function middleware(req: NextRequest) {
 
   // ─── /admin/* gate ───
   if (path.startsWith('/admin')) {
-    // /admin/login 不擋 (使用者要登入)
+    // /admin/login is unguarded (user needs to log in)
     if (path === '/admin/login' || path.startsWith('/admin/login/')) {
       return NextResponse.next();
     }
 
-    // env 缺 → 503
+    // Missing env → 503
     const password = process.env.ADMIN_PASSWORD;
     const secret = process.env.ADMIN_SESSION_SECRET;
     if (!password || !secret || secret.length < 32) {
@@ -44,7 +47,7 @@ export async function middleware(req: NextRequest) {
       );
     }
 
-    // 驗 cookie HMAC
+    // Verify cookie HMAC
     const cookieValue = req.cookies.get(ADMIN_SESSION_COOKIE)?.value;
     const sessionId = await verifyAdminEdge(cookieValue, secret);
     if (!sessionId) {
@@ -54,14 +57,15 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // HMAC OK — server component 會再做 DB 存活 check
+    // HMAC OK — server component will do the DB liveness check
     return NextResponse.next();
   }
 
   // ─── /merchant/* gate (V2 task 103, 105 finalized) ───
   if (path.startsWith('/merchant')) {
-    // /merchant/login + /merchant/signup + /merchant/logout 不擋
-    // (登入/註冊頁本身不需登入; logout 是 idempotent route, 沒 cookie 也能呼叫 → 直接 redirect 到 login)
+    // /merchant/login + /merchant/signup + /merchant/logout are unguarded
+    // (login/signup pages don't require auth; logout is an idempotent route — fine to call
+    //  without a cookie → just redirects to login)
     const isPublicMerchantPath =
       path === '/merchant/login' ||
       path.startsWith('/merchant/login/') ||
@@ -74,7 +78,7 @@ export async function middleware(req: NextRequest) {
       return NextResponse.next();
     }
 
-    // env 缺 → 503 (matches admin pattern)
+    // Missing env → 503 (matches admin pattern)
     const merchantSecret = process.env.MERCHANT_SESSION_SECRET;
     if (!merchantSecret || merchantSecret.length < 32) {
       return new NextResponse(
@@ -83,7 +87,7 @@ export async function middleware(req: NextRequest) {
       );
     }
 
-    // 驗 cookie HMAC
+    // Verify cookie HMAC
     const cookieValue = req.cookies.get(MERCHANT_SESSION_COOKIE)?.value;
     const sessionId = await verifyMerchantEdge(cookieValue, merchantSecret);
     if (!sessionId) {
@@ -93,7 +97,7 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // HMAC OK — (merchant)/layout.tsx + resolveMerchantFromCookie() 會做 DB row liveness +
+    // HMAC OK — (merchant)/layout.tsx + resolveMerchantFromCookie() handle DB row liveness +
     // revoked + suspended/approved checks (V2 task 105, E11 defense-in-depth).
     return NextResponse.next();
   }
@@ -102,7 +106,7 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // /onboarding 不在 matcher → middleware 不跑 → 自動放行 (註冊流程不需登入)
-  // V2 task 105: /merchant-switcher 不再 match (route 已刪) — 訪會 404, by design.
+  // /onboarding not in matcher → middleware doesn't run → auto pass-through (signup needs no auth)
+  // V2 task 105: /merchant-switcher no longer matches (route deleted) — visiting returns 404, by design.
   matcher: ['/merchant/:path*', '/admin/:path*'],
 };

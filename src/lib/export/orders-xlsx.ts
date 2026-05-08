@@ -1,9 +1,9 @@
 /**
  * Orders Excel (xlsx) export (V1.5 Track B2)
  *
- * 13-column header:
- *   訂單編號 / 顧客姓名 / Email / 電話 / 地址 / 狀態 / 總額 (NT$) /
- *   物流商 / 物流單號 / 建立時間 / 已付款時間 / 已出貨時間 / 已完成時間
+ * 13-column header (CJK header strings preserved in COLUMNS below):
+ *   order id / customer name / email / phone / address / status / total (NT$) /
+ *   carrier / tracking number / created at / paid at / shipped at / completed at
  *
  * paid / shipped / completed timestamps come from the earliest createdAt in order_status_history matching toStatus
  * (the orders table itself does not store these three fields; the caller computes the timestamps from history and passes them in).

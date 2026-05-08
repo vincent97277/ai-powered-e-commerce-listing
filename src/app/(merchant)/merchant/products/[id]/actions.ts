@@ -1,7 +1,7 @@
 'use server';
 
 /**
- * 商家商品 CRUD server actions
+ * Merchant product CRUD server actions
  */
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -16,14 +16,14 @@ async function resolveTenantIdFromCookie(): Promise<string> {
   return m.tenantId;
 }
 
-/** V1 #53: 商家被平台停權時所有 write 拒絕 (但容許 togglePublish 為 false 也擋住, 不能下架後再上架) */
+/** V1 #53: when a merchant is suspended by the platform, all writes are rejected (also blocks togglePublish=false, so no unpublish-then-republish loophole) */
 async function resolveTenantAndCheckSuspend(): Promise<string> {
   const tenantId = await resolveTenantIdFromCookie();
   await assertNotSuspended(tenantId);
   return tenantId;
 }
 
-/** 上架 / 下架 */
+/** Publish / unpublish */
 export async function togglePublishAction(productId: string, publish: boolean): Promise<{ success: boolean; error?: string }> {
   try {
     const tenantId = await resolveTenantAndCheckSuspend();
@@ -39,7 +39,7 @@ export async function togglePublishAction(productId: string, publish: boolean): 
   }
 }
 
-/** 編輯商品 (商家手動微調 AI 結果) */
+/** Edit product (merchant manually fine-tunes AI output) */
 export async function updateProductAction(
   productId: string,
   patch: { title?: string; description?: string; priceCents?: number; stockQuantity?: number },
@@ -79,7 +79,7 @@ export async function updateProductAction(
   }
 }
 
-/** 刪除商品 */
+/** Delete product */
 export async function deleteProductAction(productId: string): Promise<{ success: boolean; error?: string }> {
   try {
     const tenantId = await resolveTenantAndCheckSuspend();
@@ -94,7 +94,7 @@ export async function deleteProductAction(productId: string): Promise<{ success:
   redirect('/merchant/products');
 }
 
-/** Seed 假資料供新商家快速體驗 */
+/** Seed fixture data so new merchants can try things out quickly */
 export async function seedDemoProductAction(opts: { fixtureSlug: 'teacup' | 'phonecase' | 'sauce' }): Promise<{ success: boolean; productId?: string; error?: string }> {
   try {
     const tenantId = await resolveTenantAndCheckSuspend();

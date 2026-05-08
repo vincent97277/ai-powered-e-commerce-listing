@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * PrintTrigger — 找 page.tsx 上 [data-print-trigger] 按鈕, 接 window.print()
- * (page.tsx 是 server component, 不能直接 onClick → 用 ref 從這個 client island 啟動)
+ * PrintTrigger — finds [data-print-trigger] buttons on page.tsx and wires them to window.print()
+ * (page.tsx is a server component and can't onClick directly → trigger via this client island)
  */
 import { useEffect } from 'react';
 

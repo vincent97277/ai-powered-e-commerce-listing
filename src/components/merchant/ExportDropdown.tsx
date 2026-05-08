@@ -1,18 +1,18 @@
 'use client';
 
 /**
- * ExportDropdown — 商家後台 toolbar 統一匯出按鈕 (V1.5 Track B2)
+ * ExportDropdown — unified export button for merchant-admin toolbar (V1.5 Track B2)
  *
- * 用法:
+ * Usage:
  *   <ExportDropdown kind="orders" currentFilter={{ status: 'paid' }} />
  *   <ExportDropdown kind="products" currentFilter={{ filter: 'low-stock' }} />
  *
- * 不引外部 dropdown lib — 用 Tailwind + native onBlur 收合, 鍵盤可關 (ESC).
- * 點 item → 直接 window.location 觸發 GET /api/export/...?format=...&...filters,
- * 瀏覽器自動觸發下載對話框.
+ * No external dropdown lib — Tailwind + native onBlur to collapse, keyboard-closeable (ESC).
+ * Click an item → directly triggers GET /api/export/...?format=...&...filters via window.location,
+ * browser auto-fires the download dialog.
  *
- * V1.6 B4 update: 下載完成 hint 改用 Sonner toast (取代 inline ad-hoc div).
- * Sonner Toaster 在 src/app/layout.tsx:39 已 mount globally.
+ * V1.6 B4 update: download-complete hint switched to Sonner toast (replacing inline ad-hoc div).
+ * Sonner Toaster is mounted globally at src/app/layout.tsx:39.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Download, ChevronDown } from 'lucide-react';
@@ -22,7 +22,7 @@ type Kind = 'orders' | 'products';
 
 type Props = {
   kind: Kind;
-  /** 透傳到 /api/export/.../?...filters; undefined / empty 值會自動忽略 */
+  /** Forwarded to /api/export/.../?...filters; undefined / empty values are auto-ignored */
   currentFilter?: Record<string, string | undefined | null>;
 };
 
@@ -30,7 +30,7 @@ export function ExportDropdown({ kind, currentFilter }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // ESC / 點外面 → 關
+  // ESC / click outside → close
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
@@ -63,9 +63,9 @@ export function ExportDropdown({ kind, currentFilter }: Props) {
 
   function handleDownload(format: 'xlsx' | 'shopee_csv') {
     setOpen(false);
-    // 跳掉 history pollution: 用隱形 <a> 取代 window.location.
-    // V1.5 review M6: 不設 a.download — filename 由 server-side Content-Disposition: attachment
-    //                 header 決定 (more authoritative, 跟 reviewer 同意採方案 2).
+    // Avoid history pollution: use a hidden <a> instead of window.location.
+    // V1.5 review M6: don't set a.download — filename comes from server-side Content-Disposition: attachment
+    //                 header (more authoritative, agreed with reviewer on option 2).
     const a = document.createElement('a');
     a.href = buildHref(format);
     a.rel = 'noopener';

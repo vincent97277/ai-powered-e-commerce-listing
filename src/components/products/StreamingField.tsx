@@ -7,8 +7,8 @@ import { Badge } from '@/components/ui/badge';
 type Mode = 'text' | 'tags' | 'variants';
 
 /**
- * Whimsy: 偵測「完成瞬間」(typewriter 抵達 length / visibleCount 抵達 list 長度)
- * 一秒只能慶祝一次，避免被父層 re-render 連發。
+ * Whimsy: detect the "moment of completion" (typewriter reaches length / visibleCount reaches list length).
+ * Celebrate at most once per second to avoid re-fire from parent re-renders.
  */
 function useJustCompleted(
   value: string | string[] | null,
@@ -71,7 +71,7 @@ export function StreamingField({
         >
           {label}
         </p>
-        {/* 完成 checkmark — spring，重量感比文字勾勾好 */}
+        {/* Completion checkmark — spring; feels weightier than a text tick */}
         <AnimatePresence>
           {justDone && (
             <motion.span

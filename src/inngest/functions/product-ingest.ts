@@ -1,16 +1,16 @@
 /**
  * Inngest function: product.ingest pipeline (local-first)
  *
- * Pipeline 步驟（每一步都用 step.run() 包，發揮 Inngest 的 step-level retry）：
- *   1. read-from-fs          — 從 public/uploads/ 讀照片
- *   2. process-image         — sharp 縮圖到 max 1024px + 轉 WebP
- *   3. write-processed       — 寫 processed/ 子目錄
- *   4. fetch-brand-voice     — 用 dbAdmin 抓商家 brand_voice
- *   5. call-vision           — 呼叫 GPT-4o vision (自帶 retry 2 次)
+ * Pipeline steps (each wrapped in step.run() to leverage Inngest step-level retry):
+ *   1. read-from-fs          — read photo from public/uploads/
+ *   2. process-image         — sharp resize to max 1024px + convert to WebP
+ *   3. write-processed       — write to processed/ subdir
+ *   4. fetch-brand-voice     — fetch merchant brand_voice via dbAdmin
+ *   5. call-vision           — call GPT-4o vision (built-in retry x2)
  *   6. write-product (or write-failed-placeholder)
  *      + emit success / failed event
  *
- * v2 升回 R2: read-from-fs / write-processed 兩步換成 R2 即可
+ * v2 promote back to R2: swap the two read-from-fs / write-processed steps for R2.
  */
 
 import { eq, sql } from 'drizzle-orm';
@@ -77,7 +77,7 @@ export const productIngestFn = inngest.createFunction(
       return result;
     };
 
-    // Step 1: 從 storage 讀原始照片
+    // Step 1: read original photo from storage
     const originalBuffer = await step.run('read-from-fs', () =>
       timed('read-from-fs', async () => {
         const buf = await readFile(r2Key);
@@ -85,7 +85,7 @@ export const productIngestFn = inngest.createFunction(
       }),
     );
 
-    // Step 2: 縮圖 + WebP
+    // Step 2: resize + WebP
     const processed = await step.run('process-image', () =>
       timed('process-image', async () => {
         const buf = Buffer.from(originalBuffer, 'base64');
@@ -98,7 +98,7 @@ export const productIngestFn = inngest.createFunction(
       }),
     );
 
-    // Step 3: 寫處理過的版本回 storage
+    // Step 3: write the processed version back to storage
     const processedKey = await step.run('write-processed', () =>
       timed('write-processed', async () => {
         const buf = Buffer.from(processed.base64, 'base64');
@@ -107,7 +107,7 @@ export const productIngestFn = inngest.createFunction(
       }),
     );
 
-    // Step 4: 抓 brand_voice (system query 走 dbAdmin)
+    // Step 4: fetch brand_voice (system query goes through dbAdmin)
     const brandVoice = await step.run('fetch-brand-voice', () =>
       timed('fetch-brand-voice', async () => {
         const rows = await dbAdmin
@@ -120,7 +120,8 @@ export const productIngestFn = inngest.createFunction(
     );
 
     // Step 5: GPT-4o vision (the slow step — typically 5-15s; biggest risk on Hobby)
-    //         V1 #67 (RA12): sourceText 從 IG/蝦皮 import 帶進來, 餵 GPT-4o 重寫成 brand voice
+    //         V1 #67 (RA12): sourceText is carried in from IG/Shopee import; feeds GPT-4o
+    //         to be rewritten into the brand voice
     //
     // V2.6.1 local-dev fix: when STORAGE_BACKEND=local, the processedKey resolves
     // to http://localhost:3000/uploads/... — OpenAI cloud cannot reach localhost,
@@ -143,14 +144,15 @@ export const productIngestFn = inngest.createFunction(
       }),
     );
 
-    // V1.5 review C1: 把 vision 回傳的 token usage 累積進 import_sessions, 給 cost cap 讀
-    // step.run idempotency: 同一 step ID retry 時 Inngest 不重跑 → 不會重複加 usage
-    // 失敗 case usage 會是 0/0, write 也沒副作用 — 直接跳過寫入
+    // V1.5 review C1: accumulate vision-returned token usage into import_sessions for cost cap to read.
+    // step.run idempotency: Inngest doesn't re-run on retries with the same step ID → no double-counting.
+    // Failure cases have usage 0/0, and the write has no side effect — just skip.
     const hasUsage = visionResult.usage.tokensIn > 0 || visionResult.usage.tokensOut > 0;
     if (importSessionId && hasUsage) {
       await step.run('record-token-usage', async () => {
-        // import_sessions 沒 tenant_id 欄位 (RLS via JOIN merchants), 但 withTenantTx 會
-        // SET LOCAL app.tenant_id, RLS policy 走 JOIN 認得 merchant_id = tenantId 的 session
+        // import_sessions has no tenant_id column (RLS via JOIN merchants); withTenantTx still
+        // SET LOCAL app.tenant_id, and the RLS policy via JOIN identifies sessions where
+        // merchant_id = tenantId.
         const tokensIn = visionResult.usage.tokensIn;
         const tokensOut = visionResult.usage.tokensOut;
         await withTenantTx(tenantId, async (tx) => {
@@ -182,7 +184,7 @@ export const productIngestFn = inngest.createFunction(
       });
     }
 
-    // Step 6a: 失敗分支 (RA20: 寫 needs_review status, 不 throw 讓 parent retry)
+    // Step 6a: failure branch (RA20: write needs_review status; don't throw and let parent retry)
     if (!visionResult.success) {
       logger.error('vision 失敗', { error: visionResult.error });
 
@@ -220,11 +222,12 @@ export const productIngestFn = inngest.createFunction(
         data: { tenantId, r2Key, error: visionResult.error, importSessionId, itemIndex },
       });
 
-      // RA20: 不 throw — parent worker 已 dispatch, 不該因為 child AI 失敗 retry parent
+      // RA20: don't throw — parent worker already dispatched; shouldn't retry parent because
+      // a child AI step failed.
       return { ok: false, productId: failedProductId, error: visionResult.error };
     }
 
-    // Step 6b: 成功分支 — 額外 Zod-light 驗證 (RA10): title/desc 不可含 URL
+    // Step 6b: success branch — extra Zod-light validation (RA10): title/desc must not contain URLs
     const aiData = visionResult.data;
     const URL_RE = /https?:\/\/|www\./i;
     if (URL_RE.test(aiData.title) || URL_RE.test(aiData.description)) {

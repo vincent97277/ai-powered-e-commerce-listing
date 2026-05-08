@@ -2,19 +2,20 @@
  * Reserved slug list (V1.7 D1) — application-layer block on /onboarding.
  *
  * Why blocklist (not just collision check on existing routes):
- *   - Future routes 還沒加, 但 attacker 現在註冊 'admin' / 'api' 就佔位 → 之後就佔死
- *   - 部分名稱有可能跟 Next.js 內建 / static asset 衝突 (_next, public, static, assets)
- *   - 一些 marketing / system pages V2 才會建 (about, privacy, terms, help, support)
+ *   - Future routes don't exist yet, but an attacker registering 'admin' / 'api' now
+ *     would squat the slot — locked out forever once we ship.
+ *   - Some names may collide with Next.js built-ins / static assets (_next, public, static, assets)
+ *   - Some marketing / system pages only ship in V2 (about, privacy, terms, help, support)
  *
- * Match 是 case-insensitive (slug 已 lowercase, 但這層多保險一次).
+ * Matching is case-insensitive (slug is already lowercased, but extra defense).
  *
- * V2 可考慮:
- *   - 把這份搬 DB 表, 給 admin UI 維護
- *   - 加 brand-protection list (大品牌名稱 'apple', 'google', ...) — V1.7 不做, scope creep.
+ * V2 candidates:
+ *   - Move this list into a DB table maintained via admin UI
+ *   - Add a brand-protection list (big brand names 'apple', 'google', ...) — V1.7 skip, scope creep.
  */
 
 export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
-  // 平台保留路徑
+  // Platform reserved paths
   'admin',
   'api',
   'www',
@@ -42,7 +43,7 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   'public',
   'assets',
   'favicon',
-  // 商家後台 routes (未來如把 (merchant) 改 path-based 也不會撞)
+  // Merchant back-office routes (won't collide if (merchant) is later switched to path-based routing)
   'dashboard',
   'settings',
   'orders',

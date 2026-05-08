@@ -3,8 +3,8 @@
 /**
  * Admin login server action (V1 #45)
  * - constant-time password compare
- * - 對則建 admin_sessions row + set HttpOnly Secure SameSite=Strict cookie
- * - inline error 不出 toast (避免 timing leak)
+ * - on match: create admin_sessions row + set HttpOnly Secure SameSite=Strict cookie
+ * - inline error, no toast (avoid timing leak)
  */
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -26,11 +26,11 @@ export async function loginAction(prevState: LoginState, formData: FormData): Pr
     return { error: '密碼錯誤' };
   }
   if (!verifyAdminPassword(password)) {
-    // 故意不分「密碼錯誤」「沒設密碼」, 統一錯誤訊息
+    // Intentionally do not distinguish "wrong password" from "no password set"; use a unified error message
     return { error: '密碼錯誤' };
   }
 
-  // 建 session
+  // Create session
   const h = await headers();
   const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
   const userAgent = h.get('user-agent') ?? null;

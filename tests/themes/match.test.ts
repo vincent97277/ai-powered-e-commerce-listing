@@ -44,7 +44,7 @@ describe('THEME_PRESETS schema invariants', () => {
         ).toBeTruthy();
         expect(typeof preset.themeVars[k]).toBe('string');
       }
-      // keywords ≥ 3
+      // keywords >= 3
       expect(
         preset.keywords.length,
         `preset ${preset.id} keywords too short`,
@@ -97,7 +97,7 @@ describe('pickThemeForVoice', () => {
   });
 
   it('tech-ecom: 科技電商專業 → tech-ecom (or modern-minimal as 專業 also matches)', () => {
-    // 「科技電商」 命中 tech-ecom 兩個 keyword vs 「專業」命中 modern-minimal 一個
+    // "科技電商" hits two tech-ecom keywords vs "專業" hits one modern-minimal keyword
     const result = pickThemeForVoice('科技電商, 數位 3C 周邊');
     expect(result.id).toBe('tech-ecom');
   });
@@ -108,7 +108,7 @@ describe('pickThemeForVoice', () => {
   });
 
   it('case-insensitive matching (mixed cn/en)', () => {
-    // 「Retro」是 vintage-retro 的 keyword — 大寫應該也命中
+    // "Retro" is a vintage-retro keyword — uppercase should also match
     const result = pickThemeForVoice('Retro 老派風格');
     expect(result.id).toBe('vintage-retro');
   });

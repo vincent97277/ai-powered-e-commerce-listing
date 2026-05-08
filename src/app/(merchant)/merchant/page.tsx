@@ -1,6 +1,6 @@
 /**
- * 商家後台首頁 — Dashboard
- * KPI 概覽 + 近 7 天訂單趨勢 + 商品上架轉換率 + 最近訂單 + 銷量 Top 3
+ * Merchant backend home — Dashboard
+ * KPI overview + 7-day order trend + product publish-conversion rate + recent orders + sales Top 3
  */
 import Link from 'next/link';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
 export default async function MerchantDashboard() {
   const merchant = await resolveMerchantFromCookie();
 
-  // KPI 統計
+  // KPI stats
   const [productStats] = await withTenantTx(merchant.tenantId, async (tx) => {
     return await tx
       .select({
@@ -39,7 +39,7 @@ export default async function MerchantDashboard() {
       .from(orders);
   });
 
-  // 近 7 天每日訂單數 (含 0)
+  // Daily order count for the last 7 days (including 0s)
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const dailyRows = await withTenantTx(merchant.tenantId, async (tx) => {
     return await tx
@@ -68,7 +68,7 @@ export default async function MerchantDashboard() {
   });
   const maxCount = Math.max(...days.map((d) => d.count), 1);
 
-  // 銷量 Top 3
+  // Sales Top 3
   const topProducts = await withTenantTx(merchant.tenantId, async (tx) => {
     return await tx
       .select({
@@ -85,7 +85,7 @@ export default async function MerchantDashboard() {
       .limit(3);
   });
 
-  // 最近 5 筆訂單
+  // Most recent 5 orders
   const recentOrders = await withTenantTx(merchant.tenantId, async (tx) => {
     return await tx
       .select({
@@ -100,16 +100,16 @@ export default async function MerchantDashboard() {
       .limit(5);
   });
 
-  // V1.6 B5: MerchantInbox 統一資料源 (取代 V1 #72 PendingCallout + V1.5 B1 HealthCallout)
-  // 7 種 signal type 在一個 withTenantTx 內拉完, RLS-safe.
+  // V1.6 B5: MerchantInbox single data source (replaces V1 #72 PendingCallout + V1.5 B1 HealthCallout)
+  // 7 signal types fetched within one withTenantTx, RLS-safe.
   const inboxItems = await getInboxItems(merchant.tenantId);
 
-  // 上架轉換率
+  // Publish conversion rate
   const publishRate = productStats.total > 0
     ? Math.round((productStats.published / productStats.total) * 100)
     : 0;
 
-  // 最近訂單金額累計 (近 7 天)
+  // Cumulative recent-order revenue (last 7 days)
   const last7Revenue = days.reduce((s, d) => s + d.revenue, 0);
   const last7Orders = days.reduce((s, d) => s + d.count, 0);
 
@@ -170,11 +170,11 @@ export default async function MerchantDashboard() {
           </div>
         </header>
 
-        {/* V1.6 B5 MerchantInbox — 取代 PendingCallout + HealthCallout, 7 種 signal 一個容器 */}
+        {/* V1.6 B5 MerchantInbox — replaces PendingCallout + HealthCallout, 7 signals in one container */}
         {/* items=[] → MerchantInbox return null, preserve V1 hide-when-zero behavior */}
         <MerchantInbox items={inboxItems} />
 
-        {/* Mobile-only KPI summary chip (B1 spirit, < sm 螢幕一行收) */}
+        {/* Mobile-only KPI summary chip (B1 spirit, collapses to one line on < sm screens) */}
         <div
           className="t-caption flex flex-wrap items-center gap-x-3 gap-y-1 tabular-nums opacity-60 sm:hidden"
         >
@@ -186,7 +186,7 @@ export default async function MerchantDashboard() {
           <span>商品 {productStats.total}</span>
         </div>
 
-        {/* KPI cards (desktop full grid; mobile 收成上面的 summary chip) */}
+        {/* KPI cards (desktop full grid; on mobile collapses into the summary chip above) */}
         <div className="hidden gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard
             href="/merchant/products"
@@ -218,9 +218,9 @@ export default async function MerchantDashboard() {
           />
         </div>
 
-        {/* 兩欄: 近 7 天圖 + 銷量 Top 3 */}
+        {/* Two columns: 7-day chart + sales Top 3 */}
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* 近 7 天訂單 bar chart */}
+          {/* 7-day order bar chart */}
           <div
             className="lg:col-span-2 border p-4 sm:p-6"
             style={{
@@ -272,7 +272,7 @@ export default async function MerchantDashboard() {
             </div>
           </div>
 
-          {/* 銷量 Top 3 */}
+          {/* Sales Top 3 */}
           <div
             className="border p-6"
             style={{
@@ -327,7 +327,7 @@ export default async function MerchantDashboard() {
           </div>
         </div>
 
-        {/* 最近訂單 */}
+        {/* Recent orders */}
         <div
           className="border p-4 sm:p-6"
           style={{

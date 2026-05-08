@@ -58,7 +58,7 @@ export function CustomerProductView({
       style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}
     >
       <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-2">
-        {/* 左: 商品圖 */}
+        {/* Left: product image */}
         <div
           className="aspect-square overflow-hidden"
           style={{ borderRadius: 'var(--brand-radius)', boxShadow: 'var(--elev-2)' }}
@@ -76,7 +76,7 @@ export function CustomerProductView({
           )}
         </div>
 
-        {/* 右: 商品資訊 + CTA */}
+        {/* Right: product info + CTA */}
         <div className="flex flex-col">
           <h1
             className="t-h1 mb-4 break-words"

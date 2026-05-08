@@ -1,20 +1,20 @@
 /**
- * Catalogify 平台首頁 — marketplace 入口 (V1 #58, RA5)
+ * Catalogify platform homepage — marketplace entry (V1 #58, RA5)
  *
- * Linear-tone: 黑白 + Inter + sharp 4px radius (PlatformShell wrapper)
- * 不繼承商家 brand vars
+ * Linear-tone: B/W + Inter + sharp 4px radius (PlatformShell wrapper)
+ * Does not inherit merchant brand vars
  *
  * V1.9 T2:
  *   - F: Wordmark replaces rotated-zinc-square in hero kicker + footer
  *   - J: Tagline rewrite — full-width punctuation, no slashes
- *   - L: Stat strip 變大 (mt-6, text-2xl numerals) + 5-emoji merchant peek
- *   - G: Footer hairline uses --platform-accent for 柿色 signature
+ *   - L: Stat strip enlarged (mt-6, text-2xl numerals) + 5-emoji merchant peek
+ *   - G: Footer hairline uses --platform-accent for the persimmon signature
  *
- * 結構:
+ * Structure:
  *   1. Hero: wordmark kicker + tagline + stat strip + 2 CTA + emoji peek
- *   2. 熱門店鋪 — 6 張 (GMV desc, fallback createdAt desc)
- *   3. 新進駐 — 近 7 天 (空狀態 hide section)
- *   4. Footer: 關於 / 隱私 / 條款 + Wordmark 小尺寸
+ *   2. Featured stores — 6 cards (GMV desc, fallback createdAt desc)
+ *   3. New arrivals — last 7 days (section hidden if empty)
+ *   4. Footer: About / Privacy / Terms + small Wordmark
  */
 import Link from 'next/link';
 import { ArrowRight, Sparkles } from 'lucide-react';
@@ -66,7 +66,7 @@ export default async function HomePage() {
             拍一張照,60 秒上架;不切後台,不開 Excel — 把時間還給做產品的人。
           </p>
 
-          {/* L: stat strip — 變大, ABOVE CTAs */}
+          {/* L: stat strip — enlarged, ABOVE CTAs */}
           {stats.merchantCount > 0 && (
             <div
               className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-sm"
@@ -152,7 +152,7 @@ export default async function HomePage() {
           )}
         </section>
 
-        {/* 熱門店鋪 */}
+        {/* Featured stores */}
         <section id="featured" className="py-12 md:py-16">
           <div className="flex items-baseline justify-between">
             <h2
@@ -195,7 +195,7 @@ export default async function HomePage() {
           )}
         </section>
 
-        {/* 新進駐 (空狀態 hide) */}
+        {/* New arrivals (hidden if empty) */}
         {recent.length > 0 && (
           <section
             className="border-t py-12 md:py-16"

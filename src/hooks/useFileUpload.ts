@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * useFileUpload — local-first 版本
+ * useFileUpload — local-first version.
  *
  * Flow:
- *   idle → uploading (有 progress) → processing → done
- *                                              ↘ error
+ *   idle → uploading (with progress) → processing → done
+ *                                                 ↘ error
  *
- * 改造重點: 不走 presigned URL，直接 POST FormData 到 /api/uploads
- * (server 寫到 public/uploads/，回傳 storage key)
+ * Refactor highlight: no presigned URL — POST FormData directly to /api/uploads
+ * (server writes to public/uploads/ and returns the storage key).
  */
 
 import { useCallback, useRef, useState } from 'react';
@@ -45,7 +45,7 @@ export function useFileUpload(): UseFileUploadReturn {
         setError(null);
         setProgress(0);
 
-        // step 1: POST 到 /api/uploads (local fs write)
+        // step 1: POST to /api/uploads (local fs write)
         setState('uploading');
         const result = await postWithProgress({
           file,
@@ -59,7 +59,7 @@ export function useFileUpload(): UseFileUploadReturn {
           return null;
         }
 
-        // step 2: 通知 Inngest 開始處理
+        // step 2: notify Inngest to start processing
         setState('processing');
         const ingest = await triggerIngest({ r2Key: result.key });
         if (!ingest.ingested) {
@@ -83,7 +83,7 @@ export function useFileUpload(): UseFileUploadReturn {
   return { state, progress, error, upload, reset };
 }
 
-// ---------- 內部 helper: XHR POST with progress ----------
+// ---------- Internal helper: XHR POST with progress ----------
 
 type UploadResponse =
   | { success: true; key: string; publicUrl: string; size: number }

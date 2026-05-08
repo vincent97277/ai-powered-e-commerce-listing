@@ -1,16 +1,17 @@
 /**
- * /admin/queue — 客服佇列 / 商家行動清單 (V1.6 Track A8)
+ * /admin/queue — operator queue / merchant action list (V1.6 Track A8)
  *
- * 「哪些商家需要介入 + 為什麼」垂直 inbox cards (NOT a table).
- * 每張 card = 一個 (merchant × signal) 組合, 一個商家可同時出現多張 (3 種 signal = 3 張 card).
+ * "Which merchants need intervention + why" rendered as vertical inbox cards (NOT a table).
+ * Each card = a (merchant × signal) tuple; one merchant can appear in multiple cards
+ * (3 signals = 3 cards).
  *
  * Sort: severity asc (P1 first), count desc, name asc.
  *
- * Empty (全部商家狀態良好): EmptyState (CheckCircle2 icon, 慶祝 state).
- * Error: ErrorState — query throw 整頁 fallback.
+ * Empty (all merchants healthy): EmptyState (CheckCircle2 icon, celebration state).
+ * Error: ErrorState — query throw falls back to whole-page error.
  *
- * 不 bulk action / 不 snooze persistence — V2 工作 (per plan A5 已被 cut).
- * 不即時推 — V1.6 = SSR snapshot per request, refresh 走 browser reload.
+ * No bulk action / no snooze persistence — V2 work (cut per plan A5).
+ * No live push — V1.6 = SSR snapshot per request; refresh via browser reload.
  */
 import Link from 'next/link';
 import { ArrowUpRight, ChevronRight, CheckCircle2 } from 'lucide-react';
@@ -80,7 +81,7 @@ export default async function AdminQueuePage() {
   return (
     <main className="px-4 py-10 sm:px-8 lg:px-12">
       <div className="mx-auto max-w-4xl space-y-8">
-        {/* Header — sibling nav 跟 /admin overview 對齊 */}
+        {/* Header — sibling nav aligned with /admin overview */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div className="space-y-2">
             <p className="font-mono text-xs uppercase tracking-wider text-ink-muted">

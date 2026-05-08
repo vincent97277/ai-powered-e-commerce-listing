@@ -1,5 +1,5 @@
 /**
- * /merchant/products/import/[sessionId] — import 進度頁 (V1 #68)
+ * /merchant/products/import/[sessionId] — import progress page (V1 #68)
  * Server component fetch initial state, ImportProgressStream client poll 2s
  */
 import Link from 'next/link';

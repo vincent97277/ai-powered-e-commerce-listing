@@ -1,12 +1,12 @@
 /**
  * GET /api/export/orders.xlsx?status=&from=&to=
  *
- * V1.5 Track B2: 訂單 Excel 匯出 (統一收口)
- *   - 透過 cookie 解 tenantId → withTenantTx (RLS-safe)
- *   - 接受 status 過濾 (對齊 /merchant/orders ?status=)
- *   - 接受 from / to (YYYY-MM-DD) 限制建立時間區間
- *   - 同步 join order_status_history 把 paid/shipped/completed timestamps 也丟進 export
- *   - Content-Type + Content-Disposition: attachment 觸發瀏覽器下載
+ * V1.5 Track B2: order Excel export (single chokepoint)
+ *   - tenantId resolved via cookie → withTenantTx (RLS-safe)
+ *   - accepts status filter (aligned with /merchant/orders ?status=)
+ *   - accepts from / to (YYYY-MM-DD) to bound creation-time range
+ *   - joins order_status_history to include paid/shipped/completed timestamps in the export
+ *   - Content-Type + Content-Disposition: attachment to trigger browser download
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';
@@ -17,13 +17,14 @@ import { and, asc, desc, eq, gte, lt, inArray, sql } from 'drizzle-orm';
 import { generateOrdersXlsx, type OrderExportRow } from '@/lib/export/orders-xlsx';
 
 /**
- * V1.5 review H2: Content-Disposition 防注入 helper
+ * V1.5 review H2: Content-Disposition injection-defense helper
  *
- * 即便目前 filename 都是 server-side 產 (e.g. orders-2025-01-01.xlsx) 沒外部輸入,
- * 仍套這層, 抓住 reviewer 提的「未來把 merchant slug 拼進來」風險
- *  - \r\n 拆 header (CRLF injection)
- *  - " 拆 quoted filename
- * 同時雙開 RFC 6266 filename + filename* (UTF-8 fallback) 給非 ASCII 安全
+ * Even though today's filenames are all server-generated (e.g. orders-2025-01-01.xlsx)
+ * with no external input, we still apply this layer to address the reviewer's concern
+ * about "future risk of splicing in merchant slug":
+ *  - \r\n splits the header (CRLF injection)
+ *  - " breaks out of the quoted filename
+ * Also emits both RFC 6266 filename + filename* (UTF-8 fallback) for non-ASCII safety.
  */
 function buildContentDisposition(filename: string): string {
   const safe = filename.replace(/[\r\n"]/g, '_');
@@ -39,7 +40,7 @@ function isStatus(s: unknown): s is Status {
   return typeof s === 'string' && (ALLOWED_STATUS as readonly string[]).includes(s);
 }
 
-/** YYYY-MM-DD → Date (UTC midnight); 不合法 → null */
+/** YYYY-MM-DD → Date (UTC midnight); invalid → null */
 function parseDate(s: string | null | undefined): Date | null {
   if (!s) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
   try {
     const merchant = await resolveMerchantFromCookie();
 
-    // V1.5 review H1: 停權商家不可匯出 (對齊 /api/products/generate 的 suspend guard)
+    // V1.5 review H1: suspended merchants cannot export (aligned with /api/products/generate's suspend guard)
     try {
       await assertNotSuspended(merchant.tenantId);
     } catch (err) {
@@ -66,11 +67,11 @@ export async function GET(req: NextRequest) {
     const status: Status | null = isStatus(statusParam) ? statusParam : null;
     const from = parseDate(url.searchParams.get('from'));
     const toRaw = parseDate(url.searchParams.get('to'));
-    // to 是含當日 — 內部加 1 天用 < 比 <= 安全
+    // `to` is inclusive of that day — internally add 1 day and use < instead of <= for safety
     const toExclusive = toRaw ? new Date(toRaw.getTime() + 24 * 60 * 60 * 1000) : null;
 
     const exportRows = await withTenantTx(merchant.tenantId, async (tx) => {
-      // 1) 撈訂單
+      // 1) Fetch orders
       const conditions = [];
       if (status) conditions.push(eq(orders.status, status));
       if (from) conditions.push(gte(orders.createdAt, from));
@@ -82,13 +83,13 @@ export async function GET(req: NextRequest) {
         : baseQuery
       )
         .orderBy(desc(orders.createdAt))
-        .limit(5000); // 防爆: 5000 筆上限 (一個商家正常匯出量級)
+        .limit(5000); // Safety cap: 5000-row max (normal export volume for one merchant)
 
       if (orderRows.length === 0) {
         return [];
       }
 
-      // 2) 一次撈這批 order 的 status history (paid/shipped/completed 最早 createdAt)
+      // 2) Fetch this batch's status history in one query (earliest createdAt for paid/shipped/completed)
       const orderIds = orderRows.map((o) => o.id);
       const historyRows = await tx
         .select({
@@ -108,7 +109,7 @@ export async function GET(req: NextRequest) {
         .groupBy(orderStatusHistory.orderId, orderStatusHistory.toStatus)
         .orderBy(asc(orderStatusHistory.orderId));
 
-      // 3) join 成 OrderExportRow
+      // 3) join into OrderExportRow
       const tsByOrder = new Map<string, { paidAt: Date | null; shippedAt: Date | null; completedAt: Date | null }>();
       for (const h of historyRows) {
         const cur = tsByOrder.get(h.orderId) ?? { paidAt: null, shippedAt: null, completedAt: null };
@@ -130,10 +131,10 @@ export async function GET(req: NextRequest) {
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     const filename = `orders-${today}.xlsx`;
 
-    // V1.5 review M2: silent truncate signal — 讓 client 知道有沒有滿格 5000
+    // V1.5 review M2: silent truncate signal — lets client know whether the 5000-row cap was hit
     const truncated = exportRows.length === 5000 ? '1' : '0';
 
-    // NextResponse 不直收 Node Buffer (TS 型別); 轉 Uint8Array view
+    // NextResponse doesn't accept Node Buffer directly (TS types); convert to Uint8Array view
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {

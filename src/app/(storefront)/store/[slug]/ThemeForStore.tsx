@@ -1,9 +1,10 @@
 /**
- * Storefront 用的 theme provider — 把該商家的 5 個 CSS vars 注入 :root
- * 跟 (merchant) 那個 ThemeProvider 不同, 這個是 server-resolved 寫死, 不能切換
+ * Theme provider for the storefront — injects this merchant's 5 CSS vars into :root.
+ * Unlike the (merchant) ThemeProvider, this one is server-resolved and fixed; cannot be switched.
  *
- * V2.1.x FOUC fix: server-render inline <style> 注入 themeVars, 第一次 paint 就用對的顏色.
- * 改成 server component (拿掉 'use client' + useEffect), 因為不需 client-side 行為.
+ * V2.1.x FOUC fix: server-render an inline <style> injecting themeVars so the first paint
+ * already uses the correct colors. Converted to a server component (dropped 'use client' +
+ * useEffect) since no client-side behavior is needed.
  */
 export function ThemeProviderForStore({
   themeVars,

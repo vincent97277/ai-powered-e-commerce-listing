@@ -1,12 +1,12 @@
 /**
- * 商品照片上傳 endpoint
- * 前端 POST FormData → server 寫到 public/uploads/{tenant}/{uuid}.ext
+ * Product photo upload endpoint
+ * Client POSTs FormData → server writes to public/uploads/{tenant}/{uuid}.ext
  *
- * V1 限制:
- * - 不做 magic byte 檔案類型驗證
- * - 不做 file dedup
- * - 不做 virus scan
- * - 限制 10MB / 圖片類型
+ * V1 limitations:
+ * - No magic-byte file-type verification
+ * - No file dedup
+ * - No virus scan
+ * - 10MB / image-only cap
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { writeFile } from '@/lib/storage';
@@ -19,7 +19,7 @@ const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function POST(req: NextRequest) {
   try {
-    // V2 task 105: cookie → merchant 已統一走 resolveMerchantFromCookie() (讀 merchant-session cookie)
+    // V2 task 105: cookie → merchant lookup is unified via resolveMerchantFromCookie() (reads merchant-session cookie)
     const merchant = await resolveMerchantFromCookie();
 
     const formData = await req.formData();

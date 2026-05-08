@@ -5,10 +5,10 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ======================================
-   全域 token (寫進 :root)
+   Global tokens (written into :root)
    ====================================== */
 :root {
-  /* Base palette (兩家 merchant 共用) */
+  /* Base palette (shared by both merchants) */
   --neutral-50:  #FAFAF9;
   --neutral-100: #F5F5F4;
   --neutral-200: #E7E5E4;
@@ -48,15 +48,15 @@
   --tracking-wide: 0.08em;
 
   /* ----- Spacing rhythm ----- */
-  --space-section-y: clamp(3rem, 6vw, 6rem);       /* 縱向 section padding */
-  --space-section-x: clamp(1.5rem, 4vw, 4rem);     /* 橫向 page padding */
+  --space-section-y: clamp(3rem, 6vw, 6rem);       /* vertical section padding */
+  --space-section-x: clamp(1.5rem, 4vw, 4rem);     /* horizontal page padding */
   --space-card-pad:  1.5rem;
   --space-stack-sm:  0.75rem;
   --space-stack-md:  1.25rem;
   --space-stack-lg:  2rem;
   --space-stack-xl:  3rem;
 
-  /* ----- Elevation system (3 層 + glass) ----- */
+  /* ----- Elevation system (3 layers + glass) ----- */
   --elev-1: 0 1px 2px 0 rgb(0 0 0 / 0.04),
             0 1px 3px 0 rgb(0 0 0 / 0.06);
   --elev-2: 0 4px 6px -2px rgb(0 0 0 / 0.05),
@@ -67,7 +67,7 @@
                0 8px 32px -8px color-mix(in srgb, var(--brand-primary) 24%, transparent);
   --elev-inset: inset 0 1px 0 0 rgb(255 255 255 / 0.6);
 
-  /* 預設 brand vars (避免初始化閃白) — 阿明選物 */
+  /* Default brand vars (avoid flash-of-white on init) — Akami Selects */
   --brand-primary: #8B7355;
   --brand-bg: #FAF8F5;
   --brand-text: #2C2416;
@@ -106,7 +106,7 @@
   --status-info-soft:    color-mix(in srgb, var(--info) 12%, transparent);
   --status-info-edge:    color-mix(in srgb, var(--info) 24%, transparent);
 
-  /* ----- V1.9 T2: Platform accent (柿色 — TW indie marketplace signature) -----
+  /* ----- V1.9 T2: Platform accent (persimmon — TW indie marketplace signature) -----
    * Used SPARINGLY on platform surfaces only (wordmark glyph, hero divider,
    * link-hover underline, storefront footer separator). NOT on merchant pages —
    * merchant --brand-primary already does that work.
@@ -163,17 +163,17 @@ html {
 
 /* ======================================
    Platform palette (V1 #48, RA16)
-   套在 admin / 平台首頁 / about / privacy / terms wrapper
-   .platform 內: brand vars 切 Linear-tone, shadcn vars 也跟著切
-   merchant storefront / merchant 後台 不加 .platform → 繼續用商家 brand
+   Applied to admin / platform home / about / privacy / terms wrapper
+   Inside .platform: brand vars switch to Linear-tone, shadcn vars follow
+   Merchant storefront / merchant admin do NOT add .platform → keep merchant brand
    ====================================== */
 .platform {
   /* V1.9 T2: Warm-shift Linear palette (paper-warm + warm-black, 4px sharp radius)
    * Was zinc-50/zinc-900 — too cold for an indie TW marketplace. Now reads as
-   * "牛皮紙 + 墨黑" while keeping Linear's structural feel. */
+   * "kraft paper + ink black" while keeping Linear's structural feel. */
   --brand-primary: #1A1614;        /* warm-black (was #18181B), primary CTA / link */
   --brand-bg: #FAF8F3;             /* paper-warm (was #FAFAFA) */
-  --brand-text: #1A1614;           /* warm-black, 高對比 body */
+  --brand-text: #1A1614;           /* warm-black, high-contrast body */
   --brand-radius: 4px;             /* sharp Linear-style */
   --brand-font-heading: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
 
@@ -184,13 +184,13 @@ html {
   color: var(--brand-text);
 }
 
-/* platform 區塊用 Inter, 不繼承 body 的 Noto Serif */
+/* Platform section uses Inter, does not inherit body's Noto Serif */
 .platform,
 .platform * {
   font-family: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
 }
 
-/* tabular-nums 用 monospace */
+/* tabular-nums uses monospace */
 .platform .font-mono,
 .platform .t-tabular {
   font-family: 'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
@@ -204,8 +204,8 @@ body {
 }
 
 /* ======================================
-   Brand voice transition (核心 wow #2)
-   切 merchant 時整頁絲滑 600ms
+   Brand voice transition (core wow #2)
+   Whole-page silky 600ms when switching merchant
    ====================================== */
 * {
   transition:
@@ -215,7 +215,7 @@ body {
     border-radius 600ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 不要 transition 任何 transform / shadow / opacity (避免互動延遲) */
+/* Do not transition any transform / shadow / opacity (avoid interaction lag) */
 button, a, input, textarea, select, [role="button"] {
   transition:
     background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
@@ -226,7 +226,7 @@ button, a, input, textarea, select, [role="button"] {
 }
 
 /* ======================================
-   Focus rings — brand 色而非預設藍
+   Focus rings — brand color, not default blue
    ====================================== */
 :where(button, a, [role="button"], input, textarea, select):focus-visible {
   outline: 2px solid var(--brand-primary);
@@ -240,7 +240,7 @@ button, a, input, textarea, select, [role="button"] {
 }
 
 /* ======================================
-   Streaming 動畫
+   Streaming animations
    ====================================== */
 @keyframes blink-cursor {
   0%, 49% { opacity: 1; }
@@ -263,9 +263,9 @@ button, a, input, textarea, select, [role="button"] {
   border-radius: var(--brand-radius);
 }
 
-/* V1.9.2: native <input type="color"> swatch fill — Chrome/Safari/Firefox 預設 swatch
-   有 ~4px inset padding + border, 配 outer wrapper 的 overflow-hidden + border-radius
-   會被裁掉露出底色. 重設 swatch 填滿整個 input 框, 視覺乾淨 */
+/* V1.9.2: native <input type="color"> swatch fill — Chrome/Safari/Firefox default swatch
+   has ~4px inset padding + border; combined with outer wrapper's overflow-hidden + border-radius
+   it gets clipped, exposing the underlying color. Reset swatch to fill the entire input box for clean visuals. */
 input[type="color"]::-webkit-color-swatch-wrapper {
   padding: 0;
   border: none;
@@ -278,7 +278,7 @@ input[type="color"]::-moz-color-swatch {
   border: none;
 }
 
-/* Brand-aware skeleton (覆蓋 shadcn 預設) */
+/* Brand-aware skeleton (overrides shadcn default) */
 [data-slot="skeleton"] {
   background: linear-gradient(
     90deg,
@@ -311,7 +311,7 @@ input[type="color"]::-moz-color-swatch {
    Whimsy layer — micro-celebrations
    ====================================== */
 
-/* 欄位完成時 sparkle (用 ::after 觸發，避免多 DOM) */
+/* Sparkle when field completes (triggered via ::after, avoid extra DOM) */
 @keyframes whimsy-sparkle {
   0%   { opacity: 0; transform: scale(0.4) rotate(0deg); }
   40%  { opacity: 1; transform: scale(1.4) rotate(20deg); }
@@ -329,7 +329,7 @@ input[type="color"]::-moz-color-swatch {
   pointer-events: none;
 }
 
-/* 欄位剛 settled 時整段 highlight 一閃 */
+/* Whole row highlight flash when field just settled */
 @keyframes whimsy-flash {
   0%   { background-color: transparent; }
   30%  { background-color: color-mix(in srgb, var(--brand-primary) 14%, transparent); }
@@ -340,7 +340,7 @@ input[type="color"]::-moz-color-swatch {
   border-radius: var(--brand-radius);
 }
 
-/* Cursor pulsing glow — 比舊的 cursor-glow 更有「正在思考」的感覺 */
+/* Cursor pulsing glow — more "thinking" feel than the old cursor-glow */
 @keyframes whimsy-cursor-pulse {
   0%, 100% {
     opacity: 0.95;
@@ -357,7 +357,7 @@ input[type="color"]::-moz-color-swatch {
   animation: whimsy-cursor-pulse 900ms ease-in-out infinite;
 }
 
-/* 18s 結束 bloom — 整個 stream 區塊外圍呼吸一次 */
+/* 18s end bloom — whole stream block breathes once around its perimeter */
 @keyframes whimsy-bloom {
   0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-primary) 40%, transparent); }
   60%  { box-shadow: 0 0 32px 6px color-mix(in srgb, var(--brand-primary) 24%, transparent); }
@@ -365,7 +365,7 @@ input[type="color"]::-moz-color-swatch {
 }
 .whimsy-bloom { animation: whimsy-bloom 1400ms ease-out 1; border-radius: var(--brand-radius); }
 
-/* Brand voice 切換 — 從上方刷下來的 sweep */
+/* Brand voice switch — sweep that washes down from the top */
 @keyframes whimsy-sweep {
   0%   { transform: translateY(-100%); opacity: 0.85; }
   60%  { opacity: 0.55; }
@@ -385,14 +385,14 @@ input[type="color"]::-moz-color-swatch {
   animation: whimsy-sweep 720ms cubic-bezier(0.65, 0, 0.35, 1) 1 forwards;
 }
 
-/* Dropzone 呼吸 (拖入時) */
+/* Dropzone breathing (during drag-in) */
 @keyframes whimsy-breathe {
   0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-primary) 25%, transparent); }
   50%      { transform: scale(1.015); box-shadow: 0 0 0 8px color-mix(in srgb, var(--brand-primary) 12%, transparent); }
 }
 .whimsy-breathe { animation: whimsy-breathe 1200ms ease-in-out infinite; }
 
-/* Dropzone wobble (取消) */
+/* Dropzone wobble (cancel) */
 @keyframes whimsy-wobble {
   0%   { transform: translateX(0); }
   25%  { transform: translateX(-3px) rotate(-0.5deg); }
@@ -402,12 +402,12 @@ input[type="color"]::-moz-color-swatch {
 }
 .whimsy-wobble { animation: whimsy-wobble 320ms ease-in-out 1; }
 
-/* Confidence breathing — 4 段節奏 */
-@keyframes whimsy-confident-breath { /* 高 confidence: 慢穩 */
+/* Confidence breathing — 4-tier rhythm */
+@keyframes whimsy-confident-breath { /* high confidence: slow & steady */
   0%, 100% { opacity: 0.92; transform: scale(1); }
   50%      { opacity: 1;    transform: scale(1.02); }
 }
-@keyframes whimsy-anxious-breath { /* 低 confidence: 快不安 */
+@keyframes whimsy-anxious-breath { /* low confidence: fast & uneasy */
   0%, 100% { opacity: 0.65; transform: scale(0.98); }
   35%      { opacity: 1;    transform: scale(1.04); }
   70%      { opacity: 0.7;  transform: scale(0.99); }
@@ -417,14 +417,14 @@ input[type="color"]::-moz-color-swatch {
 .whimsy-conf-low    { animation: whimsy-anxious-breath 1100ms ease-in-out infinite; }
 .whimsy-conf-fail   { animation: whimsy-anxious-breath  650ms ease-in-out infinite; }
 
-/* Rainbow Easter egg 彩蛋 C */
+/* Rainbow Easter egg C */
 @keyframes whimsy-rainbow {
   0%   { filter: hue-rotate(0deg)   saturate(1.2); }
   100% { filter: hue-rotate(360deg) saturate(1.2); }
 }
 .whimsy-rainbow-mode { animation: whimsy-rainbow 2.4s linear infinite; }
 
-/* Float emoji (Demo Mode toggle 時的小 emoji) */
+/* Float emoji (small emoji during Demo Mode toggle) */
 @keyframes whimsy-emoji-float {
   0%   { opacity: 0; transform: translate(-50%, 0) scale(0.6); }
   20%  { opacity: 1; transform: translate(-50%, -22px) scale(1.1); }
@@ -439,7 +439,7 @@ input[type="color"]::-moz-color-swatch {
   font-size: 22px;
 }
 
-/* Regenerate 完成時的 ripple */
+/* Ripple on regenerate completion */
 @keyframes whimsy-ripple {
   0%   { transform: scale(0.6); opacity: 0.6; }
   100% { transform: scale(2.2); opacity: 0; }
@@ -453,7 +453,7 @@ input[type="color"]::-moz-color-swatch {
   animation: whimsy-ripple 700ms ease-out 1 forwards;
 }
 
-/* Empty state 箭頭 dance */
+/* Empty state arrow dance */
 @keyframes whimsy-arrow-dance {
   0%, 100% { transform: translateY(0)   rotate(0deg); }
   50%      { transform: translateY(-6px) rotate(-4deg); }
@@ -467,7 +467,7 @@ input[type="color"]::-moz-color-swatch {
 }
 .whimsy-404-float { animation: whimsy-404-float 3.2s ease-in-out infinite; }
 
-/* AI vision 7-second scan line — 加在 photo container 上, 配 rotating 安撫文案 */
+/* AI vision 7-second scan line — applied on photo container, paired with rotating reassurance copy */
 @keyframes whimsy-scan-line {
   0%   { transform: translateY(-100%); opacity: 0; }
   20%  { opacity: 1; }
@@ -572,7 +572,7 @@ input[type="color"]::-moz-color-swatch {
   box-shadow: var(--elev-2), var(--elev-inset);
 }
 
-/* Subtle texture noise (純 CSS, 無外部資源) */
+/* Subtle texture noise (pure CSS, no external assets) */
 .noise-bg {
   position: relative;
 }
@@ -600,7 +600,7 @@ input[type="color"]::-moz-color-swatch {
     var(--brand-bg);
 }
 
-/* Lift hover (用於 card / chip) */
+/* Lift hover (used on card / chip) */
 .hover-lift {
   transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
               box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -610,7 +610,7 @@ input[type="color"]::-moz-color-swatch {
   box-shadow: var(--elev-2);
 }
 
-/* Streaming cursor 強化版 */
+/* Streaming cursor — enhanced */
 .streaming-cursor {
   display: inline-block;
   width: 3px;

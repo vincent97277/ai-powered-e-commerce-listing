@@ -1,6 +1,6 @@
 /**
- * /admin/login — 平台 admin 密碼登入 (V1 #45)
- * Linear-tone: 黑白高對比 + 細邊框 + Inter
+ * /admin/login — platform admin password login (V1 #45)
+ * Linear-tone: high B/W contrast + thin borders + Inter
  */
 import { LoginForm } from './LoginForm';
 

@@ -1,5 +1,5 @@
 /**
- * Vitest setup — 載 .env.local 給 RLS test 用
+ * Vitest setup — load .env.local for RLS tests
  */
 import { config } from 'dotenv';
 

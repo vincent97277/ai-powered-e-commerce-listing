@@ -1,15 +1,15 @@
 /**
- * PrintableInvoice — 列印出貨單 (V1 #57)
+ * PrintableInvoice — printable shipping slip (V1 #57)
  *
- * 預設 hide, @media print 時:
- *   - 整頁其他元素 hide
- *   - invoice block 全頁顯示
- *   - A4 直紙 2cm 留白
- *   - Times New Roman (出貨單看起來像紙本傳統)
- *   - 不做 QR / barcode (V2)
+ * Hidden by default; on @media print:
+ *   - all other page elements are hidden
+ *   - invoice block fills the page
+ *   - A4 portrait, 2cm margins
+ *   - Times New Roman (gives the slip a traditional paper feel)
+ *   - No QR / barcode (V2)
  *
- * 觸發: page.tsx 的「列印出貨單」按鈕呼叫 window.print()
- *   (按鈕用 PrintTrigger 客戶端 component, 因為 server component 不能 onClick)
+ * Trigger: page.tsx's "Print shipping slip" button calls window.print()
+ *   (the button uses PrintTrigger client component since server components can't onClick)
  */
 import { PrintTrigger } from './PrintTrigger';
 
@@ -56,7 +56,7 @@ export function PrintableInvoice({
           padding: '2cm',
         }}
       >
-        {/* 商家 header */}
+        {/* Merchant header */}
         <div className="flex items-baseline justify-between border-b-2 border-black pb-3">
           <div>
             <h1 className="text-2xl font-bold">{merchantName}</h1>
@@ -68,7 +68,7 @@ export function PrintableInvoice({
           </div>
         </div>
 
-        {/* 顧客資訊 */}
+        {/* Customer info */}
         <section className="mt-6 grid grid-cols-2 gap-6 text-sm">
           <div>
             <p className="text-xs uppercase tracking-wider">收件人</p>

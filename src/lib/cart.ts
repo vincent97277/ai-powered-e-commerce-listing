@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * 購物車 hook — localStorage per merchant slug
- * V1: 不接 server，純 client 狀態
+ * Cart hook — localStorage keyed per merchant slug.
+ * V1: no server, client-only state.
  */
 import { useEffect, useState, useCallback } from 'react';
 

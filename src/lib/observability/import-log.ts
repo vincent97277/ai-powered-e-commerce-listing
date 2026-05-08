@@ -1,8 +1,8 @@
 /**
  * Import observability logger (V1 #69)
  *
- * V1: 純 console.log 一行 JSON, 統一格式給 V2 metric 系統用
- *     未來改 datadog / honeycomb / pino → 改這個檔即可
+ * V1: pure console.log of one JSON line — uniform shape for the V2 metrics system.
+ *     To swap in datadog / honeycomb / pino later, change this file only.
  */
 export type ImportLogPayload = {
   merchantId: string;
@@ -22,6 +22,6 @@ export function logImport(payload: ImportLogPayload): void {
     ts: new Date().toISOString(),
     ...payload,
   };
-  // 一行 JSON 方便 grep / 後續 ingest
+  // One JSON line — easy to grep / ingest downstream
   console.log(JSON.stringify(entry));
 }

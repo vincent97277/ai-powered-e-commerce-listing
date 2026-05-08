@@ -1,5 +1,5 @@
 /**
- * 商家訂單列表 — 透過 RLS 只看到自己的訂單
+ * Merchant orders list — sees only own orders via RLS
  */
 import Link from 'next/link';
 import { resolveMerchantFromCookie } from '@/lib/storage/resolve-merchant';

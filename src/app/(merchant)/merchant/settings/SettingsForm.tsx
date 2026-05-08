@@ -48,9 +48,10 @@ export function SettingsForm({
   const [text, setText] = useState(initialThemeVars['--brand-text'] ?? '#2C2416');
   const [radius, setRadius] = useState(initialThemeVars['--brand-radius'] ?? '6px');
   /**
-   * V2.1.x: track which preset was last applied so dropdown 顯示對應 preset name
-   * 而非 reset 成「自訂」(舊版直觀問題). 手動改任何顏色/圓角/字 → setAppliedPresetId(null).
-   * 初始: 若 initialThemeVars 跟某 preset 完全 match → 顯示該 preset, 否則「自訂」.
+   * V2.1.x: track which preset was last applied so the dropdown shows that preset name
+   * instead of resetting to "Custom" (old UX issue). Manually changing any color/radius/font →
+   * setAppliedPresetId(null).
+   * Initial: if initialThemeVars exactly matches some preset → show that preset, otherwise "Custom".
    */
   const matchInitialPreset = (() => {
     const vars = initialThemeVars;
@@ -108,7 +109,7 @@ export function SettingsForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
-      {/* 基本資訊 */}
+      {/* Basic info */}
       <Section title="基本資訊">
         <div className="space-y-2">
           <Label className="t-caption" style={{ color: 'var(--brand-primary)' }}>
@@ -165,7 +166,7 @@ export function SettingsForm({
         </div>
       </Section>
 
-      {/* 品牌語氣 */}
+      {/* Brand voice */}
       <Section title="品牌語氣 (給 AI 文案用)">
         <div className="space-y-2">
           <Textarea
@@ -185,9 +186,9 @@ export function SettingsForm({
         </div>
       </Section>
 
-      {/* 視覺主題 */}
+      {/* Visual theme */}
       <Section title="視覺主題">
-        {/* V2.1 預設主題選單 — 套用後可微調下方 5 個欄位; 不寫 preset id 進 DB. */}
+        {/* V2.1 preset theme dropdown — after applying you can fine-tune the 5 fields below; preset id is not stored in DB. */}
         <div className="space-y-2">
           <Label className="t-caption" style={{ color: 'var(--brand-primary)' }}>
             套用預設主題
@@ -197,7 +198,7 @@ export function SettingsForm({
             onChange={(e) => {
               const id = e.target.value;
               if (!id) {
-                // 用戶選「自訂」 — 不改任何東西, dropdown 跳回 ""
+                // User picked "Custom" — change nothing, dropdown reverts to ""
                 setAppliedPresetId('');
                 return;
               }
@@ -208,7 +209,7 @@ export function SettingsForm({
               setText(t.themeVars['--brand-text']);
               setRadius(t.themeVars['--brand-radius']);
               setFont(t.themeVars['--brand-font-heading']);
-              setAppliedPresetId(id);  // 留住 preset 顯示在 dropdown
+              setAppliedPresetId(id);  // keep preset name in the dropdown
             }}
             className="w-full border bg-transparent px-3 py-2 text-sm"
             style={{
@@ -313,7 +314,7 @@ export function SettingsForm({
         </motion.div>
       </Section>
 
-      {/* 營運設定 */}
+      {/* Operations settings */}
       <Section title="營運設定">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">

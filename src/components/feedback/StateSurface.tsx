@@ -10,7 +10,7 @@
  * Tone: 'brand' | 'neutral' (default 'neutral'). 'brand' tints surface with --brand-primary;
  * 'neutral' stays transparent. Admin pages default neutral; merchant pages opt in to brand.
  *
- * Server component, 沒 client 互動.
+ * Server component, no client interaction.
  */
 import type { ReactNode } from 'react';
 

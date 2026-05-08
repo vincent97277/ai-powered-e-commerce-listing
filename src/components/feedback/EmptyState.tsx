@@ -1,19 +1,19 @@
 /**
  * EmptyState — empty state primitive (V1.6 Track B4)
  *
- * 用法:
+ * Usage:
  *   <EmptyState
  *     icon={SearchX}
- *     title="找不到符合的商家"
- *     body="目前的篩選條件下沒有任何資料。"
- *     primaryCTA={{ label: '清除篩選', href: '/admin' }}
+ *     title="No matching merchants"
+ *     body="No data under the current filters."
+ *     primaryCTA={{ label: 'Clear filters', href: '/admin' }}
  *     scope="table"
  *   />
  *
  * Wraps StateSurface + lucide icon at 48px + title + optional body + 1-2 CTA links.
  * `role="status"` on outer (non-urgent informational state).
  *
- * Server component, 沒 client 互動 — CTA 是 <Link href> not onClick.
+ * Server component, no client interaction — CTA is <Link href> not onClick.
  */
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';

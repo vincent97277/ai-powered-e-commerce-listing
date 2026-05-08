@@ -1,5 +1,5 @@
 /**
- * 蝦皮 fetcher unit tests (V1 #64)
+ * Shopee fetcher unit tests (V1 #64)
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';

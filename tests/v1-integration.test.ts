@@ -1,7 +1,7 @@
 /**
- * V1 integration tests — 排除 real OpenAI 之外的全部 (RA reviewer's gap list)
+ * V1 integration tests — everything except real OpenAI calls (RA reviewer's gap list)
  *
- * 涵蓋:
+ * Covers:
  *   - Order status flow 4 transitions + audit history insert
  *   - Optimistic concurrency (WHERE status = expected, rowCount=1)
  *   - Invalid transition rejection
@@ -9,18 +9,18 @@
  *   - Admin actions: suspend / activate / rename_slug + atomic tx + history
  *   - Slug rename collision detection
  *   - Storefront previousSlug → 301 redirect (page component)
- *   - Settings 更新 lowStockThreshold + dailyAiCostCentsCap
+ *   - Settings update lowStockThreshold + dailyAiCostCentsCap
  *   - /api/products/import idempotency dedup (5min)
  *   - /api/products/import/[sessionId] progress polling
  *   - Pending callout query correctness (3 chip aggregation)
- *   - Suspend guard 全 4 個 write paths reject
+ *   - Suspend guard rejects all 4 write paths
  *   - admin_action_history populated by actions
- *   - 法遵頁 content 不是空殼
- *   - Print CSS @media block 存在 in HTML
+ *   - Compliance pages content is not an empty shell
+ *   - Print CSS @media block exists in HTML
  *
- * 不跑 (需 OpenAI):
- *   - product.ingest 真 GPT-4o vision call
- *   - product.import.batch 真 IG/蝦皮 fetch + 重寫文案
+ * Skipped (needs OpenAI):
+ *   - product.ingest real GPT-4o vision call
+ *   - product.import.batch real IG/Shopee fetch + copy rewrite
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { dbAdmin, dbUser } from '@/db';
@@ -46,7 +46,7 @@ import { randomUUID } from 'node:crypto';
 import { getHealthIssues } from '@/lib/merchant/health-checks';
 import { getInboxItems } from '@/lib/merchant/inbox';
 
-// 用獨立 tenant 避免污染 demo data
+// Use isolated tenants to avoid polluting demo data
 const T1 = '88888888-1111-1111-1111-111111111111';
 const T2 = '88888888-2222-2222-2222-222222222222';
 const PRODUCT_1 = '99999999-1111-1111-1111-111111111111';
@@ -61,7 +61,7 @@ beforeAll(async () => {
     .insert(merchants)
     .values([
       // V1.7 D1: integration fixtures need approvedAt set, otherwise storefront / suspend
-      // tests fail (unapproved merchants are 暫停營業中). 'fixture' label distinguishes test
+      // tests fail (unapproved merchants are shown as suspended). 'fixture' label distinguishes test
       // data from real legacy/admin/system approvals.
       {
         id: T1,
@@ -132,7 +132,7 @@ afterAll(async () => {
   await dbAdmin.delete(orders).where(eq(orders.tenantId, T1));
   await dbAdmin.delete(products).where(eq(products.tenantId, T1));
   await dbAdmin.delete(importSessions).where(eq(importSessions.merchantId, T1));
-  // merchant_sessions FK ON DELETE CASCADE — 跟 merchants delete 一起清, 但保險刪 ip='integ-test'
+  // merchant_sessions FK ON DELETE CASCADE — cleared with merchants delete, but extra-cleanup ip='integ-test' just in case
   await dbAdmin.delete(merchantSessions).where(sql`ip = 'integ-test'`);
   await dbAdmin.delete(merchants).where(eq(merchants.id, T1));
   await dbAdmin.delete(merchants).where(eq(merchants.id, T2));
@@ -172,7 +172,7 @@ describe('Order status flow + audit log', () => {
   });
 
   it('optimistic concurrency: stale fromStatus → 0 rows updated', async () => {
-    // 訂單現在 status=paid, 嘗試 fromStatus=pending → 應 0 rows
+    // Order status=paid currently; try fromStatus=pending → should be 0 rows
     await expect(
       withTenantTx(T1, async (tx) => {
         const updated = await tx
@@ -237,7 +237,7 @@ describe('Order status flow + audit log', () => {
   });
 
   it('refund rate limit query: 過去 1 小時 refunded 數', async () => {
-    // 模擬 5 件 refund 寫進 history
+    // Simulate 5 refunds written into history
     const orderIds: string[] = [];
     for (let i = 0; i < 5; i++) {
       const id = `66666666-${i}666-1111-1111-111111111111`;
@@ -337,8 +337,8 @@ describe('Admin actions: suspend / activate / rename_slug', () => {
   });
 
   it('rename_slug: collision check + previousSlug saved', async () => {
-    // 前置: T2 是 'integ-shop-b'
-    // 改成 'integ-shop-c'
+    // Precondition: T2 is 'integ-shop-b'
+    // Rename to 'integ-shop-c'
     const newSlug = 'integ-shop-c';
     await dbAdmin.transaction(async (tx) => {
       const [m] = await tx
@@ -373,8 +373,8 @@ describe('Admin actions: suspend / activate / rename_slug', () => {
   });
 
   it('rename_slug collision: 拒已存在 slug', async () => {
-    // 試圖把 T1 改成 T2 現在的 slug
-    const conflictSlug = 'integ-shop-c'; // T2 剛改成這個
+    // Try to rename T1 to T2's current slug
+    const conflictSlug = 'integ-shop-c'; // T2 just renamed to this
     await expect(
       dbAdmin.transaction(async (tx) => {
         const [existing] = await tx
@@ -390,7 +390,7 @@ describe('Admin actions: suspend / activate / rename_slug', () => {
   });
 
   it('rename_slug previous match: 拒新 slug = 別商家 previousSlug', async () => {
-    // T2 previousSlug 是 'integ-shop-b', 現在嘗試把 T1 改成這個 → 拒
+    // T2 previousSlug is 'integ-shop-b'; trying to rename T1 to this → reject
     const stolenSlug = 'integ-shop-b';
     await expect(
       dbAdmin.transaction(async (tx) => {
@@ -409,20 +409,20 @@ describe('Admin actions: suspend / activate / rename_slug', () => {
 
 // ─────────────── HTTP integration ───────────────
 describe('HTTP routes integration', () => {
-  // V2 task 105: /merchant/* 被 middleware 擋, 必須帶 merchant-session cookie.
-  // legacy demo-merchant-id cookie 已完全廢除 — 所有 (merchant) 測試都得用 minted session.
-  // beforeAll 建 T1 merchant_sessions row + 簽 cookie. 不依賴 login flow (T1 fixture 沒 password).
+  // V2 task 105: /merchant/* is blocked by middleware; must carry merchant-session cookie.
+  // Legacy demo-merchant-id cookie fully retired — all (merchant) tests must use a minted session.
+  // beforeAll creates T1 merchant_sessions row + signs cookie. Does not rely on login flow (T1 fixture has no password).
   let t1MerchantCookie = '';
   beforeAll(async () => {
     try {
       await fetch(`${BASE}/`);
     } catch {
-      console.warn('dev server 沒跑, HTTP integration 跳');
+      console.warn('dev server not running, skipping HTTP integration');
     }
 
     if (!process.env.MERCHANT_SESSION_SECRET || process.env.MERCHANT_SESSION_SECRET.length < 32) {
       console.warn(
-        'MERCHANT_SESSION_SECRET 未設定 (≥ 32 chars) — V2 (merchant)/* HTTP smoke 將全 redirect 到 /merchant/login',
+        'MERCHANT_SESSION_SECRET not set (>= 32 chars) — V2 (merchant)/* HTTP smoke will all redirect to /merchant/login',
       );
       return;
     }
@@ -464,7 +464,7 @@ describe('HTTP routes integration', () => {
   });
 
   it('previousSlug redirect: DB-level + cache-bypass HTTP', async () => {
-    // 1. DB level: previousSlug 確實 saved on T2
+    // 1. DB level: previousSlug actually saved on T2
     const [m] = await dbAdmin
       .select({ slug: merchants.slug, previousSlug: merchants.previousSlug })
       .from(merchants)
@@ -485,7 +485,7 @@ describe('HTTP routes integration', () => {
     try {
       const r = await tryFetch(`/store/${uniqueOld}`);
       if (!r) return;
-      // Next.js redirect() 預設 307. 接受 301/307/308 都算
+      // Next.js redirect() defaults to 307. Accept 301/307/308.
       expect([301, 307, 308]).toContain(r.status);
       const loc = r.headers.get('location') ?? '';
       expect(loc).toContain(uniqueNew);
@@ -497,7 +497,7 @@ describe('HTTP routes integration', () => {
   });
 
   it('Suspended storefront 顯示「暫停營業中」 (200 OK)', async () => {
-    // suspend T1
+    // Suspend T1
     await dbAdmin
       .update(merchants)
       .set({ suspendedAt: new Date(), suspendedReason: 'http test' })
@@ -508,7 +508,7 @@ describe('HTTP routes integration', () => {
 
     const r = await tryFetch('/store/integ-shop-a');
     if (!r) return;
-    // Cache 可能還沒 invalidate, accept 200
+    // Cache may not yet be invalidated; accept 200
     expect(r.status).toBe(200);
 
     // Reactivate
@@ -641,7 +641,7 @@ describe('HTTP routes integration', () => {
     if (!r) return;
     expect(r.status).toBe(200);
     const html = await r.text();
-    // Verify @media print + #printable-invoice 都在
+    // Verify @media print + #printable-invoice both present
     expect(html).toMatch(/@media print/);
     expect(html).toMatch(/printable-invoice/);
     expect(html).toMatch(/Times New Roman/);
@@ -656,7 +656,7 @@ describe('HTTP routes integration', () => {
     expect(r.status).toBe(200);
     const html = await r.text();
     // After we marked ORDER_PENDING as completed, no pending. But low-stock product still exists.
-    // Either chip 顯示 or not (depending on order state). Just verify low-stock chip link 對.
+    // Either chip shown or not (depending on order state). Just verify low-stock chip link is correct.
     expect(html).toMatch(/filter=low-stock/);
   });
 
@@ -668,7 +668,7 @@ describe('HTTP routes integration', () => {
     if (!r1) return;
     expect(r1.status).toBe(200);
     const html1 = await r1.text();
-    expect(html1).toContain('Integ product 1'); // stock=3 ≤ 5
+    expect(html1).toContain('Integ product 1'); // stock=3 <= 5
     expect(html1).not.toContain('Integ product 2'); // stock=50
 
     const r2 = await tryFetch('/merchant/products?sort=stock', {
@@ -713,7 +713,7 @@ describe('HTTP routes integration', () => {
     if (!r) return;
     const html = await r.text();
     expect(html).toContain('狀態流轉歷史');
-    // React RSC 把 `by {h.changedBy}` 拆成 separate text nodes, 不相鄰. 只驗 section 存在 + DB 有 row
+    // React RSC splits `by {h.changedBy}` into separate text nodes (not adjacent). Just verify section exists + DB row exists
     const histRows = await dbAdmin
       .select()
       .from(orderStatusHistory)
@@ -726,13 +726,13 @@ describe('HTTP routes integration', () => {
     const r = await tryFetch('/');
     if (!r) return;
     const html = await r.text();
-    // 至少有一個 seed merchant 在 (akami / afen / integ-shop-a / integ-shop-c)
+    // At least one seed merchant present (akami / afen / integ-shop-a / integ-shop-c)
     expect(html).toMatch(/akami|阿明|阿芬|integ-shop-a|integ-shop-c/);
   });
 
   it('Hackathon 字樣 0 in serve HTML', async () => {
-    // /merchant 需 auth cookie; 其他公開頁不用. 沒 session 時 /merchant 會 redirect 到 login.
-    // 只要 final HTML (不論 page) 不含 hackathon 即可 — login page 也 count.
+    // /merchant needs auth cookie; other public pages don't. Without session, /merchant redirects to login.
+    // Just need final HTML (any page) to not contain hackathon — login page also counts.
     const cookie = t1MerchantCookie || '';
     const paths = ['/', '/merchant', '/admin/login', '/about'];
     for (const p of paths) {
@@ -749,8 +749,8 @@ describe('HTTP routes integration', () => {
     const html = await r.text();
     expect(html).toContain('管理密碼');
     expect(html).toContain('登入');
-    // Server action 在 form data 用 hidden Next-Action header, html 內不會有 fetch URL
-    // 只 verify form 有 password input + submit button
+    // Server action uses hidden Next-Action header in form data; no fetch URL in html
+    // Just verify form has password input + submit button
     expect(html).toMatch(/<input[^>]+type="password"/);
   });
 
@@ -783,15 +783,15 @@ describe('Settings 更新', () => {
   });
 
   it('Validation: lowStockThreshold 範圍 0-10000', async () => {
-    // 直接驗 SQL constraint 沒擋 (應用層驗 only) — 確認 OK insert 12345 但 actions.ts 會 reject
-    // 不真寫, 只確認 schema 無 CHECK constraint, 應用層擔
+    // Verify SQL constraint does not block (app-level validation only) — OK to insert 12345 but actions.ts will reject
+    // Don't actually write; just confirm schema has no CHECK constraint, app layer handles it
     expect(true).toBe(true); // placeholder
   });
 });
 
 // ─────────────── V1.5 B1: Health checks ───────────────
 describe('Health checks (V1.5 B1)', () => {
-  // 獨立 tenant + 4 個 products with 各自 health issue
+  // Isolated tenant + 4 products each with its own health issue
   const TH = '88888888-7777-7777-7777-777777777777';
   const P_NO_PHOTO = '99999999-aaaa-aaaa-aaaa-aaaaaaaa0001';
   const P_SHORT_TITLE = '99999999-aaaa-aaaa-aaaa-aaaaaaaa0002';
@@ -815,7 +815,7 @@ describe('Health checks (V1.5 B1)', () => {
     await dbAdmin
       .insert(products)
       .values([
-        // 1: 沒照片 (r2Key 空字串) — 標題 12 字 OK, 庫存 5 OK, 定價 100 OK
+        // 1: no photo (r2Key empty string) — title 12 chars OK, stock 5 OK, price 100 OK
         {
           id: P_NO_PHOTO,
           tenantId: TH,
@@ -826,7 +826,7 @@ describe('Health checks (V1.5 B1)', () => {
           stockQuantity: 5,
           aiMetadata: aiMeta,
         },
-        // 2: 標題太短 (5 字) — 有照片, 庫存 5, 定價 100
+        // 2: title too short (5 chars) — has photo, stock 5, price 100
         {
           id: P_SHORT_TITLE,
           tenantId: TH,
@@ -837,7 +837,7 @@ describe('Health checks (V1.5 B1)', () => {
           stockQuantity: 5,
           aiMetadata: aiMeta,
         },
-        // 3: 缺貨 (stock=0) — 標題 OK, 有照片, 定價 100
+        // 3: out of stock (stock=0) — title OK, has photo, price 100
         {
           id: P_ZERO_STOCK,
           tenantId: TH,
@@ -848,7 +848,7 @@ describe('Health checks (V1.5 B1)', () => {
           stockQuantity: 0,
           aiMetadata: aiMeta,
         },
-        // 4: normal — 全部 OK
+        // 4: normal — all OK
         {
           id: P_NORMAL,
           tenantId: TH,
@@ -873,14 +873,14 @@ describe('Health checks (V1.5 B1)', () => {
 
     expect(issues.length).toBe(3);
 
-    // 每個 issue 各 1 件 (因為 4 件商品中 3 件各有一個問題, 1 件全 OK)
+    // 1 of each issue (since 3 of 4 products each have one problem, 1 fully OK)
     const byType = Object.fromEntries(issues.map((i) => [i.type, i]));
     expect(byType.no_photo?.count).toBe(1);
     expect(byType.short_title?.count).toBe(1);
     expect(byType.zero_stock?.count).toBe(1);
-    expect(byType.zero_price).toBeUndefined(); // 0 件 → 不在列表
+    expect(byType.zero_price).toBeUndefined(); // 0 → not in list
 
-    // label / filterUrl 結構正確
+    // label / filterUrl structure correct
     expect(byType.no_photo?.label).toMatch(/缺照片/);
     expect(byType.no_photo?.filterUrl).toBe('/merchant/products?filter=no_photo');
     expect(byType.short_title?.filterUrl).toBe('/merchant/products?filter=short_title');
@@ -888,13 +888,13 @@ describe('Health checks (V1.5 B1)', () => {
   });
 
   it('全 0 issues → 回 [] (健康 merchant)', async () => {
-    // 用 T2 (Integ Shop B / integ-shop-c — V1 沒商品, 全乾淨)
+    // Use T2 (Integ Shop B / integ-shop-c — V1 has no products, all clean)
     const issues = await getHealthIssues(T2);
     expect(issues).toEqual([]);
   });
 
   it('top 3 排序 by count desc + 多個同 type 累加', async () => {
-    // 在 TH 多塞 5 件 zero_stock, 讓 zero_stock 衝到第一
+    // Insert 5 more zero_stock under TH to push zero_stock to rank 1
     const extras: string[] = [];
     for (let i = 0; i < 5; i++) {
       const id = `99999999-bbbb-bbbb-bbbb-bbbbbbbb000${i}`;
@@ -916,10 +916,10 @@ describe('Health checks (V1.5 B1)', () => {
     try {
       const issues = await getHealthIssues(TH);
       expect(issues.length).toBe(3);
-      // zero_stock 現在 6 件 (1 + 5), 應 rank 1
+      // zero_stock now has 6 (1 + 5), should rank 1
       expect(issues[0].type).toBe('zero_stock');
       expect(issues[0].count).toBe(6);
-      // 後兩個是 no_photo / short_title (各 1)
+      // The other two are no_photo / short_title (1 each)
       const remaining = issues.slice(1).map((i) => i.type).sort();
       expect(remaining).toEqual(['no_photo', 'short_title']);
     } finally {
@@ -959,7 +959,7 @@ describe('Import idempotency dedup', () => {
   it('5min 內同 (tenant, sourceUrl) 已 pending → 回同 sessionId', async () => {
     const sourceUrl = 'https://www.instagram.com/integ-dedup-test';
 
-    // 先建一個 pending session
+    // First create a pending session
     const [first] = await dbAdmin
       .insert(importSessions)
       .values({
@@ -970,7 +970,7 @@ describe('Import idempotency dedup', () => {
       })
       .returning({ id: importSessions.id });
 
-    // 模擬 API route dedup query
+    // Simulate API route dedup query
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
     const existing = await withTenantTx(T1, async (tx) => {
       return await tx
@@ -995,10 +995,10 @@ describe('Import idempotency dedup', () => {
 
 // ─────────────── V1.6 B5: MerchantInbox aggregator ───────────────
 describe('MerchantInbox getInboxItems (V1.6 B5)', () => {
-  // 獨立 tenant 避開 T1 / TH 的 fixture
+  // Isolated tenant, avoiding T1 / TH fixtures
   const TG = 'aaaaaaaa-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
-  const G_PAID = '99999999-cccc-cccc-cccc-ccccccccc001'; // P1 paid_unshipped (1 筆)
-  const G_PENDING = '99999999-cccc-cccc-cccc-ccccccccc002'; // P5 pending_unpaid (1 筆)
+  const G_PAID = '99999999-cccc-cccc-cccc-ccccccccc001'; // P1 paid_unshipped (1 row)
+  const G_PENDING = '99999999-cccc-cccc-cccc-ccccccccc002'; // P5 pending_unpaid (1 row)
   const G_NO_PHOTO = '99999999-cccc-cccc-cccc-ccccccccc101'; // P3 no_photo
   const G_SHORT_TITLE = '99999999-cccc-cccc-cccc-ccccccccc102'; // P4 short_title
   const G_ZERO_STOCK_A = '99999999-cccc-cccc-cccc-ccccccccc103'; // P2 zero_stock #1
@@ -1015,14 +1015,14 @@ describe('MerchantInbox getInboxItems (V1.6 B5)', () => {
     confidence: 0.9,
   };
 
-  // 健康 tenant — 沒商品沒訂單, getInboxItems 應回 []
+  // Healthy tenant — no products no orders, getInboxItems should return []
   const TG_HEALTHY = 'aaaaaaaa-cccc-cccc-cccc-cccccccccccc';
 
   beforeAll(async () => {
     await dbAdmin
       .insert(merchants)
       .values([
-        // 主 tenant: lowStockThreshold=5 (default), 之後讓 G_LOW_STOCK 卡 stock=3 觸發 low_stock
+        // Main tenant: lowStockThreshold=5 (default); G_LOW_STOCK stock=3 will trigger low_stock
         { id: TG, slug: 'integ-inbox-shop', name: 'Integ Inbox Shop', lowStockThreshold: 5 },
         { id: TG_HEALTHY, slug: 'integ-inbox-healthy', name: 'Integ Inbox Healthy' },
       ])
@@ -1031,7 +1031,7 @@ describe('MerchantInbox getInboxItems (V1.6 B5)', () => {
     await dbAdmin
       .insert(products)
       .values([
-        // no_photo (r2Key 空字串) — 標題 14 字, 庫存 5, 定價 100
+        // no_photo (r2Key empty string) — title 14 chars, stock 5, price 100
         {
           id: G_NO_PHOTO,
           tenantId: TG,
@@ -1042,7 +1042,7 @@ describe('MerchantInbox getInboxItems (V1.6 B5)', () => {
           stockQuantity: 50,
           aiMetadata: aiMeta,
         },
-        // short_title (5 字)
+        // short_title (5 chars)
         {
           id: G_SHORT_TITLE,
           tenantId: TG,
@@ -1064,7 +1064,7 @@ describe('MerchantInbox getInboxItems (V1.6 B5)', () => {
           stockQuantity: 0,
           aiMetadata: aiMeta,
         },
-        // zero_stock #2 — 同 P2, count=2 用來驗證 group 內 count desc
+        // zero_stock #2 — same P2, count=2 to verify count desc within group
         {
           id: G_ZERO_STOCK_B,
           tenantId: TG,
@@ -1075,7 +1075,7 @@ describe('MerchantInbox getInboxItems (V1.6 B5)', () => {
           stockQuantity: 0,
           aiMetadata: aiMeta,
         },
-        // zero_price (priceCents=0) — 標題 OK, 庫存 50 (不算 zero_stock / low_stock)
+        // zero_price (priceCents=0) — title OK, stock 50 (not zero_stock / low_stock)
         {
           id: G_ZERO_PRICE,
           tenantId: TG,
@@ -1086,7 +1086,7 @@ describe('MerchantInbox getInboxItems (V1.6 B5)', () => {
           stockQuantity: 50,
           aiMetadata: aiMeta,
         },
-        // low_stock (stock=3, threshold=5, > 0 → 不算 zero_stock)
+        // low_stock (stock=3, threshold=5, > 0 → not zero_stock)
         {
           id: G_LOW_STOCK,
           tenantId: TG,
@@ -1170,7 +1170,7 @@ describe('MerchantInbox getInboxItems (V1.6 B5)', () => {
     const items = await getInboxItems(TG);
     const severities = items.map((i) => i.severity);
 
-    // P1 first, P5 last; severities 應 monotonic non-decreasing (P1, P2, P2, P3, P3, P4, P5)
+    // P1 first, P5 last; severities should be monotonic non-decreasing (P1, P2, P2, P3, P3, P4, P5)
     expect(severities[0]).toBe('P1');
     expect(severities[severities.length - 1]).toBe('P5');
     const rank: Record<string, number> = { P1: 1, P2: 2, P3: 3, P4: 4, P5: 5 };
@@ -1178,7 +1178,7 @@ describe('MerchantInbox getInboxItems (V1.6 B5)', () => {
       expect(rank[severities[i]]).toBeGreaterThanOrEqual(rank[severities[i - 1]]);
     }
 
-    // Within P2 (zero_stock=2, zero_price=1) → zero_stock 先 (count desc)
+    // Within P2 (zero_stock=2, zero_price=1) → zero_stock first (count desc)
     const p2 = items.filter((i) => i.severity === 'P2');
     expect(p2[0].type).toBe('zero_stock');
     expect(p2[0].count).toBe(2);
@@ -1193,11 +1193,11 @@ describe('MerchantInbox getInboxItems (V1.6 B5)', () => {
 
   it('drops signals with count=0 (no zero-noise chips)', async () => {
     const items = await getInboxItems(TG);
-    // 沒 zero count 出現
+    // No zero counts appear
     for (const item of items) {
       expect(item.count).toBeGreaterThan(0);
     }
-    // healthy tenant 應沒 paid_unshipped
+    // healthy tenant should have no paid_unshipped
     const healthy = await getInboxItems(TG_HEALTHY);
     expect(healthy.find((i) => i.type === 'paid_unshipped')).toBeUndefined();
   });

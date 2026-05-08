@@ -4,14 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 import type { ProductOutput } from '@/lib/types';
 
 /**
- * 7 個欄位 streaming timeline (18 秒)
- * 用 setTimeout 模擬 GPT-4o token stream，build day demo 不一定真連 streaming API
+ * 7-field streaming timeline (18 seconds).
+ * Uses setTimeout to simulate GPT-4o token stream — build-day demo may not actually wire
+ * up a streaming API.
  *
  * Timeline:
- * 0-3s   標題 typewriter (60ms/char)
- * 3-12s  描述 streaming (~30ms/char)
- * 6s     tags pop in (300ms 間隔)
- * 8-15s  variants table 錯位 fade in
+ * 0-3s   title typewriter (60ms/char)
+ * 3-12s  description streaming (~30ms/char)
+ * 6s     tags pop in (300ms interval)
+ * 8-15s  variants table staggered fade in
  * 15s    price card fade in
  * 18s    shopee tab pulse
  */
@@ -55,14 +56,14 @@ export function useStreamingPipeline() {
       timers.current.push(setTimeout(fn, ms));
     };
 
-    // 0s: title 出現
+    // 0s: title appears
     push(() => setState((s) => ({ ...s, title: data.title })), 0);
     // 0-3s: typewriter 60ms/char
     for (let i = 1; i <= data.title.length; i++) {
       push(() => setState((s) => ({ ...s, titleChars: i })), i * 60);
     }
 
-    // 3s: description 開始
+    // 3s: description starts
     push(() => setState((s) => ({ ...s, description: data.description })), 3000);
     const descSpeed = 9000 / Math.max(data.description.length, 1);
     for (let i = 1; i <= data.description.length; i++) {
@@ -75,7 +76,7 @@ export function useStreamingPipeline() {
       push(() => setState((s) => ({ ...s, tagsVisible: i + 1 })), 6000 + i * 300);
     });
 
-    // 8s: variants 錯位 fade in
+    // 8s: variants staggered fade in
     push(() => setState((s) => ({ ...s, variants: data.variants })), 8000);
     const varSpan = 7000 / Math.max(data.variants.length, 1);
     data.variants.forEach((_, i) => {

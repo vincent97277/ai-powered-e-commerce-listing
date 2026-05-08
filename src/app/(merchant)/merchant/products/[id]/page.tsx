@@ -1,6 +1,6 @@
 /**
- * 商家商品詳情頁 (server component) — 從 DB 撈真實商品資料
- * 透過 RLS 確保只看得到自己的商品
+ * Merchant product detail page (server component) — fetches real product data from DB
+ * RLS ensures only the merchant's own products are visible
  */
 import { notFound } from 'next/navigation';
 import { withTenantTx } from '@/lib/db/with-tenant';
@@ -28,7 +28,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const tenant = await resolveMerchantFromCookie();
 
-  // 不是 UUID 直接 404
+  // Not a UUID → 404 immediately
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
 
   const [row] = await withTenantTx(tenant.tenantId, async (tx) => {
@@ -36,7 +36,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   });
 
   if (!row) {
-    // Fallback: 萬一是 demo 還沒 build 過真實 product, 顯示 fixture
+    // Fallback: in case the demo hasn't built a real product yet, show a fixture
     const fixtureRes = await fetch(
       `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/fixtures/products/teacup.json`,
     );
@@ -53,7 +53,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     );
   }
 
-  // 撈 merchant 的 lowStockThreshold for stock indicator
+  // Fetch the merchant's lowStockThreshold for the stock indicator
   const [merchantRow] = await withTenantTx(tenant.tenantId, async (tx) => {
     return await tx
       .select({ lowStockThreshold: merchants.lowStockThreshold })
@@ -64,7 +64,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const lowStockThreshold = merchantRow?.lowStockThreshold ?? 5;
 
   const uiProduct = aiOutputToUi(row.aiMetadata);
-  // 用 DB 真實 title/description/price (商家可能編輯過)
+  // Use real DB title/description/price (merchant may have edited it)
   uiProduct.title = row.title;
   uiProduct.description = row.description;
   uiProduct.price_twd = {
@@ -117,7 +117,7 @@ function ProductDetailLayout({
   return (
     <main className="min-h-screen px-12 py-8" style={{ backgroundColor: 'var(--brand-bg)', color: 'var(--brand-text)' }}>
       <div className="mx-auto max-w-6xl space-y-8">
-        {/* 返回列表 */}
+        {/* Back to list */}
         <Link
           href="/merchant/products"
           className="inline-flex items-center gap-1 text-sm hover:opacity-80"

@@ -31,7 +31,7 @@ test.describe('public surface', () => {
   test('storefront /store/akami responds (200 or 503-suspended)', async ({ page }) => {
     // Akami may be active or suspended depending on admin approval state
     const res = await page.goto('/store/akami');
-    // Either active storefront (200) or suspended page (200 with 暫停營業 banner) — both fine
+    // Either active storefront (200) or suspended page (200 with "shop suspended" banner) — both fine
     expect(res?.status()).toBeLessThan(500);
   });
 

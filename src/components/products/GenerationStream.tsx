@@ -44,7 +44,7 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
 
     useImperativeHandle(ref, () => ({
       async kickoff(file: File | null) {
-        // 直接從 localStorage 讀最新 mode (避開 useDemoMode hook 的 stale closure)
+        // Read latest mode directly from localStorage (avoids stale closure in useDemoMode hook)
         const liveMode =
           typeof window !== 'undefined'
             ? ((localStorage.getItem('demoMode') as 'on' | 'off' | null) ?? mode)
@@ -56,7 +56,7 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           hasFile: !!file,
         });
 
-        // 預覽模式: 走 fixture (不打 OpenAI)
+        // Preview mode: use fixture (no OpenAI call)
         if (liveMode === 'on') {
           toast.info('預覽模式 — 用範例資料展示流程', { duration: 2000 });
           await new Promise((r) => setTimeout(r, 500));
@@ -66,7 +66,7 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
           return;
         }
 
-        // 真實模式: 真打 GPT-4o
+        // Real mode: actually call GPT-4o
         if (!file) {
           toast.error('找不到上傳檔案，請重新拖曳照片');
           const fb = await fetch('/fixtures/products/teacup.json');
@@ -75,7 +75,7 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
         }
 
         try {
-          // Step 1: 上傳檔案到 /api/uploads (寫入 public/uploads/)
+          // Step 1: upload file to /api/uploads (writes to public/uploads/)
           console.log('[GenerationStream] uploading file', file.name, file.size);
           toast.loading('上傳照片中...', { id: 'upload' });
           const formData = new FormData();
@@ -171,14 +171,14 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
             description: `${msg}。改用 fixture demo 繼續。`,
             duration: 6000,
           });
-          // Fallback: 萬一 AI 掛了，仍跑 fixture demo 不讓畫面卡死
+          // Fallback: if AI fails, still run fixture demo so the UI doesn't freeze
           const fb = await fetch('/fixtures/products/teacup.json');
           start(await fb.json());
         }
       },
     }));
 
-    // 18s done — bloom + AI 完成 toast (一次性)
+    // 18s done — bloom + AI completion toast (fire once)
     useEffect(() => {
       if (state.done && !celebrated.current) {
         celebrated.current = true;
@@ -247,7 +247,7 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
             </motion.div>
           )}
 
-          {/* 完成後 CTA — 引導下一步 */}
+          {/* Post-completion CTA — guide next step */}
           {state.done && (
             <motion.div
               initial={{ opacity: 0, y: 12 }}
@@ -295,7 +295,7 @@ export const GenerationStream = forwardRef<GenerationStreamHandle, { previewUrl:
                   href="/merchant/products/new"
                   className="hover-lift inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium"
                   onClick={() => {
-                    // 強制 hard reload 重置 state (再上一張不卡到上一次的 streaming state)
+                    // Force hard reload to reset state (so the next upload doesn't get stuck on previous streaming state)
                     if (typeof window !== 'undefined') {
                       setTimeout(() => window.location.reload(), 50);
                     }

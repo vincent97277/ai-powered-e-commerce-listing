@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 /**
- * 彩蛋 C: 連點 logo 3 次 (1.2s window) → 整頁 hue-rotate 5 秒
- * 副效果：所有 brand color 跟著旋轉，玩心慶祝感
+ * Easter egg C: tap logo 3x (1.2s window) → full-page hue-rotate for 5 seconds
+ * Side effect: all brand colors rotate along, playful celebratory vibe
  */
 export function RainbowLogo({ children }: { children: React.ReactNode }) {
   const tapCount = useRef(0);

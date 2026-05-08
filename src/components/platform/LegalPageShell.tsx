@@ -1,6 +1,6 @@
 /**
- * LegalPageShell — 法遵頁共用 layout (V1 #60)
- * 統一 header + footer + Linear-tone typography
+ * LegalPageShell — shared layout for legal/compliance pages (V1 #60)
+ * Unified header + footer + Linear-tone typography.
  *
  * V1.9 T2: rotated zinc square → <Wordmark> in header,
  *           hairline border switched to semantic --border-hairline.

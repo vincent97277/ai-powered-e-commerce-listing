@@ -1,19 +1,20 @@
 'use client';
 
 /**
- * AdminToolbar — admin overview 上方工具列 (V1.6 A1)
+ * AdminToolbar — top toolbar on the admin overview (V1.6 A1)
  *
- * 4 件事合一個 client component, 全部寫進 URL searchParams:
- *   - q       搜尋 (name/slug ILIKE), debounce 200ms
+ * 4 things merged into one client component, all written into URL searchParams:
+ *   - q       search (name/slug ILIKE), 200ms debounce
  *   - status  'all' | 'active' | 'suspended'
  *   - attn    '1' | '0'  (needs-attention chip toggle)
  *   - sort    'gmv' | 'orders' | 'products' | 'created'
- *   - page    任何篩選變化會 reset 回 1
+ *   - page    any filter change resets back to 1
  *
- * 取代既有 SortDropdown (V1.6 Eng E1: 三件事不同 component 會把 URL 互砍).
+ * Replaces the existing SortDropdown (V1.6 Eng E1: three things in different components were
+ * trampling each other's URL state).
  *
- * Mobile (<sm): 垂直堆疊 + search 全寬;
- * Desktop (sm+): 同一行, search flex-1, 其餘 fixed.
+ * Mobile (<sm): vertical stack + full-width search;
+ * Desktop (sm+): single row, search flex-1, others fixed.
  */
 
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -49,11 +50,11 @@ export function AdminToolbar({ q, status, attn, sort }: Props) {
   const [, startTransition] = useTransition();
 
   // Local controlled state for the search input — keeps typing snappy
-  // 不直接 push URL on each keystroke, 200ms debounce
+  // Don't push URL on every keystroke; 200ms debounce
   const [qLocal, setQLocal] = useState(q);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 若 URL q 變了 (例: 清除篩選 link), sync 回 input
+  // If URL q changes (e.g. clear-filter link), sync it back into the input
   useEffect(() => {
     setQLocal(q);
   }, [q]);
@@ -67,7 +68,7 @@ export function AdminToolbar({ q, status, attn, sort }: Props) {
         params.set(k, v);
       }
     }
-    // 任何 filter 變動都 reset page = 1 (除非 patch 自己有指定 page)
+    // Any filter change resets page = 1 (unless the patch itself specifies a page)
     if (!('page' in patch)) {
       params.delete('page');
     }

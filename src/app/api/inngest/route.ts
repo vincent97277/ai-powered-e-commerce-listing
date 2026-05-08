@@ -1,9 +1,9 @@
 /**
  * Inngest webhook handler — Next.js App Router
  *
- * 注意：
- * - sharp 是 native 模組，必須跑在 Node.js runtime，不能用 edge
- * - maxDuration 拉到 300s（vision call + R2 round-trip 偶爾會慢）
+ * Notes:
+ * - sharp is a native module, must run on Node.js runtime, not edge
+ * - maxDuration raised to 300s (vision call + R2 round-trip is occasionally slow)
  */
 
 import { serve } from 'inngest/next';

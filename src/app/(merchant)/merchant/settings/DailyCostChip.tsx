@@ -1,14 +1,14 @@
 /**
- * DailyCostChip — 商家 settings 頁顯示「今日 AI 用量」
+ * DailyCostChip — shows "today's AI usage" on the merchant settings page
  *
- * 顏色:
- *   - <50%   綠 (var(--success), 預設 fallback teal)
- *   - 50-80% 橘 (var(--warning))
- *   - >80%   紅 (var(--error))
+ * Colors:
+ *   - <50%   green (var(--success), default fallback teal)
+ *   - 50-80% orange (var(--warning))
+ *   - >80%   red (var(--error))
  *
- * Server component, 純展示 (跟 PendingCallout chip 同 style)
+ * Server component, pure display (same style as PendingCallout chip)
  *
- * V1.5 Track A2 — 看得見 cap 才有意義, 商家才會願意調 dailyAiCostCentsCap
+ * V1.5 Track A2 — visible cap is what makes it meaningful; only then will merchants tune dailyAiCostCentsCap
  */
 import { AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 
@@ -23,7 +23,7 @@ export function DailyCostChip({
   const usedTwd = Math.round(usedCents / 100);
   const capTwd = Math.round(capCents / 100);
 
-  // 三段式顏色: <50 綠, 50-80 橘, >80 紅
+  // Three-tier color: <50 green, 50-80 orange, >80 red
   const tone =
     ratio >= 0.8 ? 'error' : ratio >= 0.5 ? 'warning' : 'success';
 
@@ -32,7 +32,7 @@ export function DailyCostChip({
       ? 'var(--error)'
       : tone === 'warning'
         ? 'var(--warning)'
-        : 'var(--success, #16a34a)'; // success var 不一定有定義 → fallback green-600
+        : 'var(--success, #16a34a)'; // success var may not always be defined → fallback green-600
 
   const Icon =
     tone === 'error' ? AlertCircle : tone === 'warning' ? AlertTriangle : CheckCircle2;

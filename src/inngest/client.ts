@@ -1,28 +1,29 @@
 /**
- * Inngest client + 事件型別
+ * Inngest client + event types.
  *
- * V1 scope：只有 product.ingest pipeline 三個事件。
+ * V1 scope: just the three product.ingest pipeline events.
  *
- * 事件設計：
- * - product.ingest          ← 前端上傳完成後 trigger（input 事件）
- * - product.ingested        ← AI pipeline 成功後 emit（讓其他 worker / UI 訂閱）
- * - product.ingest.failed   ← 失敗 emit（DLQ 用，UI 顯示「處理失敗、請重試」）
+ * Event design:
+ * - product.ingest          ← triggered after frontend upload completes (input event)
+ * - product.ingested        ← emitted after AI pipeline success (subscribed by other workers / UI)
+ * - product.ingest.failed   ← emitted on failure (DLQ; UI shows "processing failed, please retry")
  *
- * 為什麼要 emit 成功 / 失敗事件而不是直接寫 DB 完事？
- *   方便之後接「商品上架後自動發 IG 文」「失敗時自動通知商家」這類
- *   下游 worker — 反正 V1 scope 只跑一條，但接點先留好。
+ * Why emit success/failure events instead of just writing to DB and being done?
+ *   Easier to wire up downstream workers like "auto-post product to IG after listing"
+ *   or "auto-notify merchant on failure". V1 scope only runs one pipeline, but the
+ *   hook points are already in place.
  */
 
 import { EventSchemas, Inngest } from 'inngest';
 
 type ProductIngestEvent = {
   data: {
-    tenantId: string; // 租戶 ID（給 RLS 用）
-    r2Key: string; // 本地 storage key, e.g. "{tenant}/{uuid}.jpg"
-    merchantId: string; // 商家 ID（同 tenant 內可能多商家，這裡多帶一個）
-    /** V1 #67 (RA12): IG/蝦皮 import 時餵進 GPT-4o 的 source caption (商家原文) */
+    tenantId: string; // tenant ID (for RLS)
+    r2Key: string; // local storage key, e.g. "{tenant}/{uuid}.jpg"
+    merchantId: string; // merchant ID (a tenant may have multiple merchants, so we carry it separately)
+    /** V1 #67 (RA12): source caption fed into GPT-4o during IG/Shopee import (merchant's original copy) */
     sourceText?: string;
-    /** V1 #66 (RA15): 給 child failure 寫回 parent session 用 */
+    /** V1 #66 (RA15): used by child failure to write back into parent session */
     importSessionId?: string;
     itemIndex?: number;
   };
@@ -47,7 +48,7 @@ type ProductIngestFailedEvent = {
   };
 };
 
-/** V1 #66: IG/蝦皮 import batch parent worker (5-20 件 / session) */
+/** V1 #66: IG/Shopee import batch parent worker (5-20 items / session) */
 type ProductImportBatchEvent = {
   data: {
     sessionId: string;

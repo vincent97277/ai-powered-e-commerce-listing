@@ -1,5 +1,5 @@
 /**
- * Storefront 首頁 — 列出 published 商品
+ * Storefront homepage — lists published products
  */
 import Link from 'next/link';
 import { resolveSlugRedirect, resolveStorefrontMeta } from '@/lib/tenant/resolver';
@@ -17,16 +17,16 @@ export default async function StorefrontPage({ params }: { params: Promise<{ slu
   const { slug } = await params;
   const meta = await resolveStorefrontMeta(slug);
 
-  // 若 slug 不存在 — 看是否 match previousSlug, 是的話 301 redirect 到新 slug
+  // If slug doesn't exist — check whether it matches a previousSlug; if so, 301 redirect to the new slug
   if (!meta) {
     const newSlug = await resolveSlugRedirect(slug);
     if (newSlug) redirect(`/store/${newSlug}`);
     notFound();
   }
 
-  // 商家被平台停權 OR 還沒被 admin 核可 (V1.7 D1) — 顯示「暫停營業中」
-  // 兩種狀態 customer-facing 體驗一樣 (店面對外不可見), 內部 reason 不對外露.
-  // 200 OK 不是 503, SEO 不爆.
+  // Merchant suspended by the platform OR not yet admin-approved (V1.7 D1) — show "Paused" state
+  // Both states give the same customer-facing experience (storefront hidden); internal reason is not exposed.
+  // 200 OK, not 503, so SEO doesn't tank.
   const isUnavailable = meta.suspendedAt != null || meta.approvedAt == null;
   if (isUnavailable) {
     return (

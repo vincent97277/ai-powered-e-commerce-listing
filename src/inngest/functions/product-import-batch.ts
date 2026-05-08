@@ -1,25 +1,25 @@
 /**
- * product.import.batch — IG/蝦皮 import parent worker (V1 #66)
+ * product.import.batch — IG/Shopee import parent worker (V1 #66)
  *
- * 職責:
- *   1. step.run('fetch-source')  抓 IG/蝦皮 HTML (safeFetch)
+ * Responsibilities:
+ *   1. step.run('fetch-source')  fetch IG/Shopee HTML (safeFetch)
  *   2. step.run('parse-source')  parser → NormalizedItem[]
- *   3. step.run('cap-and-update-total') cap 5-20 件, 寫 import_sessions.totalItems
- *   4. step.run('item-N')        per-item: 下載圖 → dispatch product.ingest child event
- *      (per-item step 確保 retry 不重算 counter — RA1)
+ *   3. step.run('cap-and-update-total') cap to 5-20 items, write import_sessions.totalItems
+ *   4. step.run('item-N')        per-item: download image → dispatch product.ingest child event
+ *      (per-item step ensures retries don't double-count — RA1)
  *   5. step.run('complete')      sessions.status = 'completed'
  *
- * 失敗策略:
- *   - 整批 fetch/parse 失敗 → import_sessions.status='failed' + errors[]
- *   - 個別 item 失敗 → errors[] 加一筆, 其他 item 照跑 (per-item step.run isolated)
- *   - completedItems counter 由 child event 在 product.ingest 完成時 ++
- *     (但因 per-item step.run dispatch 已穩定, 計數可從 dispatch 數推)
+ * Failure strategy:
+ *   - Batch-wide fetch/parse failure → import_sessions.status='failed' + errors[]
+ *   - Per-item failure → push to errors[]; other items proceed (per-item step.run is isolated)
+ *   - completedItems counter is incremented by child events when product.ingest finishes
+ *     (with per-item step.run dispatch stable, count can also be derived from dispatch count)
  *
  * RA13 cost cap (TODO V1.5):
- *   import_sessions.tokensIn/tokensOut 已預留, V1 不真執行 cap (smoke test 流程順)
- *   V1.5 加 daily_ai_cost 累積 + 超 cap abort batch
+ *   import_sessions.tokensIn/tokensOut already reserved; V1 doesn't actually enforce a cap
+ *   (smoke test flow runs through). V1.5 adds daily_ai_cost accumulation + abort batch on cap.
  *
- * 全 withTenantTx 寫入 (RA: ENG D2 final), tenantId 從 event.data 取
+ * All writes go through withTenantTx (RA: ENG D2 final); tenantId comes from event.data.
  */
 import { eq, sql } from 'drizzle-orm';
 import { inngest } from '../client';
@@ -45,7 +45,7 @@ export const productImportBatchFn = inngest.createFunction(
     name: 'IG/蝦皮 import 批次處理',
     retries: 1,
     idempotency: 'event.data.sessionId',
-    // 序列下載 5-20 張圖避免 OOM, 不要 concurrency 衝高
+    // Serial downloads of 5-20 images to avoid OOM; don't crank concurrency.
     concurrency: { limit: 3, key: 'event.data.tenantId' },
   },
   { event: 'product.import.batch' },
@@ -135,7 +135,7 @@ export const productImportBatchFn = inngest.createFunction(
       return { success: false, reason: 'zero items' };
     }
 
-    // Step 3: 寫入 totalItems + status='importing'
+    // Step 3: write totalItems + status='importing'
     await step.run('write-total', async () => {
       await withTenantTx(tenantId, async (tx) => {
         await tx
@@ -153,8 +153,9 @@ export const productImportBatchFn = inngest.createFunction(
       logger.warn(`只找到 ${items.length} 件, 建議至少 ${MIN_ITEMS_WARN} 件`);
     }
 
-    // Step 3.5: V1.5 A2 cost cap gate — 超過 cap 前不要再 dispatch child events
-    // (個別 child 失敗仍會被 product.ingest 自身處理, 這裡只擋整批送進去)
+    // Step 3.5: V1.5 A2 cost cap gate — don't dispatch any more child events past the cap.
+    // (Per-item child failures are still handled by product.ingest itself; this only blocks
+    //  the whole batch from entering.)
     const capCheck = await step.run('check-cost-cap', async () => {
       try {
         await assertWithinDailyCap(tenantId);
@@ -168,7 +169,7 @@ export const productImportBatchFn = inngest.createFunction(
             capCents: err.capCents,
           };
         }
-        throw err; // 非預期錯誤 → 讓 Inngest retry
+        throw err; // Unexpected error → let Inngest retry
       }
     });
 
@@ -196,7 +197,7 @@ export const productImportBatchFn = inngest.createFunction(
       };
     }
 
-    // Step 4: per-item processing — 序列, 每個 item 一個 step.run (RA1: retry safe)
+    // Step 4: per-item processing — serial, one step.run per item (RA1: retry-safe)
     const itemResults: Array<{ ok: boolean; itemIndex: number; error?: string }> = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -220,7 +221,7 @@ export const productImportBatchFn = inngest.createFunction(
           return { ok: true as const, itemIndex: i };
         } catch (err) {
           const errMessage = err instanceof Error ? err.message : 'unknown';
-          // 寫進 errors[] 但不 throw — 其他 item 繼續跑
+          // Write to errors[] but don't throw — other items keep going
           await withTenantTx(tenantId, async (tx) => {
             await tx
               .update(importSessions)
@@ -238,7 +239,8 @@ export const productImportBatchFn = inngest.createFunction(
       itemResults.push(result);
     }
 
-    // Step 5: mark completed (即便部分 fail, 整 batch 算 completed; UI 顯示 errors[] 給商家 retry)
+    // Step 5: mark completed (even with some failures the batch counts as completed; UI shows
+    //         errors[] so the merchant can retry)
     const successCount = itemResults.filter((r) => r.ok).length;
     await step.run('mark-completed', async () => {
       await withTenantTx(tenantId, async (tx) => {

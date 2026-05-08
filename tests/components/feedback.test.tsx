@@ -1,12 +1,12 @@
 /**
  * V1.6 Track B4 — feedback state primitives smoke tests
  *
- * 測 5 components: StateSurface / EmptyState / LoadingState / ErrorState / PartialState.
+ * Tests 5 components: StateSurface / EmptyState / LoadingState / ErrorState / PartialState.
  *
  * Vitest runs in `node` env (per vitest.config.ts) — no jsdom, no @testing-library/react.
- * 用 renderToStaticMarkup 做 server-render snapshot smoke tests:
- *   - 確認 component compiles + renders without throwing
- *   - 確認 markup 含預期的 a11y attributes / brand tokens / text
+ * Uses renderToStaticMarkup for server-render snapshot smoke tests:
+ *   - confirm component compiles + renders without throwing
+ *   - confirm markup contains expected a11y attributes / brand tokens / text
  *
  * Coverage:
  *   - EmptyState renders icon + title + body + 2 CTAs

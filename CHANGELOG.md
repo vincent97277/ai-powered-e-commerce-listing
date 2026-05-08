@@ -10,6 +10,47 @@ Format: every entry is one Git commit with SHA + date + subject + bullet expansi
 
 ---
 
+## V2.6.x i18n phase 2 — 2026-05-08 (PR pending) — pending SHA
+
+**chore(i18n): phase 2 — translate remaining Chinese comments to English (app/ + components/ + tests/ + scripts/ + drizzle/ + workflows)**
+
+Per user directive 「程式碼和設定檔中的註釋，統一用英文」. Phase 2 sweeps everything outside the phase 1 lib/db/configs scope. After this PR, **zero comment-CJK** remains in the codebase (verified with `rg --pcre2 '(^\s*//|^\s*\*[^/]|^\s*/\*)[^"\`]*[\x{4e00}-\x{9fff}]'` returns 0).
+
+Scope (137 files, +1,301/-1,254):
+
+- **src/app/** — page components, server actions, layouts, API routes, globals.css
+- **src/components/** — feedback states, products UI, merchant UI, platform UI, theme provider
+- **src/inngest/** — client + product-ingest + product-import-batch worker comments
+- **src/hooks/** — useStreamingPipeline, useFileUpload
+- **src/lib/** stragglers — themes.ts root file, suspend-guard, reserved-slugs, edge session helpers, cart, image-downloader, shopee-fetcher, types, with-tenant, observability/import-log, ai/flatten, observability/ai-cost-pricing
+- **src/middleware.ts**
+- **src/db/admin-only/index.ts**
+- **tests/** — 21 files (test descriptions intentionally stay CJK for readable failure output; only file headers + inline comments translated)
+- **scripts/** — test-vision, seed-merchant-auth (operator-facing console output preserved CJK)
+- **drizzle/migrations/** — all 8 forward + 6 rollback SQL files: `--` comments translated
+- **.github/workflows/ai-vision-smoke-manual.yml** + **docker-compose.yml** — yaml `#` comments
+
+Drift checker fixes (3 blog snippets):
+- `docs/blog/compile-time-tenant-isolation.md` quoted T2 + T3 RLS test comments and the `with-tenant.ts` JSDoc verbatim. After phase 2 translated those source comments to English, the drift checker (V2.6 PR3 T4) caught 3 mismatches. Updated blog snippets to match the new English source.
+
+What stayed Chinese (intentional, per `feedback_english_comments_only.md`):
+- UI strings in JSX (`<button>登入</button>`, status labels, category names)
+- Brand voice prompts in `src/lib/ai/prompt.ts` template
+- Enum values: `'服飾配件' | '美妝保養' | '食品飲料' | '居家生活' | '3C 周邊' | '文具書籍' | '運動戶外' | '其他'`
+- Test descriptions: `it('中文 ...')` — stay for readable failure output
+- Operator-facing console output strings in scripts
+- Brand voice fixture data (akami's wabi-sabi voice, afen's night-market voice)
+- Regex patterns matching Chinese (e.g. IG private-account detection)
+- Error messages thrown to UI / dev visibility
+- Markdown docs — out of scope
+- xlsx / CSV column header arrays (Taiwanese export format)
+
+Total CJK reduction across the repo: 3,210 → 1,435 lines (-55%). Files with any CJK: 177 → 141 (-20%).
+
+Verified: pnpm typecheck + lint + lint:docs + vitest run (327 tests) all green. Pure comment translation, zero behavior change.
+
+---
+
 ## V2.6.x homepage merchant card productCount fix — 2026-05-08 (PR #57) — `56bf4bc`
 
 **fix(home): merchant card productCount 對不起來 — qualify subquery cols + filter is_published**
