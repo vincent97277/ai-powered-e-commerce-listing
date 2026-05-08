@@ -43,17 +43,17 @@ Cloud: Vercel (sin1) · Neon Singapore · Cloudflare R2 (APAC) · Inngest Cloud
 
 Three personas, one codebase. RLS keeps tenants apart; `dbAdmin` (BYPASSRLS) is allowlisted to platform surfaces only.
 
-| Storefront (顧客端) | Merchant dashboard (商家後台) |
+| AI photo → listing in ~7s (商家後台) | Per-merchant brand-aware storefront (顧客端) |
 |---|---|
-| [![Storefront product detail](./docs/screenshots/storefront-product-detail.png)](./docs/screenshots/storefront-product-detail.png) | [![Merchant dashboard](./docs/screenshots/merchant-dashboard.png)](./docs/screenshots/merchant-dashboard.png) |
-| Brand-aware theming via per-merchant CSS vars; same `/store/{slug}` route, different visual identity per tenant. | KPI tiles, 7-day order chart, hot products, recent orders, action inbox — RLS-scoped to the logged-in merchant. |
+| [![Merchant product edit with AI metadata](./docs/screenshots/merchant-product-detail.png)](./docs/screenshots/merchant-product-detail.png) | [![Akami storefront full page](./docs/screenshots/storefront-akami-full.png)](./docs/screenshots/storefront-akami-full.png) |
+| GPT-4o vision generates title + description + SEO chips + price band, with confidence shown inline. Multi-channel export (蝦皮 / IG / LINE) per row. Cost gated by `assertWithinDailyCap()`. | Same `/store/{slug}` route, different CSS vars per tenant. Theme + font + radius driven by `merchants.theme_vars` JSONB. Tenant data isolation enforced at the Postgres RLS layer below the CSS. |
 
 | AI cost dashboard (平台管理) | Operator queue (跨商家客服) |
 |---|---|
 | [![AI cost dashboard](./docs/screenshots/admin-ai-cost-dashboard.png)](./docs/screenshots/admin-ai-cost-dashboard.png) | [![Operator queue](./docs/screenshots/admin-operator-queue.png)](./docs/screenshots/admin-operator-queue.png) |
 | 14-day platform-wide AI token usage + per-merchant top-10. The cost cap is a load-bearing primitive — see `assertWithinDailyCap()`. | P1–P5 severity inbox aggregating action items across every tenant via cross-merchant CTE — `dbAdmin` BYPASSRLS, ESLint-allowlisted. |
 
-[More screenshots →](./docs/screenshots/) (settings, product list, order detail, A4 print slip, storefront grid, success page, merchant ranking, full akami storefront, merchant + admin login forms)
+[More screenshots →](./docs/screenshots/) — merchant dashboard, settings, products list, order detail, A4 print slip, storefront product detail, storefront brand comparison (akami + afen), customer order success, admin merchant ranking, merchant + admin login forms.
 
 ## Why this is interesting
 
