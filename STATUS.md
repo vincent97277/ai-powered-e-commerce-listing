@@ -4,6 +4,8 @@ Version-by-version progression for `rls-ai-shop`. This replaces the older `V1_ST
 
 > **Doc role**: STATUS = per-version theme + numbers + rationale (the *why*). [CHANGELOG.md](./CHANGELOG.md) = commit-level mechanical entries (the *what*). Going forward, narrative belongs here; SHA-level minutiae belongs there.
 
+> **URL note** (2026-05-08): production domain was renamed `demo-sass-2.vercel.app` → `rls-ai-shop.vercel.app` as part of the V2.6 product-name unification. The old domain was replaced without a Vercel alias, so V2.2-era references below to `demo-sass-2.vercel.app` are now dead links — substitute `rls-ai-shop.vercel.app` mentally. Entries are preserved verbatim because rewriting would misstate the URL at the V2.2 deploy moment.
+
 ## TL;DR
 
 - **V1 (2026-04-30)** Hackathon → multi-merchant platform, 7 phases shipped, 81 tests.

@@ -6,6 +6,8 @@ Format: every entry is one Git commit with SHA + date + subject + bullet expansi
 
 > **Doc role** (V2.4 forward-only): CHANGELOG = mechanical commit-level *what*. STATUS = per-version theme + numbers + rationale (*why*). Existing V1–V2.3 entries retain mixed-style content (not retroactively reclassified — that surgery was deemed too risky in the V2.4 retro).
 
+> **URL note** (2026-05-08): production domain was renamed `demo-sass-2.vercel.app` → `rls-ai-shop.vercel.app` as part of the V2.6 product-name unification. The old domain was replaced without a Vercel alias, so any older entries below that reference `demo-sass-2.vercel.app` are now dead links — substitute `rls-ai-shop.vercel.app` mentally. Entries are preserved verbatim because rewriting would misstate the URL at deploy time.
+
 ---
 
 ## V2.6.x Tier 1 #5 — 2026-05-07 (PR #47) — `f401b80`
