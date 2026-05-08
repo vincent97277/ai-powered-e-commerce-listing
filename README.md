@@ -1,4 +1,4 @@
-# demo-sass-2
+# rls-ai-shop
 
 > A multi-merchant e-commerce platform for Taiwan's independent stores. AI photo→listing in ~7 seconds, multi-tenant Postgres RLS, and a platform-admin observability suite — built as a portfolio project that started life as a hackathon and got pushed thirteen versions deeper to exercise real production patterns (cloud deploy, per-merchant auth, R2 storage, security hardening).
 

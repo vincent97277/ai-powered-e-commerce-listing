@@ -1,4 +1,4 @@
-# Build Day Checklist — demo-sass-2
+# Build Day Checklist — rls-ai-shop
 
 > **Historical artifact (archived V2.4)** — preserved as the original hackathon checklist (V1 day-of plan). Project has shipped 13+ versions since (V1 → V2.3). For current state see [STATUS.md](../../STATUS.md); for setup see [LOCAL_SETUP.md](../../LOCAL_SETUP.md). Path was `/BUILD_DAY.md` until V2.4 when it moved here to keep root focused on living docs.
 
@@ -13,9 +13,9 @@
 全部用 GitHub OAuth 省時。OpenAI 充值要等 5-10 分鐘額度生效，**先做這個**。
 
 - [ ] [Neon](https://console.neon.tech) — 建 project (region: `AWS ap-southeast-1` 跟 Vercel 同區)
-- [ ] [Cloudflare R2](https://dash.cloudflare.com) — 開 bucket `demo-sass-2-photos`
+- [ ] [Cloudflare R2](https://dash.cloudflare.com) — 開 bucket `rls-ai-shop-photos`
 - [ ] [OpenAI](https://platform.openai.com) — 充值 **USD 10** + 設 budget alert USD 10/month
-- [ ] [Inngest](https://app.inngest.com) — 建 app `demo-sass-2`，拿 Event Key + Signing Key
+- [ ] [Inngest](https://app.inngest.com) — 建 app `rls-ai-shop`，拿 Event Key + Signing Key
 - [ ] [Sentry](https://sentry.io) — 建 Next.js project，拿 DSN
 
 ### 2. Neon 建雙 ROLE (#B3)
@@ -130,7 +130,7 @@ pnpm dlx vercel --prod     # production deploy
 
 ### Sprint 7: USER 必做 — 演練 ≥3 次 (#H2) (19:00-21:00)
 
-開 `~/.gstack/projects/demo-sass-2/pitch-deck-content-20260428-210243.md`，套版進 Pitch.com / Keynote。
+開 `~/.gstack/projects/rls-ai-shop/pitch-deck-content-20260428-210243.md`，套版進 Pitch.com / Keynote。
 
 完整 5 分鐘演練：
 - 0:00-0:45 開場 (痛點故事)

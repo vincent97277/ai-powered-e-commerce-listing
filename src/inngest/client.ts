@@ -66,6 +66,6 @@ export type Events = {
 };
 
 export const inngest = new Inngest({
-  id: 'demo-sass-2',
+  id: 'rls-ai-shop',
   schemas: new EventSchemas().fromRecord<Events>(),
 });

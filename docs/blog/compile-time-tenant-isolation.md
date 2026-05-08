@@ -208,6 +208,6 @@ The rule is not novel. It is a pragmatic boundary guard around primitives that a
 
 Every code excerpt above is anchored via `<!-- src: path:line-line -->` markers in the markdown source. A drift checker runs in CI and fails if any snippet diverges from the file it claims to quote. So if you read this six months from now and the line numbers have shifted, either the post or the codebase has been edited — and CI caught the divergence on whichever PR introduced it.
 
-The reference repo: [demo-sass-2 on GitHub](https://github.com/vincent97277/ai-powered-e-commerce-listing) (Apache-2.0).
+The reference repo: [rls-ai-shop on GitHub](https://github.com/vincent97277/ai-powered-e-commerce-listing) (Apache-2.0).
 
 Honest disclaimer: that repo is a portfolio / showcase project, not a production SaaS. The patterns are the same ones I'd use in production; the limitations are documented in `ARCHITECTURE.md` §4.4 ("Honest threat model for `web_admin`"). The rule does not save you from RCE. It saves you from yourself.

@@ -59,7 +59,7 @@ function fmtTime(d: Date): string {
  */
 export async function generateProductsXlsx(products: Product[]): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'demo-sass-2';
+  workbook.creator = 'rls-ai-shop';
   workbook.created = new Date();
   const sheet = workbook.addWorksheet('商品列表', {
     views: [{ state: 'frozen', ySplit: 1 }],

@@ -1,6 +1,6 @@
 # Project Status
 
-Version-by-version progression for `demo-sass-2`. This replaces the older `V1_STATUS.md` (kept on disk only as historical context — see Git history if needed). Companion to [README.md](./README.md), [ARCHITECTURE.md](./ARCHITECTURE.md), and [CHANGELOG.md](./CHANGELOG.md).
+Version-by-version progression for `rls-ai-shop`. This replaces the older `V1_STATUS.md` (kept on disk only as historical context — see Git history if needed). Companion to [README.md](./README.md), [ARCHITECTURE.md](./ARCHITECTURE.md), and [CHANGELOG.md](./CHANGELOG.md).
 
 > **Doc role**: STATUS = per-version theme + numbers + rationale (the *why*). [CHANGELOG.md](./CHANGELOG.md) = commit-level mechanical entries (the *what*). Going forward, narrative belongs here; SHA-level minutiae belongs there.
 
@@ -455,7 +455,7 @@ Previous state: `THEME_PICKS` array in onboarding had 3 themes, picked randomly.
 - Vercel project import, 17 env vars (Production scope), Function region pinned to `sin1`.
 
 **Phase D — Inngest Cloud + smoke tests**:
-- Inngest app `demo-sass-2` synced against `https://demo-sass-2.vercel.app/api/inngest`.
+- Inngest app `rls-ai-shop` synced against `https://demo-sass-2.vercel.app/api/inngest`.
 - OpenAI hard cap $10/mo at vendor dashboard (defense in depth alongside app's `assertWithinDailyCap`).
 - 15-step manual smoke checklist completed.
 

@@ -1,6 +1,6 @@
 # Changelog
 
-Commit-level history for `demo-sass-2`. Per-version narrative + numbers in [STATUS.md](./STATUS.md). Architecture context in [ARCHITECTURE.md](./ARCHITECTURE.md).
+Commit-level history for `rls-ai-shop`. Per-version narrative + numbers in [STATUS.md](./STATUS.md). Architecture context in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 Format: every entry is one Git commit with SHA + date + subject + bullet expansion. Trivial commits (merge / formatting) are skipped.
 

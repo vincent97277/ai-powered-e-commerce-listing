@@ -1,6 +1,6 @@
 # Local Setup
 
-Dev onboarding for someone (or future-you) cloning `demo-sass-2`. For project-level context first, read [README.md](./README.md). For architecture depth: [ARCHITECTURE.md](./ARCHITECTURE.md). For version history: [STATUS.md](./STATUS.md) and [CHANGELOG.md](./CHANGELOG.md).
+Dev onboarding for someone (or future-you) cloning `rls-ai-shop`. For project-level context first, read [README.md](./README.md). For architecture depth: [ARCHITECTURE.md](./ARCHITECTURE.md). For version history: [STATUS.md](./STATUS.md) and [CHANGELOG.md](./CHANGELOG.md).
 
 ---
 
@@ -47,9 +47,9 @@ Verify:
 
 ```bash
 docker compose ps
-# demo-sass-2-postgres    healthy
+# rls-ai-shop-postgres    healthy
 
-docker exec -it demo-sass-2-postgres psql -U owner -d demo_sass_2 \
+docker exec -it rls-ai-shop-postgres psql -U owner -d demo_sass_2 \
   -c "SELECT rolname, rolbypassrls FROM pg_roles WHERE rolname IN ('web_anon','web_admin');"
 # web_anon  | f
 # web_admin | t
@@ -101,17 +101,17 @@ pnpm db:migrate:bootstrap        # mark all current files as applied without run
 Each migration has a paired `*.rollback.sql`. To roll back V1.7's onboarding hardening for example:
 
 ```bash
-docker exec -i demo-sass-2-postgres psql -U owner -d demo_sass_2 \
+docker exec -i rls-ai-shop-postgres psql -U owner -d demo_sass_2 \
   < drizzle/migrations/0007_v17_onboarding_hardening.rollback.sql
 # Then manually remove the row from __migrations__:
-docker exec -i demo-sass-2-postgres psql -U owner -d demo_sass_2 \
+docker exec -i rls-ai-shop-postgres psql -U owner -d demo_sass_2 \
   -c "DELETE FROM __migrations__ WHERE filename = '0007_v17_onboarding_hardening.sql'"
 ```
 
 ### 4. Seed two demo merchants
 
 ```bash
-docker exec -i demo-sass-2-postgres psql -U owner -d demo_sass_2 <<'EOF'
+docker exec -i rls-ai-shop-postgres psql -U owner -d demo_sass_2 <<'EOF'
 INSERT INTO merchants (id, slug, name, brand_voice, theme_vars, approved_at, approved_by_admin) VALUES
   ('11111111-1111-1111-1111-111111111111',
    'akami',
@@ -244,7 +244,7 @@ Older test fixtures used the same UUID range as the seed. Fixed: tests now use `
 V1.5 bug — fixed in `13a9957`. Verify migration `0006_ai_usage_events.sql` was applied:
 
 ```bash
-docker exec -it demo-sass-2-postgres psql -U owner -d demo_sass_2 \
+docker exec -it rls-ai-shop-postgres psql -U owner -d demo_sass_2 \
   -c "\d ai_usage_events"
 ```
 
