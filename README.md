@@ -53,7 +53,7 @@ Three personas, one codebase. RLS keeps tenants apart; `dbAdmin` (BYPASSRLS) is 
 | [![AI cost dashboard](./docs/screenshots/admin-ai-cost-dashboard.png)](./docs/screenshots/admin-ai-cost-dashboard.png) | [![Operator queue](./docs/screenshots/admin-operator-queue.png)](./docs/screenshots/admin-operator-queue.png) |
 | 14-day platform-wide AI token usage + per-merchant top-10. The cost cap is a load-bearing primitive — see `assertWithinDailyCap()`. | P1–P5 severity inbox aggregating action items across every tenant via cross-merchant CTE — `dbAdmin` BYPASSRLS, ESLint-allowlisted. |
 
-[More screenshots →](./docs/screenshots/) (settings, product list, order detail, A4 print slip, storefront grid, success page, merchant ranking)
+[More screenshots →](./docs/screenshots/) (settings, product list, order detail, A4 print slip, storefront grid, success page, merchant ranking, full akami storefront, merchant + admin login forms)
 
 ## Why this is interesting
 
