@@ -6,12 +6,12 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: demo-sass-2-postgres
+    container_name: rls-ai-shop-postgres
     restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: demo_sass_2
+      POSTGRES_DB: rls_ai_shop
       POSTGRES_USER: owner
       POSTGRES_PASSWORD: owner_pass
       # 啟用 plpgsql + 必要 extension
@@ -20,11 +20,11 @@ services:
       - pg_data:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U owner -d demo_sass_2"]
+      test: ["CMD-SHELL", "pg_isready -U owner -d rls_ai_shop"]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
   pg_data:
-    name: demo-sass-2-pg-data
+    name: rls-ai-shop-pg-data

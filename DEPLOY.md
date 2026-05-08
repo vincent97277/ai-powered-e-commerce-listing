@@ -38,18 +38,18 @@ Companion to [README.md](./README.md), [LOCAL_SETUP.md](./LOCAL_SETUP.md), and
 2. Project name: `rls-ai-shop`
 3. Region: **Asia Pacific (Singapore)** — colocated with our chosen Vercel region
 4. Postgres version: 16 (or latest)
-5. Database name: `demo_sass_2`
+5. Database name: `rls_ai_shop`
 6. Click **Create**
 
 **Capture:**
 - Connection string (Neon shows it after create). Has shape:
   ```
-  postgresql://<owner>:<password>@<host>.neon.tech/demo_sass_2?sslmode=require
+  postgresql://<owner>:<password>@<host>.neon.tech/rls_ai_shop?sslmode=require
   ```
   Save as `NEON_OWNER_URL_UNPOOLED`.
 - Build the **pooled** URL by adding `-pooler` to the host:
   ```
-  postgresql://<owner>:<password>@<host>-pooler.neon.tech/demo_sass_2?sslmode=require
+  postgresql://<owner>:<password>@<host>-pooler.neon.tech/rls_ai_shop?sslmode=require
   ```
   Save as `NEON_OWNER_URL_POOLED`.
 
@@ -117,8 +117,8 @@ Done. Applied 10 migration(s).
 ```bash
 # These are the URLs Vercel will use at runtime.
 # Substitute <host> with the part before .neon.tech in your owner URL.
-DATABASE_URL_USER="postgresql://web_anon:$ANON_PW@<host>-pooler.<region>.aws.neon.tech/demo_sass_2?sslmode=require"
-DATABASE_URL_ADMIN="postgresql://web_admin:$ADMIN_PW@<host>-pooler.<region>.aws.neon.tech/demo_sass_2?sslmode=require"
+DATABASE_URL_USER="postgresql://web_anon:$ANON_PW@<host>-pooler.<region>.aws.neon.tech/rls_ai_shop?sslmode=require"
+DATABASE_URL_ADMIN="postgresql://web_admin:$ADMIN_PW@<host>-pooler.<region>.aws.neon.tech/rls_ai_shop?sslmode=require"
 
 echo "DATABASE_URL_USER=$DATABASE_URL_USER"
 echo "DATABASE_URL_ADMIN=$DATABASE_URL_ADMIN"
@@ -227,7 +227,7 @@ For each variable below, click "Add" → set Name + Value → **scope to Product
 ```
 DATABASE_URL_USER          = <DATABASE_URL_USER from B.4>
 DATABASE_URL_ADMIN         = <DATABASE_URL_ADMIN from B.4>
-NEXT_PUBLIC_APP_URL        = https://demo-sass-2.vercel.app  (update after C.5 if custom domain)
+NEXT_PUBLIC_APP_URL        = https://rls-ai-shop.vercel.app  (update after C.5 if custom domain)
 ADMIN_PASSWORD             = $(openssl rand -hex 16)
 ADMIN_SESSION_SECRET       = $(openssl rand -hex 32)
 MERCHANT_SESSION_SECRET    = $(openssl rand -hex 32)        ← MUST differ from ADMIN_SESSION_SECRET
@@ -310,7 +310,7 @@ This colocates serverless functions with the Neon Singapore database. Without th
 ### D.3 — Connect Inngest to your URL
 
 1. https://app.inngest.com → your `rls-ai-shop` app → "Apps" tab → "Sync new app"
-2. SDK URL: `https://demo-sass-2.vercel.app/api/inngest` (replace with your real Vercel URL)
+2. SDK URL: `https://rls-ai-shop.vercel.app/api/inngest` (replace with your real Vercel URL)
 3. Click **Sync**. Inngest discovers the function and shows "Product Ingest Pipeline" registered.
 
 > If sync fails: check the URL is reachable from outside (hit it in a browser, expect a JSON response from the Inngest SDK), and confirm `INNGEST_SIGNING_KEY` matches.
@@ -368,7 +368,7 @@ Knowing rollback works is more valuable than never needing it.
 Add a "Live demo" link to README.md so visitors can find the URL:
 
 ```markdown
-[![Live demo](https://img.shields.io/badge/demo-live-success)](https://demo-sass-2.vercel.app)
+[![Live demo](https://img.shields.io/badge/demo-live-success)](https://rls-ai-shop.vercel.app)
 ```
 
 ---

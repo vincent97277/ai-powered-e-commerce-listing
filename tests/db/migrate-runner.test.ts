@@ -12,7 +12,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execSync } from 'node:child_process';
 import { Client } from 'pg';
 
-const OWNER_URL = process.env.DATABASE_URL ?? 'postgresql://owner:owner_pass@localhost:5432/demo_sass_2';
+const OWNER_URL = process.env.DATABASE_URL ?? 'postgresql://owner:owner_pass@localhost:5432/rls_ai_shop';
 const TEST_DB_NAME = `migrate_runner_test_${Date.now()}`;
 
 // Build a connection URL pointing at the test DB.

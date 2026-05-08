@@ -2,15 +2,15 @@
 
 > A multi-merchant e-commerce platform for Taiwan's independent stores. AI photo→listing in ~7 seconds, multi-tenant Postgres RLS, and a platform-admin observability suite — built as a portfolio project that started life as a hackathon and got pushed thirteen versions deeper to exercise real production patterns (cloud deploy, per-merchant auth, R2 storage, security hardening).
 
-[![Live demo](https://img.shields.io/badge/demo-live-success?style=flat-square)](https://demo-sass-2.vercel.app)
+[![Live demo](https://img.shields.io/badge/demo-live-success?style=flat-square)](https://rls-ai-shop.vercel.app)
 [![Tests](https://img.shields.io/badge/tests-304%20passing-brightgreen)](#tests)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)]()
 [![Postgres RLS](https://img.shields.io/badge/Postgres-RLS%20enforced-336791)]()
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 
-**Live:** https://demo-sass-2.vercel.app · **Storefront examples:** [/store/akami](https://demo-sass-2.vercel.app/store/akami) · [/store/afen](https://demo-sass-2.vercel.app/store/afen)
+**Live:** https://rls-ai-shop.vercel.app · **Storefront examples:** [/store/akami](https://rls-ai-shop.vercel.app/store/akami) · [/store/afen](https://rls-ai-shop.vercel.app/store/afen)
 
-[![Hero — 來，把商品交給 AI](./docs/hero/hero.png)](https://demo-sass-2.vercel.app)
+[![Hero — 來，把商品交給 AI](./docs/hero/hero.png)](https://rls-ai-shop.vercel.app)
 
 ### Walkthrough — photo → AI listing in ~60s
 
@@ -18,7 +18,7 @@
 
 Real AI photo→listing flow on the local env.
 
-If the embed above doesn't render (npm package page, mirror, or some browsers): [▶ Play walkthrough (V2.3 release asset, 1.7 MB)](https://github.com/vincent97277/ai-powered-e-commerce-listing/releases/download/v2.3/walkthrough.mp4) · [Source `.mp4` in repo](./docs/hero/walkthrough.mp4) · [Poster image](./docs/hero/walkthrough-poster.jpg)
+If the embed above doesn't render (npm package page, mirror, or some browsers): [▶ Play walkthrough (V2.3 release asset, 1.7 MB)](https://github.com/vincent97277/rls-ai-shop/releases/download/v2.3/walkthrough.mp4) · [Source `.mp4` in repo](./docs/hero/walkthrough.mp4) · [Poster image](./docs/hero/walkthrough-poster.jpg)
 
 > **Portfolio / showcase project.** Public for learning, hiring, and reference. Limited active maintenance — see [.github/CONTRIBUTING.md](./.github/CONTRIBUTING.md) before opening PRs.
 

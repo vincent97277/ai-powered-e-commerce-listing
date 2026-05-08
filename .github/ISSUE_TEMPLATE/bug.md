@@ -11,7 +11,7 @@ labels: bug
 
 ## Where
 
-- [ ] Live demo (https://demo-sass-2.vercel.app)
+- [ ] Live demo (https://rls-ai-shop.vercel.app)
 - [ ] Local clone
 - [ ] Documentation
 - [ ] Tests

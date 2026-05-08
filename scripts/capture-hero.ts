@@ -15,7 +15,7 @@ import { chromium } from '@playwright/test';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 
-const BASE = process.env.HERO_BASE_URL ?? 'https://demo-sass-2.vercel.app';
+const BASE = process.env.HERO_BASE_URL ?? 'https://rls-ai-shop.vercel.app';
 const OUT_DIR = join(process.cwd(), 'docs/hero');
 
 mkdirSync(OUT_DIR, { recursive: true });

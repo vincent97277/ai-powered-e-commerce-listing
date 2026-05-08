@@ -24,7 +24,7 @@ describe('shouldReportEvent — public surfaces (allowed)', () => {
   });
 
   it('accepts a full URL (Vercel passes event.url as absolute)', () => {
-    expect(shouldReportEvent('https://demo-sass-2.vercel.app/store/akami')).toBe(true);
+    expect(shouldReportEvent('https://rls-ai-shop.vercel.app/store/akami')).toBe(true);
   });
 });
 
@@ -104,24 +104,24 @@ describe('shouldReportEvent — edge cases', () => {
 
 describe('analyticsBeforeSend — Vercel Analytics hook adapter', () => {
   it('returns the event unchanged for public paths', () => {
-    const event = { url: 'https://demo-sass-2.vercel.app/store/akami' };
+    const event = { url: 'https://rls-ai-shop.vercel.app/store/akami' };
     expect(analyticsBeforeSend(event)).toBe(event);
   });
 
   it('returns null for private paths', () => {
-    const event = { url: 'https://demo-sass-2.vercel.app/admin/queue' };
+    const event = { url: 'https://rls-ai-shop.vercel.app/admin/queue' };
     expect(analyticsBeforeSend(event)).toBeNull();
   });
 
   it('returns null for PII-bearing paths', () => {
     const event = {
-      url: 'https://demo-sass-2.vercel.app/store/akami/order/550e8400-e29b-41d4-a716-446655440000',
+      url: 'https://rls-ai-shop.vercel.app/store/akami/order/550e8400-e29b-41d4-a716-446655440000',
     };
     expect(analyticsBeforeSend(event)).toBeNull();
   });
 
   it('preserves additional event fields when allowing', () => {
-    const event = { url: 'https://demo-sass-2.vercel.app/about', name: 'pageview' };
+    const event = { url: 'https://rls-ai-shop.vercel.app/about', name: 'pageview' };
     expect(analyticsBeforeSend(event)).toEqual(event);
   });
 });
