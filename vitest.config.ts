@@ -11,7 +11,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     setupFiles: ['./tests/setup.ts'],
-    testTimeout: 30000, // RLS test 含 transaction，給寬鬆 timeout
+    testTimeout: 30000, // RLS tests run inside transactions; give a generous timeout
   },
   resolve: {
     alias: {

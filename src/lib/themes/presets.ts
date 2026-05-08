@@ -1,40 +1,40 @@
 /**
  * V2.1 — 16+ theme presets for onboarding auto-match + settings dropdown.
  *
- * 設計原則:
- *   - 每個 preset 是「一整套視覺語氣」, 不只是顏色 — 含 radius + heading font (5 個 CSS vars).
- *   - keywords 是中文 brand voice 關鍵詞, 給 onboarding action 用 substring 比對找最像的 vibe
- *     (見 src/lib/themes/match.ts). Keywords 至少 3 個, 蓋常見講法 (e.g. 「日系」「質感」「留白」)
- *   - 顏色 contrast 都過 WCAG AA on bg (text vs bg ≥ 4.5:1), 設計 review 通過.
- *   - radius 用 CSS pixel string (`'2px'`, `'12px'`, `'999px'`) — 直接灌進 `--brand-radius`.
- *     Pill 風格用 `'9999px'` (Tailwind 慣例) — 大數字 fallback 不會壞.
- *   - heading font 用 Google Fonts CSS family stack — Next.js 已 preload Noto Serif TC / Noto Sans TC,
- *     其他 family 用 system fallback (chrome/safari built-in 都有 serif/sans-serif/cursive).
+ * Design principles:
+ *   - Each preset is a "complete visual voice", not just colors — includes radius + heading font (5 CSS vars).
+ *   - keywords are Chinese brand-voice terms used by the onboarding action for substring match to find the closest vibe
+ *     (see src/lib/themes/match.ts). At least 3 keywords each, covering common phrasings (e.g. "日系", "質感", "留白").
+ *   - Color contrast all passes WCAG AA on bg (text vs bg >= 4.5:1), design review approved.
+ *   - radius uses a CSS pixel string (`'2px'`, `'12px'`, `'999px'`) — fed directly into `--brand-radius`.
+ *     Pill style uses `'9999px'` (Tailwind convention) — large-number fallback won't break.
+ *   - heading font uses a Google Fonts CSS family stack — Next.js already preloads Noto Serif TC / Noto Sans TC,
+ *     other families fall back to system (chrome/safari built-in serif/sans-serif/cursive).
  *
- * V2.1 不做:
- *   - 自定 preset 存 DB (V3 candidate)
- *   - preset 圖片 thumbnail (現在只用 emoji + 顏色 swatch in dropdown)
- *   - preset 之間 migration / rename (id 是 stable kebab, 改名請開 V2.2 issue)
+ * Out of scope for V2.1:
+ *   - Custom presets persisted in the DB (V3 candidate)
+ *   - Preset thumbnail images (currently just emoji + color swatch in the dropdown)
+ *   - Migration / rename between presets (id is a stable kebab string; for renames open a V2.2 issue)
  *
- * 加新 preset 步驟:
- *   1. push 一筆到 THEME_PRESETS
- *   2. 跑 vitest tests/themes/match.test.ts → 確保 unique id + 5 vars 存在
- *   3. 若新 preset 想搶 onboarding match, keyword 排序最好放前面 (match 取 highest score, ties 取
- *      array 靠前的)
+ * Adding a new preset:
+ *   1. Push an entry to THEME_PRESETS
+ *   2. Run vitest tests/themes/match.test.ts -> ensures unique id + all 5 vars present
+ *   3. If the new preset should win onboarding match, place its keywords near the front of the array (match picks
+ *      highest score, ties go to the earlier entry).
  */
 
 export type ThemePreset = {
-  /** 穩定 kebab id, V2.1+ 不可改名 (settings DB 不存 preset id, 但 future-proof) */
+  /** Stable kebab id; not renameable in V2.1+ (settings DB does not store preset id, but future-proof). */
   id: string;
-  /** 中文 label, 顯示在 settings dropdown */
+  /** Chinese label shown in the settings dropdown. */
   label: string;
-  /** 一句中文 description, dropdown 副標 */
+  /** One-line Chinese description, used as the dropdown subtitle. */
   hint: string;
-  /** 一個 emoji 代表 vibe */
+  /** One emoji to represent the vibe. */
   emoji: string;
-  /** brand voice 關鍵詞 (中文) — onboarding match 用 substring 比對 */
+  /** Brand voice keywords (Chinese) — onboarding match uses substring comparison. */
   keywords: string[];
-  /** 5 個 CSS vars — 直接 spread 進 merchants.themeVars JSONB */
+  /** 5 CSS vars — spread directly into merchants.themeVars JSONB. */
   themeVars: {
     '--brand-primary': string;
     '--brand-bg': string;
@@ -47,7 +47,7 @@ export type ThemePreset = {
 const FONT_NOTO_SERIF = "'Noto Serif TC', serif";
 const FONT_NOTO_SANS = "'Noto Sans TC', sans-serif";
 const FONT_INTER = "'Inter', 'Noto Sans TC', sans-serif";
-// 手寫感 / 復古 — 只用通用 family fallback, 不額外 load font (避免 V2.1 加 Google Fonts request).
+// Handwritten / retro — uses only generic family fallback, no extra font load (avoids adding a Google Fonts request in V2.1).
 const FONT_SCRIPT_FALLBACK = "'Noto Serif TC', 'Brush Script MT', cursive, serif";
 
 export const THEME_PRESETS: ThemePreset[] = [
@@ -306,7 +306,7 @@ export const THEME_PRESETS: ThemePreset[] = [
 ];
 
 /**
- * Default theme id — onboarding 沒命中關鍵字時 fallback.
- * Modern minimal 是「沒個性反而最安全」的選擇 — 任何商品類型都不違和.
+ * Default theme id — fallback when onboarding hits no keyword.
+ * Modern minimal is the "no-personality-is-the-safest-choice" option — feels at home with any product type.
  */
 export const DEFAULT_THEME_ID = 'modern-minimal';

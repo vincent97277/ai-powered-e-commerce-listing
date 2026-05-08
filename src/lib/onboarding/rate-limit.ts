@@ -1,17 +1,18 @@
 /**
- * Onboarding IP rate limit (V1.7 D1) — DB-backed, 不引 Redis.
+ * Onboarding IP rate limit (V1.7 D1) — DB-backed, no Redis dependency.
  *
- * 1 success per IP per 24h. 失敗的 attempt (rate_limited / invalid_slug / reserved_slug /
- * honeypot / duplicate_slug) 也記錄, 但不算進 limit (避免 attacker 故意打壞掉的請求把自己鎖住,
- * 反而做不到 DOS legit user).
+ * 1 success per IP per 24h. Failed attempts (rate_limited / invalid_slug / reserved_slug /
+ * honeypot / duplicate_slug) are also logged, but don't count against the limit (so an
+ * attacker can't deliberately spam broken requests to lock themselves in and DOS legit
+ * users instead).
  *
  * Why per-IP-per-24h, not stricter:
- *   - 一個人開 1 家店 / 24h 是合理上限 (V1 demo)
- *   - 5 minutes 太嚴, 開錯打回去就要等
- *   - 強碰 NAT / school / cafe 共用 IP 會擋好人 — 但 V1.7 還沒上 captcha, 折衷
+ *   - 1 store / 24h per person is a reasonable upper bound (V1 demo)
+ *   - 5 minutes is too strict — typo and you have to wait
+ *   - NAT / school / cafe shared IPs will block good users — but V1.7 has no captcha yet, this is the compromise
  *
- * checkRateLimit 走 dbAdmin (BYPASSRLS) — onboarding 還沒 tenant context, 也沒 user.
- * 對應 ESLint allowlist: src/lib/onboarding/** (admin observability 同類, 跨 tenant query).
+ * checkRateLimit goes through dbAdmin (BYPASSRLS) — onboarding has no tenant context yet, no user.
+ * Matches ESLint allowlist: src/lib/onboarding/** (same class as admin observability, cross-tenant query).
  */
 import { sql } from 'drizzle-orm';
 import { dbAdmin } from '@/db/admin-only';
@@ -31,12 +32,12 @@ export type AttemptResult =
 export type RateLimitDecision = { allowed: true } | { allowed: false; reason: string };
 
 /**
- * 檢查指定 IP 在過去 RATE_LIMIT_HOURS 內是否已有 success.
- * 注意只算 success — 失敗的 attempt 不消耗 quota (見上面 docstring).
+ * Check whether the given IP has had a success within the past RATE_LIMIT_HOURS.
+ * Note: only counts successes — failed attempts don't consume quota (see docstring above).
  */
 export async function checkRateLimit(ip: string): Promise<RateLimitDecision> {
   if (!ip) {
-    // 沒 IP 不該發生 (middleware/headers 都會給) — 防呆: 直接擋, log 'rate_limited'.
+    // No IP shouldn't happen (middleware/headers always provide one) — guard: block immediately, log 'rate_limited'.
     return { allowed: false, reason: '無法辨識來源 IP, 請稍後再試' };
   }
   const result = await dbAdmin.execute<{ n: string | number }>(sql`
@@ -55,10 +56,10 @@ export async function checkRateLimit(ip: string): Promise<RateLimitDecision> {
 }
 
 /**
- * 寫入 onboarding_attempts. 任何分支都該呼叫 (success / 各種拒絕),
- * 給 admin 觀察 abuse pattern.
+ * Write to onboarding_attempts. Every branch should call this (success / various rejections),
+ * so admin can observe abuse patterns.
  *
- * 不 throw 上去 — log 寫不進去也不能擋掉主流程. console.error fallback.
+ * Doesn't throw upward — a failed log write must not block the main flow. console.error fallback.
  */
 export async function logAttempt(opts: {
   ip: string;
@@ -68,7 +69,7 @@ export async function logAttempt(opts: {
   try {
     await dbAdmin.insert(onboardingAttempts).values({
       ipAddress: opts.ip || 'unknown',
-      slugAttempted: opts.slug.slice(0, 64), // truncate 保守, abuse 也別佔太多空間
+      slugAttempted: opts.slug.slice(0, 64), // conservative truncate; don't let abuse take too much space
       result: opts.result,
     });
   } catch (err) {
@@ -77,8 +78,8 @@ export async function logAttempt(opts: {
 }
 
 /**
- * 從 Next.js headers Map 取真實 IP. x-forwarded-for first hop > x-real-ip > 'unknown'.
- * (與 src/app/admin/login/actions.ts 同 pattern)
+ * Get the real IP from the Next.js headers Map. x-forwarded-for first hop > x-real-ip > 'unknown'.
+ * (Same pattern as src/app/admin/login/actions.ts)
  */
 export function extractIp(h: Headers): string {
   const xff = h.get('x-forwarded-for');

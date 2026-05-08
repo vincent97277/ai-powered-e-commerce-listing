@@ -1,14 +1,14 @@
 /**
- * 訂單 Excel (xlsx) 匯出 (V1.5 Track B2)
+ * Orders Excel (xlsx) export (V1.5 Track B2)
  *
- * 13 欄表頭:
+ * 13-column header:
  *   訂單編號 / 顧客姓名 / Email / 電話 / 地址 / 狀態 / 總額 (NT$) /
  *   物流商 / 物流單號 / 建立時間 / 已付款時間 / 已出貨時間 / 已完成時間
  *
- * 已付款 / 已出貨 / 已完成時間 → 從 order_status_history 對應 toStatus 取最早 createdAt
- * (orders 表本身沒這 3 個欄位; 由 caller 把 history 推算好 timestamps 一起傳進來)
+ * paid / shipped / completed timestamps come from the earliest createdAt in order_status_history matching toStatus
+ * (the orders table itself does not store these three fields; the caller computes the timestamps from history and passes them in).
  *
- * exceljs + frozen header + auto width — 同 products-xlsx 模式
+ * exceljs + frozen header + auto width — same pattern as products-xlsx.
  */
 import ExcelJS from 'exceljs';
 import type { Order } from '@/db/schema';
@@ -22,7 +22,7 @@ const STATUS_LABEL: Record<string, string> = {
   refunded: '已退款',
 };
 
-/** 由 orders + status history 拼出的 export-shape */
+/** Export shape composed from orders + status history. */
 export type OrderExportRow = Order & {
   paidAt: Date | null;
   shippedAt: Date | null;
@@ -62,7 +62,7 @@ function fmtTime(d: Date | null | undefined): string {
 }
 
 /**
- * 主 API: orders[] → xlsx Buffer
+ * Main API: orders[] -> xlsx Buffer.
  */
 export async function generateOrdersXlsx(orders: OrderExportRow[]): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();

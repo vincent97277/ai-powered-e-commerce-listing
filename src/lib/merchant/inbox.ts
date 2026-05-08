@@ -1,15 +1,15 @@
 /**
- * MerchantInbox 資料層 (V1.6 Track B5)
+ * MerchantInbox data layer (V1.6 Track B5)
  *
- * 將 V1 #72 PendingCallout (orders 3 signal) + V1.5 B1 HealthCallout (products 4 signal)
- * 合併成一個 inbox model: 7 種 signal type, 嚴重度 P1→P5.
+ * Merges V1 #72 PendingCallout (3 order signals) + V1.5 B1 HealthCallout (4 product signals)
+ * into one inbox model: 7 signal types, severity P1→P5.
  *
- * 設計決定:
- *   - 一個 withTenantTx (RLS-safe), 內含 2 條 query — products / orders 不同表 (合併不了)
- *     但 N+1 已避免, 全部在同一個 transaction 一次拉完.
- *   - merchants.lowStockThreshold 用同一個 tx 讀 (web_anon 有 SELECT, RLS-safe).
- *   - 嚴重度排序 by P1→P5 asc, 同 severity 內 by count desc.
- *   - count = 0 的 type 不出現在 inbox (preserve V1 hide-when-zero behavior).
+ * Design decisions:
+ *   - One withTenantTx (RLS-safe), containing 2 queries — products / orders are different tables (can't merge),
+ *     but N+1 is avoided, everything fetched in one transaction.
+ *   - merchants.lowStockThreshold read in the same tx (web_anon has SELECT, RLS-safe).
+ *   - Severity sorted P1→P5 asc, within same severity by count desc.
+ *   - Types with count = 0 don't appear in inbox (preserve V1 hide-when-zero behavior).
  *
  * Pattern after PendingCallout v1 + HealthCallout v1.5: chip family, no scorecard.
  */
@@ -18,14 +18,14 @@ import { withTenantTx } from '@/lib/db/with-tenant';
 import { products, orders, merchants } from '@/db/schema';
 
 /**
- * 7 種 signal type, 對應 7 種 inbox chip:
- *   P1 paid_unshipped     — 已付款待出貨 (revenue blocker, 商家錢卡這)
- *   P2 zero_stock         — 缺貨 (catalog blocker, 顧客沒貨可買)
- *   P2 zero_price         — $0 價格 (catalog blocker, 顧客買不下手)
- *   P3 low_stock          — 低庫存 (≤ merchants.lowStockThreshold, risk)
- *   P3 no_photo           — 缺照片 (含 fixture, risk)
- *   P4 short_title        — 標題太短 < 8 字 (quality)
- *   P5 pending_unpaid     — 未付款訂單 (customer pending, 等顧客)
+ * 7 signal types, corresponding to 7 inbox chips:
+ *   P1 paid_unshipped     — paid pending shipment (revenue blocker, merchant's revenue stuck)
+ *   P2 zero_stock         — out of stock (catalog blocker, no inventory for customers)
+ *   P2 zero_price         — $0 price (catalog blocker, customers can't buy)
+ *   P3 low_stock          — low stock (≤ merchants.lowStockThreshold, risk)
+ *   P3 no_photo           — missing photo (includes fixture, risk)
+ *   P4 short_title        — title too short < 8 chars (quality)
+ *   P5 pending_unpaid     — unpaid order (customer pending, waiting on customer)
  */
 export type InboxSignalType =
   | 'paid_unshipped'
@@ -42,9 +42,9 @@ export type InboxItem = {
   type: InboxSignalType;
   severity: InboxSeverity;
   count: number;
-  /** 顯示在 chip 上的中文 label, 例 "3 件商品缺照片" */
+  /** Chinese label shown on the chip, e.g. "3 件商品缺照片" */
   label: string;
-  /** 點 chip 跳轉的 filter URL */
+  /** Filter URL the chip links to */
   filterUrl: string;
 };
 
@@ -96,29 +96,30 @@ function labelFor(type: InboxSignalType, count: number, lowStockThreshold: numbe
 }
 
 /**
- * 取得 merchant inbox items (7 signal types 一次拉)
+ * Get merchant inbox items (7 signal types in one shot)
  *
- * 內部 query plan:
+ * Internal query plan:
  *   1. SELECT lowStockThreshold FROM merchants (RLS-safe via web_anon SELECT grant)
  *   2. COUNT FILTER on products (5 signals: no_photo / short_title / zero_stock / zero_price / low_stock)
  *   3. COUNT FILTER on orders (2 signals: paid_unshipped / pending_unpaid)
  *
- * 三 round-trip 但同一個 tenant tx (set_config 一次), 比 V1.5 的兩個獨立 withTenantTx 省一個 set_config.
+ * Three round-trips but one tenant tx (one set_config), saves one set_config vs V1.5's two
+ * independent withTenantTx calls.
  *
- * @param tenantId - merchant.id (UUID), 來自 cookie resolver
- * @returns Inbox items, sorted by severity asc → count desc, count=0 過濾掉
+ * @param tenantId - merchant.id (UUID), from cookie resolver
+ * @returns Inbox items, sorted by severity asc → count desc, count=0 filtered out
  */
 export async function getInboxItems(tenantId: string): Promise<InboxItem[]> {
   const { lowStockThreshold, productRow, orderRow } = await withTenantTx(tenantId, async (tx) => {
-    // 1. lowStockThreshold (per-merchant 設定)
+    // 1. lowStockThreshold (per-merchant setting)
     const merchantRows = await tx
       .select({ lowStockThreshold: merchants.lowStockThreshold })
       .from(merchants);
     const threshold = merchantRows[0]?.lowStockThreshold ?? 5;
 
-    // 2. products 5 個 signal (single round-trip, COUNT FILTER)
-    //    no_photo: 含 fixture path (跟 list 頁 hasImg hide 條件對齊, V1.5 review M4)
-    //    low_stock: stock > 0 AND stock <= threshold (zero_stock 不重複算)
+    // 2. products 5 signals (single round-trip, COUNT FILTER)
+    //    no_photo: includes fixture path (aligned with the hasImg hide condition on the list page, V1.5 review M4)
+    //    low_stock: stock > 0 AND stock <= threshold (doesn't double-count zero_stock)
     const productRows = await tx
       .select({
         noPhoto: sql<number>`count(*) filter (where ${products.r2Key} IS NULL OR ${products.r2Key} = '' OR ${products.r2Key} LIKE '%/fixtures/%')::int`.mapWith(
@@ -139,7 +140,7 @@ export async function getInboxItems(tenantId: string): Promise<InboxItem[]> {
       })
       .from(products);
 
-    // 3. orders 2 個 signal
+    // 3. orders 2 signals
     const orderRows = await tx
       .select({
         paidUnshipped: sql<number>`count(*) filter (where ${orders.status} = 'paid')::int`.mapWith(
@@ -178,7 +179,7 @@ export async function getInboxItems(tenantId: string): Promise<InboxItem[]> {
       filterUrl: FILTER_URL[c.type],
     }))
     .sort((a, b) => {
-      // severity asc (P1 first), 同 severity by count desc
+      // severity asc (P1 first), within same severity by count desc
       const sevDiff = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
       if (sevDiff !== 0) return sevDiff;
       return b.count - a.count;

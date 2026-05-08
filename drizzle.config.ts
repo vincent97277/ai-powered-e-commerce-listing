@@ -1,6 +1,6 @@
 /**
  * drizzle-kit config
- * Migration 用 owner connection (DATABASE_URL，預設 macOS user)
+ * Migrations use the owner connection (DATABASE_URL, defaults to macOS user)
  */
 import { defineConfig } from 'drizzle-kit';
 import { config } from 'dotenv';

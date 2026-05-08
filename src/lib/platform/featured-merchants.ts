@@ -1,14 +1,15 @@
 /**
- * 平台首頁公開 query (V1 #59, RA17)
+ * Platform home-page public queries (V1 #59, RA17)
  *
- * 用 dbAdmin (BYPASSRLS) 因為平台首頁無 RLS context (沒 cookie / 沒 tenant_id GUC)
- * 若改走 web_anon, current_setting('app.tenant_id') 會是 null → RLS 過濾全部 → return 0 rows
+ * Uses dbAdmin (BYPASSRLS) because the platform home page has no RLS context
+ * (no cookie / no tenant_id GUC). If routed through web_anon,
+ * current_setting('app.tenant_id') is null → RLS filters everything → 0 rows returned.
  *
- * 1. 熱門店鋪 (按 GMV desc, 空狀態 fallback createdAt desc)
- * 2. 新進駐 (近 7 天 onboarded)
- * 都過濾:
- *   - suspendedAt IS NULL  (停權商家不公開)
- *   - approvedAt IS NOT NULL (V1.7 D1: 還沒被 admin 核可的不公開)
+ * 1. Featured stores (by GMV desc, fallback to createdAt desc when empty)
+ * 2. Recent arrivals (onboarded within last 7 days)
+ * Both filter:
+ *   - suspendedAt IS NULL    (suspended merchants are not public)
+ *   - approvedAt IS NOT NULL (V1.7 D1: not-yet-approved merchants are not public)
  *
  * Subquery quirk worth knowing: Drizzle's `${products.tenantId}` interpolates
  * the BARE column name, not `"products"."tenant_id"`. In a correlated subquery
@@ -50,15 +51,15 @@ function pickEmoji(slug: string, name: string): string | null {
 }
 
 /**
- * 熱門店鋪 (top 6 by GMV, 空狀態 fallback createdAt)
+ * Featured stores (top 6 by GMV, fallback to createdAt when empty)
  *
- * productCount 必須跟 storefront 顯示的一致。Storefront page.tsx 過濾
- * `WHERE is_published = true` (line 63), 所以這邊也只 count 已上架商品 —
- * 草稿 / needs_review 排除在外。否則卡片顯示「5 件商品」但點進去只看到 2
- * 件 (V2.6.x bug report)。
+ * productCount must match what the storefront shows. Storefront page.tsx filters
+ * `WHERE is_published = true` (line 63), so this also only counts published products —
+ * drafts / needs_review excluded. Otherwise the card shows "5 products" but the
+ * user clicks in and only sees 2 (V2.6.x bug report).
  */
 export async function getFeaturedMerchants(limit = 6): Promise<FeaturedMerchant[]> {
-  // 主 query: GMV desc
+  // Main query: GMV desc
   const rows = await dbAdmin
     .select({
       id: merchants.id,
@@ -88,7 +89,7 @@ export async function getFeaturedMerchants(limit = 6): Promise<FeaturedMerchant[
 }
 
 /**
- * 新進駐 — 近 7 天 onboarded, hide 整個 section if 空
+ * Recent arrivals — onboarded within last 7 days; hide the whole section if empty
  */
 export async function getRecentMerchants(limit = 6): Promise<FeaturedMerchant[]> {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -118,17 +119,18 @@ export async function getRecentMerchants(limit = 6): Promise<FeaturedMerchant[]>
     brandVoice: r.brandVoice,
     themeVars: (r.themeVars ?? {}) as Record<string, string>,
     productCount: r.productCount,
-    gmvCents: 0, // 新進駐 GMV 不重要
+    gmvCents: 0, // GMV not relevant for recent arrivals
     emoji: pickEmoji(r.slug, r.name),
   }));
 }
 
 /**
- * 平台 KPI for footer or hero stats (V1 沒用, 但留著)
+ * Platform KPI for footer or hero stats (unused in V1, but kept around)
  *
- * productCount 跟 merchant card 一樣只 count 已上架商品 (`is_published = true`),
- * 不然 hero 顯示「N 件商品」會比所有 storefront 加總更多 — 跟使用者點進去看到
- * 的不一致。同樣排除 suspended / unapproved merchants 的商品避免 stat 灌水。
+ * productCount, like the merchant card, only counts published products
+ * (`is_published = true`); otherwise the hero "N products" figure would exceed
+ * the sum of all storefronts — inconsistent with what the user sees on click-through.
+ * Also excludes products from suspended / unapproved merchants to prevent stat inflation.
  */
 export async function getPlatformStats(): Promise<{ merchantCount: number; productCount: number }> {
   const [m] = await dbAdmin

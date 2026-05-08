@@ -1,17 +1,17 @@
 /**
- * SSRF defense for IG/蝦皮 import (V1 #62, RA9 + RA10 secondary)
+ * SSRF defense for IG/Shopee import (V1 #62, RA9 + RA10 secondary)
  *
- * Design 文件 §A6 + Security review B1 要求:
- *   1. hostname allowlist via new URL().hostname (不用 regex, regex 可被 user-info trick 繞過)
+ * Design doc §A6 + Security review B1 requirements:
+ *   1. hostname allowlist via new URL().hostname (not regex, regex can be bypassed via user-info trick)
  *   2. https only
- *   3. DNS resolve hostname → IP, 拒 RFC1918/loopback/link-local v4+v6 (DNS rebinding 防禦)
- *   4. redirect 不自動 follow, 每 hop 重 validate
- *   5. 5MB body cap pre-parse (parser DoS 防禦)
+ *   3. DNS resolve hostname → IP, reject RFC1918/loopback/link-local v4+v6 (DNS rebinding defense)
+ *   4. redirects not auto-followed, re-validate every hop
+ *   5. 5MB body cap pre-parse (parser DoS defense)
  *   6. 10s timeout
  *
  * Two separate allowlists:
- *   - SOURCE_HOSTS: IG / 蝦皮 shop URL (商家貼的, 屬於 import session source)
- *   - IMAGE_HOSTS:  IG / 蝦皮 CDN (parser 抓出的 og:image / item image URL)
+ *   - SOURCE_HOSTS: IG / Shopee shop URL (pasted by merchant, belongs to import session source)
+ *   - IMAGE_HOSTS:  IG / Shopee CDN (og:image / item image URL extracted by parser)
  */
 import { lookup } from 'node:dns/promises';
 
@@ -36,7 +36,7 @@ const IMAGE_HOSTS = new Set([
   'scontent.cdninstagram.com',
   'scontent-tpe1-1.cdninstagram.com',
   'scontent-iad3-1.cdninstagram.com',
-  // 蝦皮 CDN (台灣)
+  // Shopee CDN (Taiwan)
   'cf.shopee.tw',
   'down-tw.img.susercontent.com',
   'down.img.susercontent.com',
@@ -48,9 +48,9 @@ const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5MB
 export type AllowlistKind = 'source' | 'image';
 
 /**
- * 拆 URL 並驗 hostname 在對應 allowlist
- * @returns 已驗的 URL object, 可拿來 fetch
- * @throws ImportSourceUnavailableError 如不通過
+ * Parse URL and verify hostname is in the corresponding allowlist
+ * @returns Verified URL object, ready to fetch
+ * @throws ImportSourceUnavailableError if it doesn't pass
  */
 export function assertSafeUrl(input: string, kind: AllowlistKind): URL {
   let url: URL;
@@ -74,11 +74,11 @@ export function assertSafeUrl(input: string, kind: AllowlistKind): URL {
 }
 
 /**
- * 拒 private/loopback/link-local IP (DNS rebinding 防禦, Security B1)
- * 用 IPv4/IPv6 規則 reject 內網位址
+ * Reject private/loopback/link-local IPs (DNS rebinding defense, Security B1)
+ * Uses IPv4/IPv6 rules to reject internal-network addresses
  */
 export async function assertNotPrivateHost(hostname: string): Promise<void> {
-  // 直接拒 hostname=localhost/127.x/etc 字面值 (DNS lookup 之前)
+  // Reject literal hostname=localhost/127.x/etc up front (before DNS lookup)
   if (
     hostname === 'localhost' ||
     hostname.endsWith('.localhost') ||
@@ -106,7 +106,7 @@ export async function assertNotPrivateHost(hostname: string): Promise<void> {
 
 function isPrivateIPv4(ip: string): boolean {
   const parts = ip.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return true; // 拒不解析的 IP
+  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return true; // reject unparseable IPs
   const [a, b] = parts;
   // 10.0.0.0/8
   if (a === 10) return true;
@@ -116,7 +116,7 @@ function isPrivateIPv4(ip: string): boolean {
   if (a === 192 && b === 168) return true;
   // 127.0.0.0/8 loopback
   if (a === 127) return true;
-  // 169.254.0.0/16 link-local (含 AWS/GCP IMDS 169.254.169.254)
+  // 169.254.0.0/16 link-local (includes AWS/GCP IMDS 169.254.169.254)
   if (a === 169 && b === 254) return true;
   // 0.0.0.0/8
   if (a === 0) return true;
@@ -142,14 +142,14 @@ function isPrivateIPv6(ip: string): boolean {
  * Safe fetch with full SSRF + size + timeout guard
  *   - hostname allowlist
  *   - DNS resolve check (no private IP)
- *   - redirect: 'manual' 每 hop 重驗
+ *   - redirect: 'manual', re-validate every hop
  *   - 5MB body cap
  *   - 10s timeout
  *
- * 適合: 抓 shop page HTML, 抓 image binary
+ * Suitable for: fetching shop page HTML, fetching image binary
  *
- * 注: 大 binary download (5-20 件圖) 用 image-downloader.ts 走 streaming
- *     此 helper 適合一次性 small fetch (HTML page)
+ * Note: large binary downloads (5-20 images) use image-downloader.ts via streaming.
+ *       This helper is for one-shot small fetches (HTML page).
  */
 export async function safeFetch(
   input: string,
@@ -159,7 +159,7 @@ export async function safeFetch(
     timeoutMs?: number;
     maxBytes?: number;
     extraHeaders?: Record<string, string>;
-    /** 最多 follow 幾次 redirect (每次都會重 validate). default 3 */
+    /** Max redirects to follow (each re-validates). default 3 */
     maxRedirects?: number;
   },
 ): Promise<{ url: URL; body: Uint8Array; contentType: string | null; status: number }> {
@@ -175,7 +175,7 @@ export async function safeFetch(
       const res = await fetch(currentUrl, {
         method: opts.method ?? 'GET',
         headers: {
-          // 模擬真實 browser, 增加 IG/蝦皮 不擋我們的機率
+          // Mimic real browser, increases the chance IG/Shopee won't block us
           'user-agent':
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
           'accept-language': 'zh-TW,zh;q=0.9',
@@ -185,13 +185,13 @@ export async function safeFetch(
         signal: ctrl.signal,
       });
 
-      // Redirect → 重 validate Location
+      // Redirect → re-validate Location
       if ([301, 302, 303, 307, 308].includes(res.status)) {
         const loc = res.headers.get('location');
         if (!loc) {
           throw new ImportSourceUnavailableError(`${res.status} 但缺 Location header`);
         }
-        const nextUrl = new URL(loc, currentUrl); // 支援 relative
+        const nextUrl = new URL(loc, currentUrl); // supports relative
         currentUrl = assertSafeUrl(nextUrl.toString(), opts.kind);
         await assertNotPrivateHost(currentUrl.hostname);
         if (hop === maxRedirects) {
@@ -204,7 +204,7 @@ export async function safeFetch(
         throw new ImportSourceUnavailableError(`HTTP ${res.status}`, res.status);
       }
 
-      // 讀 body, 拒過大
+      // Read body, reject if too large
       const maxBytes = opts.maxBytes ?? MAX_RESPONSE_BYTES;
       const reader = res.body?.getReader();
       if (!reader) {

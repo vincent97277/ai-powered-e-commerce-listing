@@ -1,14 +1,14 @@
 /**
- * 商家賣場健康度 v0 (V1.5 Track B1)
+ * Merchant storefront health v0 (V1.5 Track B1)
  *
- * 看 merchant 商品有什麼明顯問題 (沒照片 / 標題太短 / 缺貨 / 沒定價),
- * 回 top 3 issues by count. 全 0 → 回 [], 上層整段隱藏.
+ * Surfaces obvious issues with a merchant's products (no photo / short title / out of stock / no price),
+ * returns top 3 issues by count. All 0 → return [], parent hides the whole section.
  *
- * 用 withTenantTx (per-merchant data, RLS-safe) — NOT dbAdmin.
+ * Uses withTenantTx (per-merchant data, RLS-safe) — NOT dbAdmin.
  *
- * Pattern after PendingCallout v1 (#72): 不引入 scorecard, 用 chip family.
+ * Pattern after PendingCallout v1 (#72): no scorecard, use chip family.
  *
- * Single SQL with COUNT(*) FILTER (WHERE ...) — 一個 round-trip, RLS 守住.
+ * Single SQL with COUNT(*) FILTER (WHERE ...) — one round-trip, RLS-safe.
  */
 import { sql } from 'drizzle-orm';
 import { withTenantTx } from '@/lib/db/with-tenant';
@@ -38,18 +38,18 @@ const ISSUE_FILTER_URL: Record<HealthIssueType, string> = {
 };
 
 /**
- * 取得 merchant 賣場健康度 issues
- * - 4 個 count 用一條 SQL (COUNT FILTER) 一次拿
- * - 過濾 count = 0 的 type
- * - 排序 by count desc
- * - 回 top 3
+ * Get merchant storefront health issues
+ * - 4 counts in one SQL (COUNT FILTER) in a single round-trip
+ * - Filter out types with count = 0
+ * - Sort by count desc
+ * - Return top 3
  */
 export async function getHealthIssues(tenantId: string): Promise<HealthIssue[]> {
   const [row] = await withTenantTx(tenantId, async (tx) => {
     return await tx
       .select({
-        // V1.5 review M4: fixture demo 圖也算「沒照片」(列表頁 hasImg 已用同條件 hide,
-        //                  健康度 chip 跟頁面一致)
+        // V1.5 review M4: fixture demo images also count as "no photo" (list page hasImg already uses
+        //                  the same condition to hide; health chip stays consistent with page)
         noPhoto: sql<number>`count(*) filter (where ${products.r2Key} IS NULL OR ${products.r2Key} = '' OR ${products.r2Key} LIKE '%/fixtures/%')::int`.mapWith(
           Number,
         ),

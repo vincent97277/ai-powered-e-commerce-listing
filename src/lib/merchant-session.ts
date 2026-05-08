@@ -1,22 +1,22 @@
 /**
  * V2 per-merchant auth — HMAC-bound session helpers (task 103, mirrors V1 admin-session).
  *
- * Cookie 格式: `{sessionId}.{HMAC-SHA256(sessionId, MERCHANT_SESSION_SECRET)}`
+ * Cookie format: `{sessionId}.{HMAC-SHA256(sessionId, MERCHANT_SESSION_SECRET)}`
  * Server-side validate:
- *   1. HMAC 簽章 timing-safe match
- *   2. merchant_sessions row 存在
+ *   1. HMAC signature timing-safe match
+ *   2. merchant_sessions row exists
  *   3. expires_at > now()
- *   4. revoked_at IS NULL          ← V2 only (admin uses DELETE row 即 revoke; merchant 用 UPDATE)
+ *   4. revoked_at IS NULL          ← V2 only (admin uses DELETE row to revoke; merchant uses UPDATE)
  *
  * Login flow (loginMerchant):
  *   - Lowercase-normalize email
- *   - bcrypt.compare 對 password
- *   - Constant-time-ish: miss 也跑一次 bcrypt 對 fake hash 防 username enumeration
- *   - 拒 suspended_at != null ("已被停權")
- *   - 拒 approved_at IS NULL ("等待 admin 審核")
- *   - INSERT merchant_sessions row, 簽 cookie 回傳
+ *   - bcrypt.compare against password
+ *   - Constant-time-ish: on miss also run bcrypt against fake hash to prevent username enumeration
+ *   - Reject suspended_at != null ("已被停權")
+ *   - Reject approved_at IS NULL ("等待 admin 審核")
+ *   - INSERT merchant_sessions row, sign cookie, return
  *
- * 不能在 middleware import (用 dbAdmin / Node crypto). middleware 用 merchant-session-edge.ts.
+ * Can't be imported in middleware (uses dbAdmin / Node crypto). Middleware uses merchant-session-edge.ts.
  */
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { compare as bcryptCompare } from 'bcryptjs';
@@ -28,15 +28,15 @@ export const MERCHANT_SESSION_COOKIE = 'merchant-session';
 export const MERCHANT_SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24h
 
 /**
- * bcrypt fake hash 給 username enumeration 防護用 — 必須是合法 bcrypt format 才不會
- * 立即 reject (compareSync 收到非 bcrypt 字串會 short-circuit, 失去 constant-time 意義).
+ * bcrypt fake hash for username enumeration protection — must be a valid bcrypt format,
+ * otherwise compareSync short-circuits on non-bcrypt strings, losing constant-time semantics.
  *
- * 這是 cost=10 對 "" 字串的合法 bcrypt hash, 形狀正確 → bcryptCompare 會跑滿 1024 rounds.
- * 任何 plaintext 對它都不會 match (因為 salt + hash 跟空字串綁定).
+ * This is a valid cost=10 bcrypt hash of "", shape-correct → bcryptCompare runs the full 1024 rounds.
+ * No plaintext will match it (because salt + hash are bound to the empty string).
  */
 const FAKE_BCRYPT_HASH = '$2a$10$CwTycUXWue0Thq9StjUM0uJ8.6e1Y1h9D3BaLWl7CLp6h3F7DqU0i';
 
-/** 確保 env 有設, 缺/太短即拋 (middleware 會捕捉並回 503) */
+/** Ensure env is set; throw if missing/too short (middleware catches and returns 503) */
 function requireEnv(): { secret: Buffer } {
   const secretRaw = process.env.MERCHANT_SESSION_SECRET;
   if (!secretRaw) throw new Error('MERCHANT_SESSION_SECRET 未設定');
@@ -46,7 +46,7 @@ function requireEnv(): { secret: Buffer } {
   return { secret: Buffer.from(secretRaw, 'utf8') };
 }
 
-/** 簽 cookie value: `{sessionId}.{hmac}` */
+/** Sign cookie value: `{sessionId}.{hmac}` */
 export function signSessionCookie(sessionId: string): string {
   const { secret } = requireEnv();
   const hmac = createHmac('sha256', secret).update(sessionId).digest('hex');
@@ -54,8 +54,8 @@ export function signSessionCookie(sessionId: string): string {
 }
 
 /**
- * 驗 cookie value 簽章 (HMAC). 不查 DB.
- * 回 sessionId 或 null. constant-time compare.
+ * Verify cookie value signature (HMAC). Doesn't hit DB.
+ * Returns sessionId or null. Constant-time compare.
  */
 export function verifyCookieSignature(cookieValue: string | undefined): string | null {
   if (!cookieValue) return null;
@@ -73,7 +73,7 @@ export function verifyCookieSignature(cookieValue: string | undefined): string |
     return null;
   }
 
-  // hex 長度先比 (timingSafeEqual buffer 不同長會丟錯)
+  // Compare hex length first (timingSafeEqual throws on different-length buffers)
   if (providedMac.length !== expected.length) return null;
   let a: Buffer;
   let b: Buffer;
@@ -89,11 +89,11 @@ export function verifyCookieSignature(cookieValue: string | undefined): string |
 }
 
 /**
- * Validate cookie + DB row 存在 + 未過期 + 未 revoke. 回 { sessionId, merchantId } 或 null.
+ * Validate cookie + DB row exists + not expired + not revoked. Returns { sessionId, merchantId } or null.
  *
- * 這是 layout-level "E11 defense-in-depth" check: middleware 只做純 crypto, 真正的
- * row liveness 必須 server-component 內 query DB. revoked_at 也必須在這層擋
- * (middleware Edge runtime 沒 DB).
+ * This is the layout-level "E11 defense-in-depth" check: middleware only does pure crypto, real
+ * row liveness must be queried in a server-component. revoked_at must also be blocked at this layer
+ * (middleware Edge runtime has no DB).
  */
 export async function validateMerchantSession(
   cookieValue: string | undefined,
@@ -119,11 +119,11 @@ export async function validateMerchantSession(
 /**
  * Login: verify email + password, create session, return signed cookie value.
  *
- * 失敗會回 { success: false, error } — error 已 i18n (繁中) 給 UI 直接顯示.
+ * On failure returns { success: false, error } — error is i18n'd (Trad. Chinese) for direct UI display.
  *
- * 安全: username enumeration 防護 — email 沒對到也跑一次 bcrypt.compare 對 fake hash.
- * suspended/pending 是 *post-credential* check (帳密對才檢查狀態), 否則隨便 POST 任何 email
- * 都能拿到 "已停權" / "等待審核" 訊息 → 變相 username enumeration leak.
+ * Security: username enumeration protection — even if email doesn't match, run bcrypt.compare against fake hash once.
+ * suspended/pending are *post-credential* checks (only check status after credentials match); otherwise
+ * POSTing any email could yield "suspended" / "awaiting approval" messages → indirect username enumeration leak.
  */
 export async function loginMerchant(
   email: string,
@@ -135,7 +135,7 @@ export async function loginMerchant(
 > {
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail || !password) {
-    // 空 input 也跑一次 fake bcrypt 維持 timing
+    // Empty input also runs fake bcrypt once to keep timing
     await bcryptCompare(password || 'x', FAKE_BCRYPT_HASH);
     return { success: false, error: '帳號或密碼不正確' };
   }
@@ -152,7 +152,7 @@ export async function loginMerchant(
     .limit(1);
 
   const m = rows[0];
-  // 即使 m 不存在或沒 hash 也跑 bcrypt 防 enumeration
+  // Run bcrypt even if m doesn't exist or has no hash, to prevent enumeration
   const hashToCheck = m?.passwordHash ?? FAKE_BCRYPT_HASH;
   let passOk = false;
   try {
@@ -165,7 +165,7 @@ export async function loginMerchant(
     return { success: false, error: '帳號或密碼不正確' };
   }
 
-  // 帳密過了, 才檢查 status — 不會洩漏 "此 email 存在但被停權" 給陌生 attacker
+  // Only check status after credentials pass — doesn't leak "this email exists but is suspended" to a random attacker
   if (m.suspendedAt !== null) {
     return { success: false, error: '此帳號已被平台停權' };
   }
@@ -194,8 +194,8 @@ export async function loginMerchant(
 }
 
 /**
- * Logout: 設 revoked_at = now(). 不 DELETE row (保 audit trail, V2.1 "全部裝置登出" UI 要列).
- * Idempotent — revoke 已 revoke 過的 session 也不會炸 (UPDATE 不存在 row 就 no-op).
+ * Logout: set revoked_at = now(). Doesn't DELETE the row (preserves audit trail, V2.1 "log out all devices" UI needs to list it).
+ * Idempotent — revoking an already-revoked session doesn't blow up (UPDATE on non-existent row is a no-op).
  */
 export async function revokeMerchantSession(sessionId: string): Promise<void> {
   await dbAdmin

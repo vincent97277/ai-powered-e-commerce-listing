@@ -1,9 +1,10 @@
 /**
- * Slug → tenant_id resolver (給 storefront 公開路由用)
- * 用 dbAdmin (BYPASSRLS) 因為訪客還沒 tenant context — 這是合法的「為了找出 tenant_id 而 bypass」
- * 一旦解析完成，後續所有 query 走 withTenantTx(tenantId, ...) 用 dbUser
+ * Slug → tenant_id resolver (for storefront public routes)
+ * Uses dbAdmin (BYPASSRLS) because the visitor has no tenant context yet — this is the
+ * legitimate "bypass to find out the tenant_id" case.
+ * Once resolved, all subsequent queries go through withTenantTx(tenantId, ...) on dbUser.
  *
- * Cache: tag-based invalidation (商家改 slug 時呼叫 invalidateSlug)
+ * Cache: tag-based invalidation (call invalidateSlug when a merchant changes slug)
  */
 import { dbAdmin } from '@/db/admin-only';
 import { merchants } from '@/db/schema';
@@ -14,9 +15,9 @@ import { notFound } from 'next/navigation';
 const tagFor = (slug: string) => `tenant-slug:${slug}`;
 
 /**
- * 從 slug 取 tenant_id (uuid)
- * @param slug 商家 URL slug (例: 'sweet-bakery')
- * @returns tenant_id (uuid) 或 null
+ * Get tenant_id (uuid) from slug
+ * @param slug merchant URL slug (e.g. 'sweet-bakery')
+ * @returns tenant_id (uuid) or null
  */
 export const resolveTenantBySlug = (slug: string) =>
   unstable_cache(
@@ -29,12 +30,12 @@ export const resolveTenantBySlug = (slug: string) =>
       return rows[0]?.id ?? null;
     },
     [`tenant-by-slug-${slug}`],
-    { tags: [tagFor(slug)], revalidate: 300 } // 5 分鐘 fallback，但 tag 失效優先
+    { tags: [tagFor(slug)], revalidate: 300 } // 5 minute fallback, but tag invalidation takes priority
   )();
 
-/** 同時拿 tenant_id + 公開資料 (商家名 + 停權 + 審核狀態), 給 storefront 用.
- *  V1.7 D1: 加 approvedAt — null 表示等待 admin 核可, storefront 視為「暫停營業中」
- *  V1.9 T3 O2: 加 brandVoice — order confirmation page 用來生 merchant-voiced thank-you. */
+/** Fetch tenant_id + public data (merchant name + suspension + approval state) together, for storefront.
+ *  V1.7 D1: added approvedAt — null means awaiting admin approval; storefront treats as "temporarily closed".
+ *  V1.9 T3 O2: added brandVoice — order confirmation page uses it to generate merchant-voiced thank-you. */
 export const resolveStorefrontMeta = (slug: string) =>
   unstable_cache(
     async (): Promise<{
@@ -72,8 +73,8 @@ export const resolveStorefrontMeta = (slug: string) =>
   )();
 
 /**
- * 若輸入 slug 不是當前 active slug, 但 match 某商家的 previousSlug → 回新 slug
- * 給 storefront 做 301 redirect 用 (V1 #52)
+ * If the input slug isn't a current active slug but matches some merchant's previousSlug → return the new slug.
+ * Used by storefront for 301 redirects (V1 #52).
  */
 export const resolveSlugRedirect = (slug: string) =>
   unstable_cache(
@@ -90,7 +91,7 @@ export const resolveSlugRedirect = (slug: string) =>
   )();
 
 /**
- * 商家在 settings 改 slug 時呼叫，cache 立即失效
+ * Called when a merchant changes their slug in settings; cache invalidates immediately.
  */
 export function invalidateSlug(oldSlug: string, newSlug: string) {
   revalidateTag(tagFor(oldSlug));
@@ -98,8 +99,8 @@ export function invalidateSlug(oldSlug: string, newSlug: string) {
 }
 
 /**
- * Storefront 路由的 root layout 都會走這個
- * 找不到 slug → 自動 notFound() (404)
+ * Every storefront route's root layout goes through this.
+ * Slug not found → automatically notFound() (404).
  */
 export async function ensureStorefrontTenant(slug: string): Promise<string> {
   const tenantId = await resolveTenantBySlug(slug);

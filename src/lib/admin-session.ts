@@ -1,11 +1,11 @@
 /**
  * Admin login HMAC-bound session helpers (V1 #43, RA11)
  *
- * Cookie 格式: `{sessionId}.{HMAC-SHA256(sessionId, ADMIN_SESSION_SECRET)}`
- * Server-side: 對應 admin_sessions row (id = sessionId UUID), valid = row 存在 AND expiresAt > now()
+ * Cookie format: `{sessionId}.{HMAC-SHA256(sessionId, ADMIN_SESSION_SECRET)}`
+ * Server-side: matches against admin_sessions row (id = sessionId UUID), valid = row exists AND expiresAt > now()
  * Revoke = DELETE admin_sessions row
  *
- * Constant-time compare 防 timing attack: password 跟 HMAC 都用 timingSafeEqual
+ * Constant-time compare to prevent timing attacks: both password and HMAC use timingSafeEqual
  */
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { dbAdmin } from '@/db/admin-only';
@@ -15,7 +15,7 @@ import { and, eq, gt, lt } from 'drizzle-orm';
 export const ADMIN_SESSION_COOKIE = 'admin-session';
 export const ADMIN_SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24hr
 
-/** 確保 env 都有設, 缺一即拋 (middleware 會捕捉並回 503) */
+/** Ensure env vars are set; throw if any is missing (middleware catches and returns 503) */
 function requireEnv(): { password: string; secret: Buffer } {
   const password = process.env.ADMIN_PASSWORD;
   const secretRaw = process.env.ADMIN_SESSION_SECRET;
@@ -27,7 +27,7 @@ function requireEnv(): { password: string; secret: Buffer } {
   return { password, secret: Buffer.from(secretRaw, 'utf8') };
 }
 
-/** Constant-time password compare. 用 HMAC 把 input/expected 都展平到固定長度後 timingSafeEqual */
+/** Constant-time password compare. Use HMAC to flatten input/expected to fixed length, then timingSafeEqual */
 export function verifyAdminPassword(input: string): boolean {
   try {
     const { password } = requireEnv();
@@ -39,7 +39,7 @@ export function verifyAdminPassword(input: string): boolean {
   }
 }
 
-/** 簽 cookie value: `{sessionId}.{hmac}` */
+/** Sign cookie value: `{sessionId}.{hmac}` */
 export function signSessionCookie(sessionId: string): string {
   const { secret } = requireEnv();
   const hmac = createHmac('sha256', secret).update(sessionId).digest('hex');
@@ -47,8 +47,8 @@ export function signSessionCookie(sessionId: string): string {
 }
 
 /**
- * 驗 cookie value 簽章. 不查 DB.
- * 回 sessionId 或 null
+ * Verify cookie value signature. Doesn't hit DB.
+ * Returns sessionId or null
  */
 export function verifyCookieSignature(cookieValue: string | undefined): string | null {
   if (!cookieValue) return null;
@@ -73,7 +73,7 @@ export function verifyCookieSignature(cookieValue: string | undefined): string |
   return sessionId;
 }
 
-/** 建新 session: 寫入 admin_sessions table, 回 signed cookie value */
+/** Create a new session: insert into admin_sessions table, return signed cookie value */
 export async function createAdminSession(opts: { ip?: string; userAgent?: string }): Promise<{
   cookieValue: string;
   expiresAt: Date;
@@ -91,10 +91,10 @@ export async function createAdminSession(opts: { ip?: string; userAgent?: string
 }
 
 /**
- * 驗 cookie + 查 DB session row 未過期. 回 sessionId 或 null.
- * 兩段檢查:
- *   1. HMAC 簽章對 (constant-time)
- *   2. admin_sessions row 存在 AND expiresAt > now()
+ * Verify cookie + check DB session row is not expired. Returns sessionId or null.
+ * Two-stage check:
+ *   1. HMAC signature matches (constant-time)
+ *   2. admin_sessions row exists AND expiresAt > now()
  */
 export async function validateAdminSession(cookieValue: string | undefined): Promise<string | null> {
   const sessionId = verifyCookieSignature(cookieValue);
@@ -113,7 +113,7 @@ export async function revokeAdminSession(sessionId: string): Promise<void> {
   await dbAdmin.delete(adminSessions).where(eq(adminSessions.id, sessionId));
 }
 
-/** Cleanup expired sessions (V1 不跑 cron, 手動或 V2 cron) */
+/** Cleanup expired sessions (V1 doesn't run cron, manual or V2 cron) */
 export async function cleanupExpiredSessions(): Promise<void> {
   await dbAdmin.delete(adminSessions).where(lt(adminSessions.expiresAt, new Date()));
 }
