@@ -1,20 +1,20 @@
 /**
  * IG fetcher (V1 #64)
  *
- * 解析 IG 公開頁面 (帳號頁 / 商品 post / shop) → og:* + JSON-LD
+ * Parse IG public pages (account / product post / shop) → og:* + JSON-LD
  *
- * V1 限制:
- *   - 不接 IG official API (no OAuth)
- *   - 純抓 server-side rendered HTML (IG 對 user-agent 敏感, safeFetch 已模擬 Chrome)
- *   - 私人帳號 / 被擋: parser 抓不到資料, throw
- *   - 一頁 ≤ 20 件商品 (cap)
+ * V1 constraints:
+ *   - No IG official API (no OAuth)
+ *   - Just fetches server-side rendered HTML (IG is user-agent sensitive, safeFetch mimics Chrome)
+ *   - Private accounts / blocked: parser finds no data, throws
+ *   - One page ≤ 20 products (cap)
  *
- * 解析策略:
- *   1. 抓 <meta property="og:title|og:image|og:description"> (single product post)
- *   2. 抓 <script type="application/ld+json"> 內容 (Product / ItemList) 多項目
+ * Parse strategy:
+ *   1. Extract <meta property="og:title|og:image|og:description"> (single product post)
+ *   2. Extract <script type="application/ld+json"> contents (Product / ItemList) for multi-item
  *
  * Pure function: input = HTML string, output = NormalizedItem[]
- * (fetch 在 caller 做, parser 純 HTML → struct, 利於 unit test fixture)
+ * (fetch happens in caller, parser is pure HTML → struct, friendly for unit test fixtures)
  */
 import {
   type NormalizedItem,
@@ -30,10 +30,10 @@ export class IgParseError extends Error {
   }
 }
 
-/** 解析 og:* meta tags */
+/** Parse og:* meta tags */
 function extractOgTags(html: string): Record<string, string> {
   const tags: Record<string, string> = {};
-  // <meta property="og:xxx" content="...">  或反向 (content 前 property 後)
+  // <meta property="og:xxx" content="...">  or reverse order (content before, property after)
   const re = /<meta\s+(?:[^>]*?\s+)?(?:property|name)\s*=\s*["']([^"']+)["'][^>]*?\scontent\s*=\s*["']([^"']*)["']/gi;
   const re2 = /<meta\s+(?:[^>]*?\s+)?content\s*=\s*["']([^"']*)["'][^>]*?\s(?:property|name)\s*=\s*["']([^"']+)["']/gi;
   let m: RegExpExecArray | null;
@@ -50,7 +50,7 @@ function extractOgTags(html: string): Record<string, string> {
   return tags;
 }
 
-/** 抓 application/ld+json blocks → array of parsed objects */
+/** Extract application/ld+json blocks → array of parsed objects */
 function extractJsonLd(html: string): unknown[] {
   const out: unknown[] = [];
   const re = /<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
@@ -79,19 +79,19 @@ function decodeHtmlEntities(s: string): string {
 }
 
 /**
- * 解析 IG HTML → NormalizedItem[]
- * 策略:
- *   - 先嘗試 JSON-LD Product/ItemList (商品多)
- *   - fallback to og:* (single page = single item)
+ * Parse IG HTML → NormalizedItem[]
+ * Strategy:
+ *   - Try JSON-LD Product/ItemList first (multi-item)
+ *   - Fallback to og:* (single page = single item)
  *
- * 不在 IMAGE_HOSTS 的圖會被 url-guard 擋, 所以這裡不過濾 image url
+ * Images outside IMAGE_HOSTS get blocked by url-guard, so we don't filter image url here
  *
- * @param sourcePageUrl — 商家貼的 IG URL (給 sourceUrl fallback)
+ * @param sourcePageUrl — IG URL pasted by merchant (used as sourceUrl fallback)
  */
 export function parseIgHtml(html: string, sourcePageUrl: string): NormalizedItem[] {
   if (!html.trim()) throw new IgParseError('HTML 為空');
 
-  // Private 帳號偵測 (IG 用「This account is private」或頁面上「私人帳號」)
+  // Private account detection (IG uses "This account is private" or page-side "私人帳號")
   if (
     /This Account is Private/i.test(html) ||
     /此帳號為私人帳號/i.test(html) ||
@@ -109,7 +109,7 @@ export function parseIgHtml(html: string, sourcePageUrl: string): NormalizedItem
     items.push(...found);
   }
 
-  // 2. og:* pass (若 JSON-LD 沒抓到 → fallback single item)
+  // 2. og:* pass (if JSON-LD found nothing → fallback to single item)
   if (items.length === 0) {
     const og = extractOgTags(html);
     if (og['og:title'] && og['og:image']) {
@@ -131,8 +131,8 @@ export function parseIgHtml(html: string, sourcePageUrl: string): NormalizedItem
 }
 
 /**
- * Recursive 抓 JSON-LD 內的 Product / ItemList
- * IG 可能用 @graph 或巢狀 structure, 一律掃一遍
+ * Recursively extract Product / ItemList from JSON-LD
+ * IG may use @graph or nested structures, scan everything
  */
 function extractItemsFromJsonLd(
   node: unknown,

@@ -1,7 +1,7 @@
 /**
- * 雙 connection pool — node-postgres (pg) driver, local-first
- * dbUser  → web_anon role，RLS 強制生效 (預設用這個)
- * dbAdmin → web_admin role，BYPASSRLS (僅限 admin-only/ 目錄)
+ * Dual connection pool — node-postgres (pg) driver, local-first
+ * dbUser  → web_anon role, RLS enforced (default — use this)
+ * dbAdmin → web_admin role, BYPASSRLS (admin-only/ directory only)
  *
  * V2.2.1 hardening:
  * - Explicit ssl config in production (was relying purely on URL string)
@@ -23,9 +23,9 @@
  *     pnpm tsx scripts/db/verify-pgbouncer.ts
  *   100 alternating tenant transactions; any RLS leak fails the script.
  *
- * v2 升級到 Neon: 換成 drizzle-orm/neon-serverless + WebSocket driver — TODO
+ * v2 upgrade to Neon: switch to drizzle-orm/neon-serverless + WebSocket driver — TODO
  *
- * Lazy init — build time 沒 .env 不會炸，runtime 第一次 query 才 throw
+ * Lazy init — no .env at build time won't blow up; throws on first runtime query
  */
 import { Pool, type PoolConfig } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -77,10 +77,10 @@ function makeDb(envKey: 'DATABASE_URL_USER' | 'DATABASE_URL_ADMIN', max: number)
   });
 }
 
-/** RLS 強制連線 — 業務邏輯預設使用 */
+/** RLS-enforced connection — default for business logic */
 export const dbUser = makeDb('DATABASE_URL_USER', USER_MAX);
 
-/** BYPASSRLS 連線 — 僅限平台 admin / tenant resolver / migration */
+/** BYPASSRLS connection — platform admin / tenant resolver / migration only */
 export const dbAdmin = makeDb('DATABASE_URL_ADMIN', ADMIN_MAX);
 
 export type DbUser = typeof dbUser;

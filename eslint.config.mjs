@@ -1,5 +1,5 @@
 /**
- * ESLint flat config — Next.js 15 + dbAdmin/dbUser 防護 + V1.9 T1 raw-color guard
+ * ESLint flat config — Next.js 15 + dbAdmin/dbUser guard + V1.9 T1 raw-color guard
  *
  * V2.6.2 Tier 1 #4: dbUser is also restricted (in same rule as dbAdmin).
  * Direct dbUser imports skip withTenantTx → tenant_id GUC unset → fail-closed
@@ -8,7 +8,7 @@
  * dbAdmin" which IS the leak. Path forward for any tenant-scoped read:
  * `import { withTenantTx } from '@/lib/db/with-tenant'`.
  *
- * dbAdmin/dbUser 允許範圍 (V2.6 narrowed):
+ * dbAdmin/dbUser allowlist (V2.6 narrowed):
  *   - (admin)/** + lib/admin/** + lib/observability/**         — platform admin / cross-tenant observability
  *   - inngest/** + lib/storage/** + scripts/**                 — worker/system context, non-RLS
  *   - lib/tenant/resolver.ts + lib/platform/** + lib/merchant/* — pre-tenant resolution + cross-merchant queries
@@ -21,8 +21,8 @@
  *       app/(storefront)/store/[slug]/layout.tsx   — slug → merchant lookup
  *       app/(merchant)/merchant/settings/actions.ts — UPDATE on merchants (no RLS policy on that table)
  *
- * Raw color classes (bg-zinc-*, bg-red-50, etc.) 禁用於 (admin)/(merchant)/(storefront)
- *   pages + src/components/* — 改用 brand vars / semantic utilities / StatusChip.
+ * Raw color classes (bg-zinc-*, bg-red-50, etc.) banned in (admin)/(merchant)/(storefront)
+ *   pages + src/components/* — use brand vars / semantic utilities / StatusChip instead.
  */
 import { FlatCompat } from '@eslint/eslintrc';
 import path from 'node:path';
@@ -144,7 +144,7 @@ const rawColorBan = {
 export default [
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
   dbAdminRule,
-  // 例外：以下路徑允許 import dbAdmin
+  // Exception: dbAdmin imports allowed in the following paths
   {
     files: [
       'src/app/(admin)/**',
@@ -152,11 +152,11 @@ export default [
       'src/db/admin-only/**',
       'src/db/index.ts',
       'src/lib/db/with-tenant.ts',         // V2.6.2 Tier 1 #4: dbUser-backed wrapper; every UI route imports withTenantTx, not dbUser
-      'src/inngest/**',         // background job 走 dbAdmin (worker context，非 user-facing)
-      'src/lib/storage/**',     // R2 / 系統內部，非 RLS 範圍
+      'src/inngest/**',         // background jobs use dbAdmin (worker context, non user-facing)
+      'src/lib/storage/**',     // R2 / system-internal, outside RLS scope
       'src/app/api/products/generate/**',  // V2.2.5 enqueue + status: cap check + status query
       'src/app/api/health/**',             // V2.2.1 platform health probe: pings dbUser + dbAdmin
-      'src/app/onboarding/**',             // signup 需建 merchant (寫入 BYPASSRLS)
+      'src/app/onboarding/**',             // signup must create merchant (BYPASSRLS write)
       // V2.6 narrowed allowlist: was '(merchant)/**' + '(storefront)/**'
       // (broad, included entire user-facing surface). Narrowed to the 3 exact
       // files that truly need BYPASSRLS — pre-tenant cookie/slug resolution
@@ -166,11 +166,11 @@ export default [
       // [slug] in the path would be parsed as a glob character-class — use wildcard for the dynamic segment.
       'src/app/(storefront)/store/*/layout.tsx',         // slug → merchant resolution before tenant context exists
       'src/app/(merchant)/merchant/settings/actions.ts', // UPDATE on merchants (web_anon has no UPDATE grant; runtime guard via cookie session)
-      'src/lib/admin-session.ts',          // V1 admin auth gate (#43): 管理 admin_sessions table
-      'src/lib/merchant-session.ts',       // V2 merchant auth gate (task 103): 管理 merchant_sessions table
-      'src/lib/platform/**',               // V1 platform 公開 query (RA17): 跨商家 dbAdmin 查熱門店鋪
-      'src/lib/merchant/**',               // V1 suspend guard (#53): 純 read merchant 狀態
-      'src/lib/observability/**',          // V1 import-log (#69): logger 不 import dbAdmin 但語意上屬同類
+      'src/lib/admin-session.ts',          // V1 admin auth gate (#43): manages admin_sessions table
+      'src/lib/merchant-session.ts',       // V2 merchant auth gate (task 103): manages merchant_sessions table
+      'src/lib/platform/**',               // V1 platform public queries (RA17): cross-merchant dbAdmin reads for featured stores
+      'src/lib/merchant/**',               // V1 suspend guard (#53): pure read of merchant state
+      'src/lib/observability/**',          // V1 import-log (#69): logger doesn't import dbAdmin but is semantically the same class
       'src/lib/admin/**',                  // V1.6 A8 operator queue: cross-tenant admin observability
       'src/lib/onboarding/**',             // V1.7 D1 onboarding hardening: IP rate-limit + abuse log (admin observability)
       'scripts/**',                        // V2 seed/maintenance scripts (admin context, run manually with dbAdmin)

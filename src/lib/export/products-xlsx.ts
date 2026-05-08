@@ -1,15 +1,15 @@
 /**
- * 商品 Excel (xlsx) 匯出 (V1.5 Track B2)
+ * Products Excel (xlsx) export (V1.5 Track B2)
  *
- * 9 欄表頭:
+ * 9-column header:
  *   商品編號 / 標題 / 描述 / 分類 / 變體 (JSON) / 價格 / 庫存 / 圖片 URL / 建立時間
  *
- * 設計:
+ * Design:
  *   - exceljs (Apache-2.0, MIT compatible)
- *   - 第一列 bold + 凍結 (frozen header row)
- *   - 自動寬度: 取每欄最大字串長度 + 2 chars buffer (上限 60)
- *   - 變體欄位: JSON.stringify(aiMetadata.variants) - 商家肉眼看也能 parse
- *   - Buffer.from(...) 讓 Next.js Response 直接餵
+ *   - First row bold + frozen (frozen header row)
+ *   - Auto width: each column takes max string length + 2-char buffer (capped at 60)
+ *   - Variants column: JSON.stringify(aiMetadata.variants) — merchants can eyeball-parse it
+ *   - Buffer.from(...) so Next.js Response can take it directly
  */
 import ExcelJS from 'exceljs';
 import type { Product } from '@/db/schema';
@@ -17,9 +17,9 @@ import { getPublicUrl } from '@/lib/storage';
 
 type Column = {
   header: string;
-  /** key 在 row object 內 */
+  /** Key inside the row object. */
   key: string;
-  /** 自動寬度上限 */
+  /** Auto-width cap. */
   maxWidth?: number;
 };
 
@@ -45,7 +45,7 @@ function imageUrl(r2Key: string | null | undefined): string {
 }
 
 function fmtTime(d: Date): string {
-  // 台灣商家最熟的 YYYY-MM-DD HH:mm
+  // YYYY-MM-DD HH:mm — the format Taiwanese merchants are most familiar with.
   const yr = d.getFullYear();
   const mo = String(d.getMonth() + 1).padStart(2, '0');
   const dy = String(d.getDate()).padStart(2, '0');
@@ -55,7 +55,7 @@ function fmtTime(d: Date): string {
 }
 
 /**
- * 主 API: products[] → xlsx Buffer
+ * Main API: products[] -> xlsx Buffer.
  */
 export async function generateProductsXlsx(products: Product[]): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
@@ -65,15 +65,15 @@ export async function generateProductsXlsx(products: Product[]): Promise<Buffer>
     views: [{ state: 'frozen', ySplit: 1 }],
   });
 
-  // 設 columns (header + key)
+  // Set columns (header + key).
   sheet.columns = COLUMNS.map((c) => ({ header: c.header, key: c.key }));
 
-  // Header bold
+  // Header bold.
   const headerRow = sheet.getRow(1);
   headerRow.font = { bold: true };
   headerRow.alignment = { vertical: 'middle' };
 
-  // Body rows
+  // Body rows.
   for (const p of products) {
     sheet.addRow({
       id: p.id,
@@ -88,14 +88,14 @@ export async function generateProductsXlsx(products: Product[]): Promise<Buffer>
     });
   }
 
-  // Auto width: 取每欄 max(len, header.len) + 2, clamp to maxWidth
+  // Auto width: max(len, header.len) + 2 per column, clamped to maxWidth.
   COLUMNS.forEach((col, idx) => {
     const sheetCol = sheet.getColumn(idx + 1);
     let maxLen = col.header.length;
     sheetCol.eachCell({ includeEmpty: false }, (cell) => {
       const v = cell.value;
       const s = v == null ? '' : String(v);
-      // CJK 字元在 Excel 比拉丁寬, 粗略 *1.6 補
+      // CJK characters render wider than Latin in Excel; roughly *1.6 to compensate.
       const len = [...s].reduce(
         (acc, ch) => acc + (/[一-鿿　-ヿ]/.test(ch) ? 1.6 : 1),
         0,

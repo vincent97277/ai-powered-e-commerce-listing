@@ -1,20 +1,20 @@
 /**
- * V2.1 — brand voice → theme preset matcher.
+ * V2.1 — brand voice -> theme preset matcher.
  *
- * 用 keyword substring 比對 (不做 stemming / fuzzy / embedding) 因為:
- *   - 中文 substring 已經夠好用 — 「質感日系, 短句留白」直接命中 quiet-japanese 3 個 keyword
- *   - V2.1 不引入 LLM 呼叫 (省 token + 不增加 onboarding 延遲 + 不需 fallback 處理)
- *   - 即使比對失敗 fallback 是 modern-minimal — 中性安全, 不會壞品牌調性
+ * Uses keyword substring matching (no stemming / fuzzy / embedding) because:
+ *   - Chinese substring is already good enough — "質感日系, 短句留白" hits 3 quiet-japanese keywords directly.
+ *   - V2.1 deliberately avoids an LLM call (saves tokens, no added onboarding latency, no fallback handling needed).
+ *   - Even on a miss the fallback is modern-minimal — neutral and safe, doesn't clash with brand tone.
  *
  * Edge cases:
- *   - 空字串 / 純空白 → DEFAULT_THEME_ID
- *   - 無關鍵字命中 → DEFAULT_THEME_ID
- *   - 多 preset 同分 → 取 THEME_PRESETS array 排前面的 (穩定 tiebreak)
- *   - case 不敏感 (toLowerCase 兩邊都跑, 即使中文無 case 概念也保留, 預防英文混入 keyword 未來)
+ *   - Empty / whitespace-only string -> DEFAULT_THEME_ID
+ *   - No keyword hit -> DEFAULT_THEME_ID
+ *   - Multiple presets tied -> pick the earlier entry in THEME_PRESETS (stable tiebreak)
+ *   - Case-insensitive (toLowerCase on both sides; kept even though Chinese has no case, in case English keywords appear later)
  *
- * 不在 scope:
- *   - 不在這裡做 brandVoice 長度檢查 (action 那邊已經 .slice(0, 200))
- *   - 不存命中分數給 admin debug (V3 candidate, 看是否要加 onboarding_attempts.matched_theme)
+ * Out of scope:
+ *   - No brandVoice length check here (the calling action already does .slice(0, 200)).
+ *   - No persisted match score for admin debug (V3 candidate; consider onboarding_attempts.matched_theme).
  */
 import { THEME_PRESETS, DEFAULT_THEME_ID, type ThemePreset } from './presets';
 
@@ -22,7 +22,7 @@ import { THEME_PRESETS, DEFAULT_THEME_ID, type ThemePreset } from './presets';
  * Match a brand voice text to a theme preset by keyword substring overlap.
  * Returns the highest-scoring preset, or DEFAULT_THEME_ID if no match.
  *
- * 注意: array iteration 順序 = THEME_PRESETS 定義順序; 同分時取靠前的 (穩定排序).
+ * Note: array iteration order = THEME_PRESETS definition order; on tie, earlier entry wins (stable order).
  */
 export function pickThemeForVoice(brandVoice: string): ThemePreset {
   if (!brandVoice || brandVoice.trim().length === 0) {
@@ -39,7 +39,7 @@ export function pickThemeForVoice(brandVoice: string): ThemePreset {
         score += 1;
       }
     }
-    // 嚴格 > 不取代同分; 保留 array 排序前者 (穩定 tiebreak — 早期定義的 preset 優先)
+    // Strict > does not replace on tie; preserves earlier array entry (stable tiebreak — earlier-defined preset wins).
     if (score > 0 && (best === null || score > best.score)) {
       best = { preset, score };
     }
@@ -50,7 +50,7 @@ export function pickThemeForVoice(brandVoice: string): ThemePreset {
 
 /**
  * Return preset by id, or null if unknown id.
- * Settings dropdown change handler 用這個.
+ * Used by the settings dropdown change handler.
  */
 export function getThemeById(id: string): ThemePreset | null {
   return THEME_PRESETS.find((t) => t.id === id) ?? null;
@@ -58,8 +58,8 @@ export function getThemeById(id: string): ThemePreset | null {
 
 /**
  * Default fallback. Pure helper to keep `pickThemeForVoice` readable.
- * 一定有 preset (THEME_PRESETS[0] 是 quiet-japanese, 永遠存在 — array 不可能空,
- * 因為定義 in source 不是 dynamic).
+ * Always returns a preset (THEME_PRESETS[0] is quiet-japanese, always present — the array cannot be empty
+ * because it's defined in source, not dynamically).
  */
 function getDefaultTheme(): ThemePreset {
   return (

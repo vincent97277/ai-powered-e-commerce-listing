@@ -1,7 +1,7 @@
 /**
- * Drizzle schema — V1 schema (7 張表) (繁中註解)
- * RLS 由 0001a_init_rls.sql 負責，本檔只定義結構。
- * tenant_id 欄位 = pool model 多租戶 key，所有 tenant-scoped 表必備。
+ * Drizzle schema — V1 schema (7 tables)
+ * RLS is handled by 0001a_init_rls.sql; this file only defines structure.
+ * tenant_id column = pool-model multi-tenant key, required on all tenant-scoped tables.
  */
 import {
   pgTable,
@@ -17,7 +17,7 @@ import {
 import { relations, sql, type InferSelectModel, type InferInsertModel } from 'drizzle-orm';
 
 /* ─────────────────────────── 1. merchants ─────────────────────────── */
-/** 商家 (tenant) 自身 — slug 為 URL 路由 key */
+/** Merchant (tenant) itself — slug is the URL routing key */
 export const merchants = pgTable(
   'merchants',
   {
@@ -42,10 +42,10 @@ export const merchants = pgTable(
     approvedAt: timestamp('approved_at', { withTimezone: true }),
     /** admin session id (UUID) | 'legacy' (V1.6 backfill) | 'system' (seed). nullable when pending. */
     approvedByAdmin: text('approved_by_admin'),
-    /** V1 商家設定 */
+    /** V1 merchant settings */
     lowStockThreshold: integer('low_stock_threshold').notNull().default(5),
     dailyAiCostCentsCap: integer('daily_ai_cost_cents_cap').notNull().default(5000),
-    /** V1 schema 預埋 (referral V2 才上 UI, 欄位先進來避免未來再 migrate) */
+    /** V1 schema pre-seeded (referral UI lands in V2, columns added now to avoid future migrate) */
     referralCode: text('referral_code'),
     referredByMerchantId: uuid('referred_by_merchant_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -53,15 +53,15 @@ export const merchants = pgTable(
   },
   (t) => ({
     slugUnique: uniqueIndex('merchants_slug_unique').on(t.slug),
-    /** RA8: 用 partial unique index 表達意圖 (multi-NULL OK, non-null 必須 unique) */
+    /** RA8: partial unique index expresses intent (multi-NULL OK, non-null must be unique) */
     referralCodeUnique: uniqueIndex('merchants_referral_code_uniq')
       .on(t.referralCode)
       .where(sql`${t.referralCode} IS NOT NULL`),
-    /** Admin 列停權商家用 */
+    /** Used by admin to list suspended merchants */
     suspendedIdx: index('merchants_suspended_idx')
       .on(t.suspendedAt)
       .where(sql`${t.suspendedAt} IS NOT NULL`),
-    /** V1.7 D1: admin approval queue 撈 pending merchants */
+    /** V1.7 D1: admin approval queue fetches pending merchants */
     pendingApprovalIdx: index('merchants_pending_approval_idx')
       .on(t.createdAt)
       .where(sql`${t.approvedAt} IS NULL`),
@@ -69,7 +69,7 @@ export const merchants = pgTable(
 );
 
 /* ─────────────────────────── 2. merchant_users ─────────────────────────── */
-/** 商家底下的使用者 (owner / staff) */
+/** Users under a merchant (owner / staff) */
 export const merchantUsers = pgTable(
   'merchant_users',
   {
@@ -88,7 +88,7 @@ export const merchantUsers = pgTable(
 );
 
 /* ─────────────────────────── 3. platform_admins ─────────────────────────── */
-/** 平台 super admin — 不屬於任何 tenant */
+/** Platform super admin — does not belong to any tenant */
 export const platformAdmins = pgTable(
   'platform_admins',
   {
@@ -102,7 +102,7 @@ export const platformAdmins = pgTable(
 );
 
 /* ─────────────────────────── 4. products ─────────────────────────── */
-/** AI 生成商品 — ai_metadata 對應 §2.2 Zod schema */
+/** AI-generated products — ai_metadata corresponds to §2.2 Zod schema */
 export const products = pgTable(
   'products',
   {
@@ -115,16 +115,16 @@ export const products = pgTable(
     aiMetadata: jsonb('ai_metadata').$type<ProductAiMetadata>().notNull(),
     r2Key: text('r2_key').notNull(),
     priceCents: integer('price_cents').notNull().default(0),
-    /** V1 庫存 (A4) */
+    /** V1 stock (A4) */
     stockQuantity: integer('stock_quantity').notNull().default(0),
-    /** V1 needs_review status for AI 失敗 fallback (RA20) */
+    /** V1 needs_review status for AI failure fallback (RA20) */
     productStatus: text('product_status', {
       enum: ['active', 'needs_review', 'archived'],
     })
       .notNull()
       .default('active'),
     isPublished: boolean('is_published').notNull().default(false),
-    /** V1 IG/蝦皮 import 來源 (RA18 dedup, A6) */
+    /** V1 IG/Shopee import source (RA18 dedup, A6) */
     importedFromUrl: text('imported_from_url'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -132,16 +132,16 @@ export const products = pgTable(
   (t) => ({
     tenantIdx: index('products_tenant_idx').on(t.tenantId),
     tenantCreatedIdx: index('products_tenant_created_idx').on(t.tenantId, t.createdAt),
-    /** A5 callout: count low-stock 用 */
+    /** A5 callout: used for counting low-stock */
     tenantStockIdx: index('products_tenant_stock_idx').on(t.tenantId, t.stockQuantity),
-    /** A6 dedup: 同一商家不可 import 同一商品 URL 兩次 (per ENG D3 / final review #9) */
+    /** A6 dedup: same merchant cannot import the same product URL twice (per ENG D3 / final review #9) */
     importDedupUnique: uniqueIndex('products_tenant_import_dedup_unique')
       .on(t.tenantId, t.importedFromUrl)
       .where(sql`${t.importedFromUrl} IS NOT NULL`),
   }),
 );
 
-/** §2.2 ai_metadata payload type — Zod 驗證後落盤 (對齊 src/lib/ai/schema.ts) */
+/** §2.2 ai_metadata payload type — persisted after Zod validation (aligned with src/lib/ai/schema.ts) */
 export type ProductAiMetadata = {
   title: string;
   description: string;
@@ -170,20 +170,20 @@ export const orders = pgTable(
       .notNull()
       .references(() => merchants.id, { onDelete: 'cascade' }),
     customerEmail: text('customer_email').notNull(),
-    /** V1 訂單 detail 顯示用 (#37 enum 擴 + #54 detail page) */
+    /** V1 used in order detail display (#37 enum expansion + #54 detail page) */
     customerName: text('customer_name'),
     customerPhone: text('customer_phone'),
     customerAddress: text('customer_address'),
-    /** 商家私用 */
+    /** Merchant-private */
     internalNote: text('internal_note'),
     totalCents: integer('total_cents').notNull(),
-    /** V1 status flow: pending → paid → shipped → completed; 任何 → refunded (dead-end) */
+    /** V1 status flow: pending → paid → shipped → completed; any → refunded (dead-end) */
     status: text('status', {
       enum: ['pending', 'paid', 'shipped', 'completed', 'failed', 'refunded'],
     })
       .notNull()
       .default('pending'),
-    /** V1 出貨記錄 (#55 status flip 寫入) */
+    /** V1 shipping record (written on #55 status flip) */
     trackingNumber: text('tracking_number'),
     carrier: text('carrier'),
     ecpayTradeNo: text('ecpay_trade_no'),
@@ -193,7 +193,7 @@ export const orders = pgTable(
   (t) => ({
     tenantIdx: index('orders_tenant_idx').on(t.tenantId),
     ecpayUnique: uniqueIndex('orders_ecpay_trade_no_unique').on(t.ecpayTradeNo),
-    /** A5 callout query 加速 (count by status per tenant) */
+    /** A5 callout query speedup (count by status per tenant) */
     tenantStatusCreatedIdx: index('orders_tenant_status_created_idx').on(
       t.tenantId,
       t.status,
@@ -228,9 +228,9 @@ export const orderItems = pgTable(
 
 /* ─────────────────────────── 7. order_status_history ─────────────────────────── */
 /**
- * 訂單狀態流轉 audit log (V1 #38, ENG D3 決議)
- * RLS via JOIN orders.tenant_id - 不冗餘存 tenant_id 欄位, 永遠跟 orders 對齊不可能 leak
- * RLS policy 在 0002_v1_rls.sql 寫 (USING + WITH CHECK 同條件)
+ * Order status transition audit log (V1 #38, ENG D3 decision)
+ * RLS via JOIN orders.tenant_id — no redundant tenant_id column; always aligned with orders, no leak possible
+ * RLS policy written in 0002_v1_rls.sql (USING + WITH CHECK same condition)
  */
 export const orderStatusHistory = pgTable(
   'order_status_history',
@@ -251,7 +251,7 @@ export const orderStatusHistory = pgTable(
 );
 
 /* ─────────────────────────── 8. payment_webhooks ─────────────────────────── */
-/** 綠界 webhook idempotency — (provider, external_id) 防止重複處理 */
+/** ECPay webhook idempotency — (provider, external_id) prevents duplicate processing */
 export const paymentWebhooks = pgTable(
   'payment_webhooks',
   {
@@ -272,9 +272,9 @@ export const paymentWebhooks = pgTable(
 
 /* ─────────────────────────── 9. admin_action_history ─────────────────────────── */
 /**
- * 平台 admin 對商家做的動作 audit log (V1 #39)
- * RLS = DENY ALL TO web_anon (defense-in-depth, RA2). web_admin BYPASSRLS 自動穿透
- * actor 欄位 V1 不存 (single-user 模型, A0 password gate). V2 真 auth 進來時補
+ * Audit log of actions platform admin performs on merchants (V1 #39)
+ * RLS = DENY ALL TO web_anon (defense-in-depth, RA2). web_admin BYPASSRLS passes through automatically
+ * actor column not stored in V1 (single-user model, A0 password gate). Added when real auth lands in V2
  */
 export const adminActionHistory = pgTable(
   'admin_action_history',
@@ -299,10 +299,10 @@ export const adminActionHistory = pgTable(
 
 /* ─────────────────────────── 10. import_sessions ─────────────────────────── */
 /**
- * IG/蝦皮 import 進度追蹤 (V1 #40)
- * RLS via JOIN merchants - 不冗餘存 tenant_id (RA18, 跟 order_status_history 同 pattern)
- * RLS policy 在 0002_v1_rls.sql 寫 (USING + WITH CHECK)
- * V1 不寫 cron 清 orphan pending sessions, 7 天後 mark failed 是 V2 工作
+ * IG/Shopee import progress tracking (V1 #40)
+ * RLS via JOIN merchants — no redundant tenant_id (RA18, same pattern as order_status_history)
+ * RLS policy written in 0002_v1_rls.sql (USING + WITH CHECK)
+ * V1 does not write cron to clean orphan pending sessions; mark-failed-after-7-days is a V2 task
  */
 export const importSessions = pgTable(
   'import_sessions',
@@ -338,17 +338,17 @@ export const importSessions = pgTable(
 
 /* ─────────────────────────── 10b. ai_usage_events ─────────────────────────── */
 /**
- * 每次 AI 呼叫的細粒度 token 用量 (V1.5 smoke fix)
+ * Fine-grained per-AI-call token usage (V1.5 smoke fix)
  *
- * 為什麼存在 (跟 import_sessions.tokens_in/out 並列):
- *   - import_sessions 只覆蓋 IG/蝦皮 batch import (worker path)
- *   - 同步 photo upload (/api/products/generate) 沒有 import session
- *     → V1.5 之前同步呼叫的 token 用量完全沒落盤, DailyCostChip 永遠 NT$0
- *   - 新表只記錄 sync path; batch import 仍寫 import_sessions
- *   - getDailyCostCents 加總兩張表
+ * Why it exists (alongside import_sessions.tokens_in/out):
+ *   - import_sessions only covers IG/Shopee batch import (worker path)
+ *   - Synchronous photo upload (/api/products/generate) has no import session
+ *     → before V1.5 sync-call token usage was never persisted, DailyCostChip always NT$0
+ *   - New table only records the sync path; batch import still writes import_sessions
+ *   - getDailyCostCents sums both tables
  *
- * Append-only audit log: 只 INSERT, 不 UPDATE/DELETE
- * RLS: tenant_id = current_setting('app.tenant_id') (跟 products 同 pattern)
+ * Append-only audit log: INSERT only, no UPDATE/DELETE
+ * RLS: tenant_id = current_setting('app.tenant_id') (same pattern as products)
  */
 export const aiUsageEvents = pgTable(
   'ai_usage_events',
@@ -359,9 +359,9 @@ export const aiUsageEvents = pgTable(
       .references(() => merchants.id, { onDelete: 'cascade' }),
     tokensIn: integer('tokens_in').notNull().default(0),
     tokensOut: integer('tokens_out').notNull().default(0),
-    /** 'photo_upload' | 'ig_import' | 'shopee_import' | other (text 不上 enum, V2 可加新 source) */
+    /** 'photo_upload' | 'ig_import' | 'shopee_import' | other (text not enum, so V2 can add new sources) */
     source: text('source').notNull(),
-    /** V1.5 寫死 gpt-4o-2024-11-20, multi-model V2 才用 */
+    /** V1.5 hardcoded gpt-4o-2024-11-20; multi-model lands in V2 */
     model: text('model').notNull().default('gpt-4o-2024-11-20'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -377,18 +377,19 @@ export const aiUsageEvents = pgTable(
 /**
  * V1.7 D1 onboarding hardening — IP rate limit + abuse log.
  *
- * 每次 /onboarding POST 寫一行 (含 success / 各種拒絕分支), 用 ip_address + created_at idx
- * 算 1 attempt per IP per 24h. RLS = web_admin only (cross-tenant observability).
+ * Every /onboarding POST writes a row (including success / various rejection branches);
+ * uses ip_address + created_at idx to count 1 attempt per IP per 24h.
+ * RLS = web_admin only (cross-tenant observability).
  *
- * Append-only log; 不 UPDATE/DELETE.
+ * Append-only log; no UPDATE/DELETE.
  */
 export const onboardingAttempts = pgTable(
   'onboarding_attempts',
   {
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-    /** x-forwarded-for first hop (raw text — IPv4 or IPv6, 不 normalize) */
+    /** x-forwarded-for first hop (raw text — IPv4 or IPv6, not normalized) */
     ipAddress: text('ip_address').notNull(),
-    /** 嘗試的 slug — 即使被拒也存, 給 admin 看 abuse pattern */
+    /** Attempted slug — stored even if rejected, so admin can see abuse pattern */
     slugAttempted: text('slug_attempted').notNull(),
     /** success / rate_limited / invalid_slug / reserved_slug / honeypot / duplicate_slug */
     result: text('result', {
@@ -411,8 +412,8 @@ export const onboardingAttempts = pgTable(
 /* ─────────────────────────── 11. admin_sessions ─────────────────────────── */
 /**
  * Admin login HMAC-bound session (V1 #41, RA11)
- * 跟 password gate 配合 - HMAC cookie 綁 session.id, revoke = DELETE row
- * 沒 RLS - 純 dbAdmin/web_admin 寫讀
+ * Pairs with password gate — HMAC cookie binds session.id, revoke = DELETE row
+ * No RLS — pure dbAdmin/web_admin read/write
  */
 export const adminSessions = pgTable(
   'admin_sessions',
@@ -433,13 +434,13 @@ export const adminSessions = pgTable(
  * V2 per-merchant auth — HMAC-bound session (task 102 schema, task 103 lib).
  *
  * Mirror admin_sessions (V1 #41, RA11): cookie value = `{sessionId}.{HMAC-SHA256(sessionId, secret)}`,
- * server validates 簽章 + DB row exists + expires_at > now() + revoked_at IS NULL.
+ * server validates signature + DB row exists + expires_at > now() + revoked_at IS NULL.
  *
- * 跟 admin_sessions 差異:
- *   - merchant_id FK (NOT NULL, ON DELETE CASCADE) — 一個 merchant 可以多 session (多裝置)
- *   - revoked_at: V2.1 想 support「全部裝置登出」按鈕, 用 UPDATE revoked_at = now() 比 DELETE 好 audit
+ * Differences from admin_sessions:
+ *   - merchant_id FK (NOT NULL, ON DELETE CASCADE) — one merchant can have many sessions (multiple devices)
+ *   - revoked_at: V2.1 wants to support a "log out everywhere" button; UPDATE revoked_at = now() audits better than DELETE
  *
- * RLS: ENABLE + FORCE, web_admin only. web_anon 不 GRANT.
+ * RLS: ENABLE + FORCE, web_admin only. web_anon not GRANTed.
  */
 export const merchantSessions = pgTable(
   'merchant_sessions',

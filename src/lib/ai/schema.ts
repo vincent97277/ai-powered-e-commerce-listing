@@ -1,37 +1,38 @@
 /**
- * Zod productSchema — GPT-4o vision 輸出的結構化驗證
+ * Zod productSchema — structured validation for GPT-4o vision output.
  *
- * 來源：engineering-handoff-specs §2.2
+ * Source: engineering-handoff-specs §2.2
  *
- * 設計重點：
- * - 整個 schema 用 .strict() — 不允許 GPT 多塞 extra fields（防 prompt
- *   injection 順便偷夾資料）
- * - safeText helper 會掃過去禁字（醫療療效 / 仿冒 / URL / 聯絡方式），
- *   命中任何一個就直接 fail validation，讓 worker 走 retry / fallback
- * - title、description、tags 全部都過 safeText
- * - confidence 0–1，給下游 UI 決定「要不要顯示警示」
+ * Design highlights:
+ * - The entire schema uses .strict() — GPT cannot sneak in extra fields (prevents
+ *   prompt-injection-piggybacked data exfiltration).
+ * - The safeText helper scans for forbidden phrases (medical claims / counterfeit /
+ *   URL / contact info); a hit fails validation immediately so the worker can
+ *   retry or fall back.
+ * - title, description, and tags all go through safeText.
+ * - confidence is 0–1, letting downstream UI decide "should we show a warning".
  */
 
 import { z } from 'zod';
 
 // ============================================================
-// 禁字 regex — 命中即 fail
+// Forbidden-phrase regex — any hit fails validation.
 // ============================================================
 
-// 醫療療效詞 — 台灣藥事法 / 食安法 / 化妝品衛生安全管理法都禁
+// Medical efficacy claims — banned by Taiwan's Pharmaceutical Affairs Act, Food Safety Act, and Cosmetic Hygiene Act.
 export const FORBIDDEN_MEDICAL =
   /(治療|療效|根治|治癒|預防(癌|病|症)|抗癌|降血壓|降血糖|消炎|殺菌|藥效|藥用|處方|醫療級|臨床證實)/;
 
-// 仿冒 / 灰色暗示
+// Counterfeit / grey-market hints.
 export const FORBIDDEN_COUNTERFEIT =
   /(正品代購|A\s*貨|超A|高仿|一比一|原單|尾單|工廠流出|海關沒收|莆田|外貿原單)/;
 
-// URL / email / 電話 / LINE ID — 防止 GPT 在描述中塞外連
+// URL / email / phone / LINE ID — prevents GPT from sneaking outbound contact methods into descriptions.
 export const URL_OR_CONTACT =
   /(https?:\/\/|www\.|\b[\w.-]+@[\w.-]+\.\w+|line\s*[:：]|加\s*line|微信|wechat|tg\s*[:：]|t\.me\/|\b09\d{2}[-\s]?\d{3}[-\s]?\d{3}\b)/i;
 
 // ============================================================
-// safeText helper — 字串長度 + 禁字檢查
+// safeText helper — length check + forbidden-phrase check.
 // ============================================================
 
 const safeText = (min: number, max: number) =>
@@ -44,7 +45,7 @@ const safeText = (min: number, max: number) =>
     .refine((s) => !URL_OR_CONTACT.test(s), { message: '含外連 / 聯絡方式' });
 
 // ============================================================
-// 商品分類 enum — V1 scope 先定 8 類，之後再擴
+// Product category enum — V1 scope defines 8 categories; expand later.
 // ============================================================
 
 export const CATEGORY_ENUM = [
@@ -59,10 +60,10 @@ export const CATEGORY_ENUM = [
 ] as const;
 
 // ============================================================
-// 主 schema
+// Main schema
 // ============================================================
 
-// V1: 放寬 min length 讓 fallback 也能 pass (max + 禁字 refine 仍嚴格)
+// V1: relaxed min length so fallback can pass (max + forbidden-phrase refine remain strict).
 //
 // V2.6.2: removed `.default([])` from seo_tags + variants. AI SDK v6 emits
 // strict OpenAI structured-output schemas — every property must be in
@@ -74,19 +75,19 @@ export const CATEGORY_ENUM = [
 // it now does under strict mode automatically.
 export const productSchema = z
   .object({
-    // 商品標題 — 1-60 字 (放寬以容納 fallback「需人工審核」)
+    // Product title — 1-60 chars (relaxed to accommodate fallback "needs manual review").
     title: safeText(1, 60),
 
-    // 描述 — 1-800 字
+    // Description — 1-800 chars.
     description: safeText(1, 800),
 
-    // 分類
+    // Category.
     category: z.enum(CATEGORY_ENUM),
 
-    // SEO tags — 0-10 個 (LLM may emit [] for fixture-fallback rows)
+    // SEO tags — 0-10 entries (LLM may emit [] for fixture-fallback rows).
     seo_tags: z.array(safeText(1, 20)).max(10),
 
-    // 變體 — 0-6 個
+    // Variants — 0-6 entries.
     variants: z
       .array(
         z
@@ -98,7 +99,7 @@ export const productSchema = z
       )
       .max(6),
 
-    // 定價建議 (新台幣)
+    // Price suggestion (TWD).
     price_twd: z
       .object({
         min: z.number().int().nonnegative().max(1_000_000),
@@ -107,9 +108,9 @@ export const productSchema = z
       .strict()
       .refine((p) => p.max >= p.min, { message: 'price_twd.max 必須 >= min' }),
 
-    // 模型自評 confidence 0–1
+    // Model's self-rated confidence 0–1.
     confidence: z.number().min(0).max(1),
   })
-  .strict(); // 不允許 GPT 多塞欄位
+  .strict(); // No extra fields from GPT.
 
 export type ProductOutput = z.infer<typeof productSchema>;
